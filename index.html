@@ -214,7 +214,7 @@ async function tmdbSearch(q){
   const data = await res.json();
   return (data.results||[]).slice(0,8).map(m=>({
     id:m.id,
-    label:m.title + (m.release_date?` (${m.release_date.slice(0,4)})`:''),
+    label:m.title,
     thumb:m.poster_path?`https://image.tmdb.org/t/p/w92${m.poster_path}`:null,
   }));
 }
@@ -334,7 +334,8 @@ const app = {
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
   quiz:[], quizName:'', quizErr:'', stage:0,
   pid:null, name:'', ans:{}, bet:{}, submittedRound:-1, sel:null, game:null,
-  searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null,
+  searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false,
+  myStage:null, reguess:false,
   unsubPlayers:null, unsubState:null, unsubMe:null, kicked:false,
   openPicker:null, confirmKick:null,
 };
@@ -376,11 +377,24 @@ function publicCurrent(){
   return base;
 }
 function pushState(){
+  // per-speler oordeel over hun huidige gok (alleen bij gestage vragen; spelers zien dit pas na de volgende hint)
+  let judged = null;
+  if(app.phase==='question'){
+    const r = app.quiz[app.round];
+    if(r && Array.isArray(r.stages)){
+      judged = {};
+      app.players.forEach(p=>{
+        const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
+        if(a!=null) judged[p.id] = (String(a)===String(r.answer));
+      });
+    }
+  }
   set(stateRef(app.code), {
     phase: app.phase, round: app.round, totalRounds: app.quiz.length, stage: app.stage,
     current: (app.phase==='question'||app.phase==='reveal') ? publicCurrent() : null,
     scores: app.scores, names: app.names,
     results: app.phase==='reveal' ? app.results : null,
+    judged,
     answeredCount: app.answeredCount, totalPlayers: Object.keys(app.names).length, ts: Date.now(),
   });
 }
@@ -563,9 +577,10 @@ async function playerSubmit(){
   await set(ansRef(app.code, app.pid, r), val);
   await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), label||'');
   if(cur.staged){
+    app.myStage = cur.stage||0;
     await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), cur.stage||0);
   }
-  app.sel=null; app.searchPick=null;
+  app.sel=null; app.searchPick=null; app.searchOpen=false; app.reguess=false;
   renderPlayer();
 }
 async function playerBet(k){
@@ -868,6 +883,12 @@ function answerAreaHTML(r){
     <div id="sout"></div></div>`;
 }
 function searchOutHTML(){
+  // ingeklapt na een keuze: toon alleen het gekozen antwoord
+  if(!app.searchOpen){
+    return app.searchPick
+      ? `<div class="picked">Gekozen: <b>${esc(app.searchPick.label)}</b> <span class="muted" style="font-size:12px">— tik in het veld om te wijzigen</span></div>`
+      : '';
+  }
   const busy = app.searchBusy ? '<p class="muted" style="margin:6px 0 0;font-size:13px">Zoeken…</p>' : '';
   const results = (app.searchResults||[]).map(x=>`<button class="sresult ${app.searchPick&&String(app.searchPick.id)===String(x.id)?'sel':''}" data-id="${esc(String(x.id))}" data-label="${esc(x.label)}">${x.thumb?`<img src="${esc(x.thumb)}" alt="">`:''}<span>${esc(x.label)}</span></button>`).join('');
   const picked = app.searchPick ? `<div class="picked">Gekozen: <b>${esc(app.searchPick.label)}</b></div>` : '';
@@ -877,6 +898,7 @@ function wireSearchResults(){
   el.querySelectorAll('.sresult').forEach(b=> b.onclick=()=>{
     const id=b.dataset.id, n=Number(id);
     app.searchPick = { id:(id!==''&&!isNaN(n))?n:id, label:b.dataset.label };
+    app.searchOpen = false;            // na keuze inklappen
     renderPlayer();
   });
 }
@@ -888,8 +910,10 @@ function wireAnswerArea(r){
   }
   const inp = $('#s-input');
   if(inp){
+    inp.onfocus = ()=>{ if(!app.searchOpen){ app.searchOpen=true; refreshSearchOut(); } };
     inp.oninput = ()=>{
       app.searchText = inp.value;
+      app.searchOpen = true;
       clearTimeout(app._sTimer);
       const q = inp.value.trim();
       if(q.length<2){ app.searchResults=[]; app.searchBusy=false; refreshSearchOut(); return; }
@@ -899,17 +923,39 @@ function wireAnswerArea(r){
         app.searchBusy=false; app.searchResults=res; refreshSearchOut();
       }, 300);
     };
-    inp.focus();
-    const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){}
+    if(app.searchOpen){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
   }
   refreshSearchOut();
 }
 function playerQuestion(){
   const g = app.game;
-  if(app.submittedRound===g.round) return playerWaiting();
   const r = g.current;
-  // nieuwe ronde → zoekstaat resetten
-  if(app.searchRound!==g.round){ app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null; app.searchBusy=false; app.sel=null; }
+  // nieuwe ronde → zoek- en herkansstaat resetten
+  if(app.searchRound!==g.round){
+    app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null;
+    app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null; app.reguess=false;
+  }
+
+  // al iets ingestuurd deze ronde?
+  if(app.submittedRound===g.round){
+    if(!r.staged) return playerWaiting();                    // niet-gestage: vergrendeld tot reveal
+    const advanced = (g.stage||0) > (app.myStage||0);        // host is naar de volgende hint
+    if(!advanced) return playerHold('hold');                 // oordeel pas ná de volgende hint
+    const verdict = g.judged ? g.judged[app.pid] : undefined;
+    if(verdict===true){
+      let note = 'Wachten op de host';
+      if(r.betting){
+        const bet = app.bet[g.round];
+        note = (bet!=null && app.myStage!=null && app.myStage<=bet)
+          ? 'Op tijd voor je inzet 🎉 — wachten op de host'
+          : 'Maar later dan je inzet, dus 0 punten — wachten op de host';
+      }
+      return playerHold('correct', note);
+    }
+    // fout + nieuwe hint → opnieuw raden
+    app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText='';
+    app.searchResults=[]; app.searchOpen=false; app.reguess=true;
+  }
 
   // gestage MET inzet: eerst inzetten (alleen de vraag/intro zichtbaar)
   if(r.staged && r.betting && app.bet[g.round]==null){
@@ -941,11 +987,13 @@ function playerQuestion(){
     spot = `<div class="spotlight">${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
     pill = `${r.points} punten`;
   }
+  const wrongBanner = app.reguess ? `<div class="card" style="border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)"><b style="color:var(--rood)">Vorige gok fout.</b> <span class="muted">Nieuwe hint — probeer opnieuw.</span></div>` : '';
   const lockReady = r.optionsMode==='list' ? app.sel!=null : app.searchPick!=null;
   const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
     ${spot}
+    ${wrongBanner}
     ${answerAreaHTML(r)}
     <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>`;
   wireAnswerArea(r);
@@ -956,6 +1004,15 @@ function playerWaiting(){
   el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
     <h1>Antwoord binnen ✓</h1><p class="muted">Wachten op de rest <span class="waiting-dots"></span></p>
     <span class="pill" style="align-self:center">${g.answeredCount}/${g.totalPlayers} geantwoord</span></div>`;
+}
+function playerHold(kind, note){
+  const g=app.game;
+  const head = kind==='correct'
+    ? `<h1 style="color:var(--groen)">Goed geraden! ✓</h1>`
+    : `<h1>Antwoord binnen ✓</h1>`;
+  const sub = kind==='correct' ? (note||'Wachten op de host') : 'Wachten op de volgende hint';
+  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+    ${head}<p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
 }
 function playerReveal(){
   const g=app.game, c=g.current, res = g.results && g.results[app.pid];
