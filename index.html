@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quizshow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1e1635; --bg2:#160f29; --surface:#2a2147; --surface-2:#332a55;
+    --ink:#f4f0ff; --muted:#a99fce; --line:#41376a; --gold:#ffc23c;
+    --rood:#ff5d6c; --blauw:#3fa0ff; --geel:#ffc23c; --groen:#43d6a0;
+    --radius:18px; --shadow:0 18px 40px -20px rgba(0,0,0,.7);
+    --display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --body:"Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--body);color:var(--ink);
+    background:radial-gradient(1200px 600px at 50% -10%, rgba(255,194,60,.10), transparent 60%),linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
+  .brand b{font-family:var(--display);letter-spacing:.5px;font-size:15px;text-transform:uppercase}
+  .brand span{color:var(--muted);font-size:13px;margin-left:auto}
+  h1{font-family:var(--display);font-weight:700;line-height:1.05;margin:.2em 0;letter-spacing:-.5px}
+  .screen{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;animation:fade .35s ease both}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.screen{animation:none}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+  .muted{color:var(--muted)} .center{text-align:center}
+  .stack{display:flex;flex-direction:column;gap:12px}
+  .row{display:flex;gap:12px;flex-wrap:wrap} .grow{flex:1}
+  button{font-family:var(--body);cursor:pointer;border:none;border-radius:14px;font-size:16px;font-weight:600;transition:transform .08s ease, filter .15s ease, background .15s}
+  button:active{transform:translateY(1px) scale(.99)}
+  button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  .btn{padding:15px 18px;background:var(--gold);color:#2a1d00}
+  .btn:hover{filter:brightness(1.05)}
+  .btn[disabled]{opacity:.4;cursor:not-allowed;filter:none}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .btn.ghost:hover{background:var(--surface-2)}
+  .btn.big{font-size:18px;padding:18px;width:100%}
+  input{font-family:var(--body);font-size:18px;padding:15px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);width:100%}
+  input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+  input::placeholder{color:#7a6fa0}
+  label.lbl{font-size:13px;color:var(--muted);font-weight:600}
+  .code{font-family:var(--display);font-weight:700;letter-spacing:.18em;font-size:clamp(44px,11vw,76px);color:var(--gold);text-shadow:0 0 30px rgba(255,194,60,.35)}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px;font-weight:600}
+  .pill.ok{color:var(--groen)} .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .spotlight{position:relative;border-radius:var(--radius);padding:30px 22px;text-align:center;
+    background:radial-gradient(420px 240px at 50% 0%, rgba(255,194,60,.18), transparent 70%), var(--surface);border:1px solid var(--line)}
+  .qmeta{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+  .qtext{font-family:var(--display);font-weight:700;font-size:clamp(22px,5vw,34px);line-height:1.15}
+  .answers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:520px){.answers{grid-template-columns:1fr}}
+  .ans{display:flex;align-items:center;gap:14px;padding:18px;border-radius:16px;border:2px solid transparent;background:var(--surface-2);color:var(--ink);text-align:left;font-size:17px;font-weight:600;width:100%}
+  .ans .shape{font-size:20px;width:30px;text-align:center;flex:none}
+  .ans[data-c="0"]{box-shadow:inset 4px 0 0 var(--rood)} .ans[data-c="1"]{box-shadow:inset 4px 0 0 var(--blauw)}
+  .ans[data-c="2"]{box-shadow:inset 4px 0 0 var(--geel)} .ans[data-c="3"]{box-shadow:inset 4px 0 0 var(--groen)}
+  .ans[data-c="0"] .shape{color:var(--rood)} .ans[data-c="1"] .shape{color:var(--blauw)}
+  .ans[data-c="2"] .shape{color:var(--geel)} .ans[data-c="3"] .shape{color:var(--groen)}
+  .ans.sel{border-color:var(--gold);background:#3b2f60}
+  .ans.correct{border-color:var(--groen);background:rgba(67,214,160,.16)}
+  .ans.wrong{border-color:var(--rood);background:rgba(255,93,108,.14);opacity:.85}
+  .ans.dim{opacity:.45} .ans[disabled]{cursor:default}
+  .lb{display:flex;flex-direction:column;gap:8px}
+  .lbrow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border-radius:12px}
+  .lbrow .rank{font-family:var(--display);font-weight:700;color:var(--muted);width:26px}
+  .lbrow .nm{flex:1;font-weight:600} .lbrow .sc{font-family:var(--display);font-weight:700}
+  .lbrow .gain{color:var(--groen);font-size:13px;font-weight:600;margin-left:6px}
+  .lbrow.me{outline:2px solid var(--gold)}
+  .podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;margin:10px 0}
+  .pcol{background:var(--surface-2);border-radius:14px 14px 0 0;padding:14px 8px;text-align:center;border:1px solid var(--line);border-bottom:none}
+  .pcol .nm{font-weight:700;font-size:15px;margin-top:6px;word-break:break-word}
+  .pcol .sc{font-family:var(--display);color:var(--gold);font-weight:700;font-size:20px}
+  .pcol.first{height:150px}.pcol.second{height:120px}.pcol.third{height:100px}
+  .medal{font-size:26px}
+  .statusbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .progress{height:8px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+  .progress>i{display:block;height:100%;background:var(--gold);transition:width .3s ease}
+  .footnote{color:var(--muted);font-size:12px;text-align:center;margin-top:14px}
+  .err{color:var(--rood)}
+  .waiting-dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <span class="dot" aria-hidden="true"></span>
+    <b>Quizshow</b>
+    <span id="conn"></span>
+  </div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+/* ============================================================
+   FIREBASE  — imports + jouw config
+   ============================================================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getDatabase, ref, get, set, remove, onValue, onDisconnect }
+  from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+
+/* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
+   Firebase console → tandwiel (Project settings) → tab "General"
+   → onderaan bij "Your apps" je web-app → "SDK setup and configuration"
+   → kies "Config" en kopieer het hele object hieronder overheen.
+   Let op dat 'databaseURL' erin staat (komt erbij zodra je de
+   Realtime Database hebt aangemaakt — zie stappenplan). */
+const firebaseConfig = {
+  apiKey: "AIzaSyB5E7zxQ9sAMQeNUz2PmI_PcWAoiz_iMf4",
+  authDomain: "quiz-db61a.firebaseapp.com",
+  databaseURL: "https://quiz-db61a-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "quiz-db61a",
+  storageBucket: "quiz-db61a.firebasestorage.app",
+  messagingSenderId: "529913806362",
+  appId: "1:529913806362:web:4c3f07caf2aa4caf7f1ba3"
+};
+
+const db = getDatabase(initializeApp(firebaseConfig));
+const stateRef   = c => ref(db, `games/${c}/state`);
+const playersRef = c => ref(db, `games/${c}/players`);
+const playerRef  = (c,p) => ref(db, `games/${c}/players/${p}`);
+
+/* ============================================================
+   SPELDATA — uitbreidbaar per 'type' (nu: multiple_choice)
+   ============================================================ */
+const ROUNDS = [
+  { type:'multiple_choice', points:100, question:'Welke planeet staat het dichtst bij de zon?',
+    options:['Mercurius','Venus','Mars','Aarde'], correctIndex:0 },
+  { type:'multiple_choice', points:100, question:'Welke studio maakte de film Spirited Away?',
+    options:['Pixar','Studio Ghibli','Disney','DreamWorks'], correctIndex:1 },
+  { type:'multiple_choice', points:100, question:'Welke programmeertaal draait op de BEAM virtual machine?',
+    options:['Python','Elixir','Ruby','Go'], correctIndex:1 },
+  { type:'multiple_choice', points:100, question:'Hoeveel spelers staan er per team op het veld bij voetbal?',
+    options:['9','10','11','12'], correctIndex:2 },
+  { type:'multiple_choice', points:100, question:'In welk land beklim je de berg Fuji?',
+    options:['China','Japan','Zuid-Korea','Nepal'], correctIndex:1 },
+];
+const SHAPES = ['▲','◆','●','■'];
+
+/* ============================================================
+   APP-STATE
+   ============================================================ */
+const app = {
+  role:null, code:null,
+  phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
+  pid:null, name:'', ans:{}, submittedRound:-1, sel:null, game:null,
+  unsubPlayers:null, unsubState:null,
+};
+const $ = s => document.querySelector(s);
+const el = $('#app');
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const setConn = t => { $('#conn').textContent = t||''; };
+const genCode = () => { const a='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s=''; for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)]; return s; };
+const genId = () => 'p'+Math.random().toString(36).slice(2,9);
+
+/* ============================================================
+   HOST → state schrijven
+   ============================================================ */
+function pushState(){
+  const r = ROUNDS[app.round];
+  set(stateRef(app.code), {
+    phase: app.phase, round: app.round, totalRounds: ROUNDS.length,
+    current: (app.phase==='question'||app.phase==='reveal') && r
+      ? { type:r.type, question:r.question, options:r.options, points:r.points } : null,
+    correctIndex: app.phase==='reveal' && r ? r.correctIndex : null,
+    scores: app.scores, names: app.names,
+    results: app.phase==='reveal' ? app.results : null,
+    answeredCount: app.answeredCount, totalPlayers: Object.keys(app.names).length, ts: Date.now(),
+  });
+}
+
+/* ============================================================
+   REALTIME LISTENERS (geen polling meer)
+   ============================================================ */
+function startHost(){
+  app.unsubPlayers = onValue(playersRef(app.code), snap=>{
+    const present = Object.values(snap.val() || {});
+    app.players = present;
+    // namen blijven bewaard (ook als iemand wegvalt) voor scorebord
+    present.forEach(p=>{ app.names[p.id]=p.name; if(!(p.id in app.scores)) app.scores[p.id]=0; });
+    if(app.phase==='question'){
+      app.answeredCount = present.filter(p=> p.ans && p.ans[app.round]!=null).length;
+    }
+    pushState();
+    setConn(present.length+' verbonden');
+    renderHost();
+  });
+}
+function startPlayer(){
+  app.unsubState = onValue(stateRef(app.code), snap=>{
+    const v = snap.val(); if(!v) return;
+    app.game = v; setConn('verbonden'); renderPlayer();
+  });
+}
+function cleanup(){
+  if(app.unsubPlayers){ app.unsubPlayers(); app.unsubPlayers=null; }
+  if(app.unsubState){ app.unsubState(); app.unsubState=null; }
+}
+
+/* ============================================================
+   HOST-ACTIES
+   ============================================================ */
+function hostCreate(){
+  app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1;
+  app.scores={}; app.names={}; app.players=[]; app.results=null;
+  pushState(); startHost(); renderHost();
+}
+function hostStart(){ app.round=0; app.phase='question'; app.answeredCount=0; app.results=null; pushState(); renderHost(); }
+function hostReveal(){
+  const r = ROUNDS[app.round]; app.results={};
+  app.players.forEach(p=>{
+    const a = p.ans ? p.ans[app.round] : null;
+    const correct = a===r.correctIndex, gained = correct ? r.points : 0;
+    app.scores[p.id] = (app.scores[p.id]||0) + gained;
+    app.results[p.id] = { answer:a, correct, gained };
+  });
+  app.phase='reveal'; pushState(); renderHost();
+}
+function hostNext(){
+  if(app.round+1 < ROUNDS.length){ app.round++; app.phase='question'; app.answeredCount=0; app.results=null; }
+  else app.phase='final';
+  pushState(); renderHost();
+}
+async function hostEnd(){ cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
+
+/* ============================================================
+   SPELER-ACTIES
+   ============================================================ */
+async function playerJoin(code, name){
+  app.role='player'; app.code=code.toUpperCase(); app.pid=genId(); app.name=name.trim();
+  app.ans={}; app.submittedRound=-1; app.sel=null;
+  const snap = await get(stateRef(app.code));
+  if(!snap.exists()) return false;
+  const pr = playerRef(app.code, app.pid);
+  await set(pr, { id:app.pid, name:app.name, ans:app.ans, seen:Date.now() });
+  onDisconnect(pr).remove();           // ruim speler op bij sluiten tab
+  startPlayer();
+  return true;
+}
+async function playerSubmit(){
+  if(app.sel==null) return;
+  const r = app.game.round;
+  app.ans[r] = app.sel; app.submittedRound = r;
+  await set(playerRef(app.code, app.pid), { id:app.pid, name:app.name, ans:app.ans, seen:Date.now() });
+  app.sel=null; renderPlayer();
+}
+
+/* ============================================================
+   NAVIGATIE
+   ============================================================ */
+function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; setConn(''); renderHome(); }
+
+/* ============================================================
+   RENDER — HOME
+   ============================================================ */
+function renderHome(){
+  el.innerHTML = `
+    <div class="center stack" style="gap:6px">
+      <div class="qmeta">Party-quiz · meerdere apparaten</div>
+      <h1 style="font-size:clamp(38px,9vw,64px)">Speel mee op<br>je eigen scherm</h1>
+      <p class="muted" style="max-width:42ch;margin:6px auto 18px">Eén iemand host op het grote scherm, de rest doet mee via de telefoon. Geen tijdslimiet — antwoord wanneer je klaar bent.</p>
+    </div>
+    <div class="card stack">
+      <button class="btn big" id="b-host">Quiz hosten</button>
+      <button class="btn big ghost" id="b-join">Meedoen met een code</button>
+    </div>`;
+  $('#b-host').onclick = hostCreate;
+  $('#b-join').onclick = renderJoin;
+}
+function renderJoin(){
+  el.innerHTML = `
+    <h1 style="font-size:clamp(30px,7vw,46px)">Meedoen</h1>
+    <div class="card stack">
+      <div class="stack"><label class="lbl" for="i-code">Spelcode</label>
+        <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
+      <div class="stack"><label class="lbl" for="i-name">Jouw naam</label>
+        <input id="i-name" maxlength="16" placeholder="Bijv. Nikki"></div>
+      <p id="join-err" class="err" style="min-height:18px;margin:0"></p>
+      <button class="btn big" id="b-go">Verbinden</button>
+      <button class="btn ghost" id="b-back">Terug</button>
+    </div>`;
+  $('#b-back').onclick = renderHome;
+  const code=$('#i-code'), name=$('#i-name'), err=$('#join-err');
+  $('#b-go').onclick = async ()=>{
+    const c=code.value.trim().toUpperCase(), n=name.value.trim();
+    if(c.length!==4){ err.textContent='Vul een geldige code van 4 letters in.'; return; }
+    if(!n){ err.textContent='Vul een naam in.'; return; }
+    $('#b-go').disabled=true; err.textContent='';
+    try{
+      const ok = await playerJoin(c,n);
+      if(!ok){ err.textContent='Geen spel gevonden met die code.'; $('#b-go').disabled=false; }
+    }catch(e){ err.textContent='Verbinden mislukt — check je Firebase-config.'; $('#b-go').disabled=false; }
+  };
+  name.addEventListener('keydown',e=>{ if(e.key==='Enter') $('#b-go').click(); });
+}
+
+/* ============================================================
+   RENDER — HOST
+   ============================================================ */
+function renderHost(){
+  if(app.phase==='lobby') return hostLobby();
+  if(app.phase==='question') return hostQuestion();
+  if(app.phase==='reveal') return hostRevealView();
+  if(app.phase==='final') return hostFinal();
+}
+function hostLobby(){
+  const names = Object.values(app.names);
+  const chips = names.length
+    ? `<div class="chips">${names.map(n=>`<span class="pill ok">✓ ${esc(n)}</span>`).join('')}</div>`
+    : `<p class="muted">Nog niemand verbonden… <span class="waiting-dots"></span></p>`;
+  el.innerHTML = `
+    <div class="center stack" style="gap:4px">
+      <div class="qmeta">Open deze site en vul de code in</div>
+      <div class="code">${app.code}</div>
+    </div>
+    <div class="card stack"><div class="statusbar"><b>Spelers (${names.length})</b></div>${chips}</div>
+    <div class="row">
+      <button class="btn grow big" id="b-start" ${names.length?'':'disabled'}>Quiz starten</button>
+      <button class="btn ghost" id="b-end">Stoppen</button>
+    </div>
+    <p class="footnote">${ROUNDS.length} rondes klaar om te spelen.</p>`;
+  $('#b-start').onclick = hostStart;
+  $('#b-end').onclick = hostEnd;
+}
+function hostQuestion(){
+  const r = ROUNDS[app.round];
+  const total = Object.keys(app.names).length, done = app.answeredCount;
+  const pct = total? Math.round(done/total*100):0, allIn = total>0 && done>=total;
+  const opts = r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('');
+  el.innerHTML = `
+    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill ${allIn?'ok':''}">${done}/${total} geantwoord</span></div>
+    <div class="spotlight"><div class="qmeta">${r.points} punten</div><div class="qtext">${esc(r.question)}</div></div>
+    <div class="answers">${opts}</div>
+    <div class="progress"><i style="width:${pct}%"></i></div>
+    <button class="btn big" id="b-reveal" ${done>0?'':'disabled'}>${allIn?'Toon het antwoord':'Toch al onthullen'}</button>`;
+  $('#b-reveal').onclick = hostReveal;
+}
+function hostRevealView(){
+  const r = ROUNDS[app.round];
+  const opts = r.options.map((o,i)=>`<div class="ans ${i===r.correctIndex?'correct':'dim'}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('');
+  const last = app.round===ROUNDS.length-1;
+  el.innerHTML = `
+    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill ok">Antwoord</span></div>
+    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(r.options[r.correctIndex])}</div></div>
+    <div class="answers">${opts}</div>
+    ${leaderboardHTML(true)}
+    <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende ronde'}</button>`;
+  $('#b-next').onclick = hostNext;
+}
+function hostFinal(){
+  el.innerHTML = `
+    <div class="center"><div class="qmeta">Dat was het</div><h1 style="font-size:clamp(32px,8vw,52px)">Eindstand</h1></div>
+    ${podiumHTML()}${leaderboardHTML(false)}
+    <button class="btn big" id="b-new">Nieuw spel</button>`;
+  $('#b-new').onclick = hostEnd;
+}
+function leaderboardHTML(showGain){
+  const rows = Object.keys(app.names).map(pid=>({pid,name:app.names[pid],score:app.scores[pid]||0,
+    gain: app.results && app.results[pid] ? app.results[pid].gained : 0})).sort((a,b)=>b.score-a.score);
+  if(!rows.length) return '';
+  return `<div class="card lb">${rows.map((p,i)=>`<div class="lbrow">
+      <span class="rank">${i+1}</span><span class="nm">${esc(p.name)}</span>
+      ${showGain && p.gain>0?`<span class="gain">+${p.gain}</span>`:''}<span class="sc">${p.score}</span></div>`).join('')}</div>`;
+}
+function podiumHTML(){
+  const rows = Object.keys(app.names).map(pid=>({name:app.names[pid],score:app.scores[pid]||0})).sort((a,b)=>b.score-a.score);
+  if(!rows.length) return '';
+  const order=[1,0,2], cls=['second','first','third'], med=['🥈','🥇','🥉'];
+  return `<div class="podium">${order.map((idx,slot)=>{ const p=rows[idx]; if(!p) return '<div></div>';
+    return `<div class="pcol ${cls[slot]}"><div class="medal">${med[slot]}</div><div class="nm">${esc(p.name)}</div><div class="sc">${p.score}</div></div>`;}).join('')}</div>`;
+}
+
+/* ============================================================
+   RENDER — SPELER
+   ============================================================ */
+function renderPlayer(){
+  const g = app.game; if(!g) return;
+  if(g.phase==='lobby')   return playerLobby();
+  if(g.phase==='question')return playerQuestion();
+  if(g.phase==='reveal')  return playerReveal();
+  if(g.phase==='final')   return playerFinal();
+}
+function playerLobby(){
+  const others = Object.values(app.game.names||{});
+  el.innerHTML = `
+    <div class="center stack"><div class="qmeta">Verbonden als</div><h1>${esc(app.name)}</h1>
+      <p class="muted">Wachten tot de host start <span class="waiting-dots"></span></p></div>
+    <div class="card"><b>Spelers (${others.length})</b><div class="chips" style="margin-top:10px">${others.map(n=>`<span class="pill ${n===app.name?'ok':''}">${esc(n)}</span>`).join('')}</div></div>`;
+}
+function playerQuestion(){
+  const g = app.game;
+  if(app.submittedRound===g.round) return playerWaiting();
+  const r = g.current;
+  const opts = r.options.map((o,i)=>`<button class="ans ${app.sel===i?'sel':''}" data-i="${i}" data-c="${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('');
+  el.innerHTML = `
+    <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${r.points} punten</span></div>
+    <div class="spotlight"><div class="qtext">${esc(r.question)}</div></div>
+    <div class="answers">${opts}</div>
+    <button class="btn big" id="b-submit" ${app.sel==null?'disabled':''}>Antwoord bevestigen</button>`;
+  el.querySelectorAll('.ans').forEach(b=>{ b.onclick=()=>{ app.sel=parseInt(b.dataset.i,10); renderPlayer(); }; });
+  $('#b-submit').onclick = playerSubmit;
+}
+function playerWaiting(){
+  const g=app.game;
+  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+    <h1>Antwoord binnen ✓</h1><p class="muted">Wachten op de rest <span class="waiting-dots"></span></p>
+    <span class="pill" style="align-self:center">${g.answeredCount}/${g.totalPlayers} geantwoord</span></div>`;
+}
+function playerReveal(){
+  const g=app.game, res = g.results && g.results[app.pid];
+  const correct = res && res.correct, myAns = res ? res.answer : null;
+  const opts = g.current.options.map((o,i)=>{ let cls='dim'; if(i===g.correctIndex) cls='correct'; else if(i===myAns) cls='wrong';
+    return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('');
+  const banner = res ? (correct ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>` : `<h1 style="color:var(--rood)">Helaas, fout</h1>`)
+    : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
+  el.innerHTML = `<div class="center stack">${banner}</div><div class="answers">${opts}</div>${playerLeaderboardHTML()}
+    <p class="footnote">Wachten op de host voor de volgende ronde <span class="waiting-dots"></span></p>`;
+}
+function playerFinal(){
+  const g=app.game;
+  const rows = Object.keys(g.names).map(pid=>({pid,name:g.names[pid],score:g.scores[pid]||0})).sort((a,b)=>b.score-a.score);
+  const myRank = rows.findIndex(r=>r.pid===app.pid)+1;
+  el.innerHTML = `<div class="center stack"><div class="qmeta">Eindstand</div>
+    <h1>${myRank===1?'🥇 Je hebt gewonnen!':'Je werd #'+myRank}</h1></div>${playerLeaderboardHTML()}
+    <p class="footnote">Bedankt voor het meespelen.</p>`;
+}
+function playerLeaderboardHTML(){
+  const g=app.game;
+  const rows = Object.keys(g.names).map(pid=>({pid,name:g.names[pid],score:g.scores[pid]||0,
+    gain: g.results && g.results[pid] ? g.results[pid].gained : 0})).sort((a,b)=>b.score-a.score);
+  return `<div class="card lb">${rows.map((p,i)=>`<div class="lbrow ${p.pid===app.pid?'me':''}">
+    <span class="rank">${i+1}</span><span class="nm">${esc(p.name)}</span>
+    ${p.gain>0?`<span class="gain">+${p.gain}</span>`:''}<span class="sc">${p.score}</span></div>`).join('')}</div>`;
+}
+
+/* ============================================================ */
+renderHome();
+</script>
+</body>
+</html>
