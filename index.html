@@ -187,7 +187,7 @@ const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
   pid:null, name:'', ans:{}, submittedRound:-1, sel:null, game:null,
-  unsubPlayers:null, unsubState:null,
+  unsubPlayers:null, unsubState:null, unsubMe:null, kicked:false,
   openPicker:null, confirmKick:null,
 };
 const $ = s => document.querySelector(s);
@@ -218,7 +218,7 @@ function pushState(){
    ============================================================ */
 function startHost(){
   app.unsubPlayers = onValue(playersRef(app.code), snap=>{
-    const present = Object.values(snap.val() || {});
+    const present = Object.values(snap.val() || {}).filter(p=> p && p.id && p.name);
     app.players = present;
     // namen blijven bewaard (ook als iemand wegvalt) voor scorebord
     present.forEach(p=>{ app.names[p.id]=p.name; if(!(p.id in app.scores)) app.scores[p.id]=0; });
@@ -235,10 +235,15 @@ function startPlayer(){
     const v = snap.val(); if(!v) return;
     app.game = v; setConn('verbonden'); renderPlayer();
   });
+  // eigen node bewaken: verdwijnt die, dan ben je door de host verwijderd
+  app.unsubMe = onValue(playerRef(app.code, app.pid), snap=>{
+    if(!snap.exists() && !app.kicked){ app.kicked=true; cleanup(); renderPlayerKicked(); }
+  });
 }
 function cleanup(){
   if(app.unsubPlayers){ app.unsubPlayers(); app.unsubPlayers=null; }
   if(app.unsubState){ app.unsubState(); app.unsubState=null; }
+  if(app.unsubMe){ app.unsubMe(); app.unsubMe=null; }
 }
 
 /* ============================================================
@@ -299,7 +304,7 @@ async function playerJoin(code, name){
   return true;
 }
 async function playerSubmit(){
-  if(app.sel==null) return;
+  if(app.kicked || app.sel==null) return;
   const r = app.game.round;
   app.ans[r] = app.sel; app.submittedRound = r;
   await set(ansRef(app.code, app.pid, r), app.sel);
@@ -309,7 +314,7 @@ async function playerSubmit(){
 /* ============================================================
    NAVIGATIE
    ============================================================ */
-function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; setConn(''); renderHome(); }
+function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; app.kicked=false; setConn(''); renderHome(); }
 
 /* ============================================================
    RENDER — HOME
@@ -371,7 +376,7 @@ function playerRowsHTML(mode){
       return `<div class="prow"><span class="nm">${esc(p.name)}</span>${kick}</div>`;
     const status = answered
       ? `<span class="st ok">geantwoord ✓</span>`
-      : `<span class="st">bezig<span class="waiting-dots"></span></span>`;
+      : `<span class="st"><span class="waiting-dots"></span></span>`;
     const picker = app.openPicker===p.id
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
@@ -439,7 +444,7 @@ function hostRevealView(){
     const correct = i===r.correctIndex;
     return `<div class="ansline ${correct?'correct':'dim'}" data-c="${i}">
         <div class="ans-head"><span class="shape">${SHAPES[i]}</span><span class="otxt">${esc(o)}</span>${correct?'<span class="tag">goed</span>':''}</div>
-        <div class="whos">${who || '<span class="who empty">niemand</span>'}</div>
+        ${who ? `<div class="whos">${who}</div>` : ''}
       </div>`;
   }).join('');
   const noAnsHTML = noAns.length ? `<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>` : '';
@@ -480,11 +485,19 @@ function podiumHTML(){
    RENDER — SPELER
    ============================================================ */
 function renderPlayer(){
+  if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
   if(g.phase==='lobby')   return playerLobby();
   if(g.phase==='question')return playerQuestion();
   if(g.phase==='reveal')  return playerReveal();
   if(g.phase==='final')   return playerFinal();
+}
+function renderPlayerKicked(){
+  el.innerHTML = `<div class="center stack">
+    <h1>Je bent uit het spel gehaald</h1>
+    <p class="muted">De host heeft je verwijderd.</p>
+    <button class="btn big ghost" id="b-home">Terug naar start</button></div>`;
+  $('#b-home').onclick = ()=>{ app.kicked=false; resetToHome(); };
 }
 function playerLobby(){
   const others = Object.values(app.game.names||{});
