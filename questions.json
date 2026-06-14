@@ -1,0 +1,75 @@
+[
+  {
+    "question": "Wat is de hoofdstad van Japan?",
+    "options": ["Tokio", "Osaka", "Kyoto", "Nagoya"],
+    "answer": 0,
+    "points": 100
+  },
+  {
+    "question": "Welke studio maakte de film Princess Mononoke?",
+    "options": ["Pixar", "Studio Ghibli", "Disney", "DreamWorks"],
+    "answer": 1,
+    "points": 100
+  },
+  {
+    "question": "Welk land? (eerder = meer punten)",
+    "stages": [
+      { "text": "Ligt in Scandinavië." },
+      { "text": "Bekend om fjorden en de Hardangervidda." },
+      { "text": "De hoofdstad is Oslo." }
+    ],
+    "options": ["Noorwegen", "Zweden", "Finland", "IJsland"],
+    "answer": 0,
+    "pointsByStage": [300, 200, 100]
+  },
+  {
+    "question": "Welk land? (inzetronde)",
+    "stages": [
+      { "text": "Ligt in Azië.", "betMultiplier": 3 },
+      { "text": "Bestaat uit duizenden eilanden.", "betMultiplier": 2 },
+      { "text": "Bekend om sushi en anime.", "betMultiplier": 1.5 },
+      { "text": "De hoofdstad is Tokio.", "betMultiplier": 1 }
+    ],
+    "options": ["Japan", "Zuid-Korea", "China", "Thailand"],
+    "answer": 0,
+    "points": 100
+  },
+  {
+    "question": "Welke film? (zoek zelf + inzet)",
+    "stages": [
+      { "text": "Psychologische film uit 1999 van David Fincher.", "betMultiplier": 3 },
+      { "text": "Met Brad Pitt en Edward Norton.", "betMultiplier": 2 },
+      { "text": "Bekend om zijn twist-einde en een ondergrondse club.", "betMultiplier": 1 }
+    ],
+    "options": ":tmdb",
+    "answer": 550,
+    "answerLabel": "Fight Club",
+    "points": 100
+  },
+  {
+    "question": "Welke film uit 1995?",
+    "stages": [
+      { "image": "actors/John_Morris.webp", "betMultiplier": 3 },
+      { "image": "actors/Tim_Allen.webp", "betMultiplier": 2 },
+      { "image": "actors/Tom_Hanks.webp", "betMultiplier": 1 }
+    ],
+    "options": ":tmdb",
+    "answer": 862,
+    "answerLabel": "Toy Story",
+    "points": 100
+  },
+  {
+    "question": "Welk nummer? — 2009 · 1.1B views · par 2",
+    "stages": [
+      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/1-drums.m4a", "betMultiplier": 3 },
+      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/2-electric_guitar.m4a", "betMultiplier": 2 },
+      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/3-bass.m4a", "betMultiplier": 1.5 },
+      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/4-electric_guitar_2.m4a", "betMultiplier": 1.25 },
+      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/5-voice_cover.m4a", "betMultiplier": 1 }
+    ],
+    "options": ":deezer",
+    "answer": 4233792,
+    "answerLabel": "Miley Cyrus – Party in the U.S.A.",
+    "points": 100
+  }
+]
