@@ -178,7 +178,15 @@
     .hostaside{position:sticky;top:16px}
   }
   .psc{margin-left:auto;font-family:var(--display);font-weight:700;color:var(--gold);font-size:15px;padding:0 4px}
-  .st.good{color:var(--groen)} .st.wait{color:var(--muted)}
+  .st.good{color:var(--groen)} .st.wait{color:var(--muted)} .st.bad{color:var(--rood)}
+  .pwin{font-family:var(--display);font-weight:700;color:var(--groen);font-size:14px;white-space:nowrap}
+  .pbust{font-family:var(--display);font-weight:700;color:var(--rood);font-size:14px}
+  .betval{margin-left:auto;font-size:13px;font-weight:600;color:var(--gold)}
+  /* pas-knop + popup */
+  .pasbtn{margin-top:10px}
+  .modal{position:fixed;inset:0;background:rgba(10,6,24,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
+  .modalcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .funbanner{border-color:rgba(255,194,60,.5)!important;background:rgba(255,194,60,.10)}
 </style>
 </head>
 <body>
@@ -353,10 +361,10 @@ function validateQuiz(data){
 const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
-  quiz:[], quizName:'', quizErr:'', stage:0,
-  pid:null, name:'', ans:{}, bet:{}, submittedRound:-1, sel:null, game:null,
+  quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false,
+  pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
   searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false,
-  myStage:null, reguess:false,
+  myStage:null, reguess:false, forFun:false,
   unsubPlayers:null, unsubState:null, unsubMe:null, kicked:false,
   openPicker:null, confirmKick:null,
 };
@@ -407,8 +415,8 @@ function publicCurrent(){
   return base;
 }
 function pushState(){
-  // per-speler oordeel over hun huidige gok (alleen bij gestage vragen; spelers zien dit pas na de volgende hint)
-  let judged = null;
+  // per-speler oordeel over hun huidige gok (alleen zichtbaar voor spelers ná 'controleer antwoorden')
+  let judged = null, bets = null;
   if(app.phase==='question'){
     const r = app.quiz[app.round];
     if(r && Array.isArray(r.stages)){
@@ -418,13 +426,18 @@ function pushState(){
         if(a!=null) judged[p.id] = (String(a)===String(r.answer));
       });
     }
+    if(r && r.betting){
+      bets = {};
+      app.players.forEach(p=>{ if(p.bet && p.bet[app.round]!=null) bets[p.id]=p.bet[app.round]; });
+    }
   }
   set(stateRef(app.code), {
     phase: app.phase, round: app.round, totalRounds: app.quiz.length, stage: app.stage,
+    betStep: app.betStep, checked: app.checked,
     current: (app.phase==='question'||app.phase==='reveal') ? publicCurrent() : null,
     scores: app.scores, names: app.names,
     results: app.phase==='reveal' ? app.results : null,
-    judged,
+    judged, bets,
     answeredCount: app.answeredCount, totalPlayers: Object.keys(app.names).length, ts: Date.now(),
   });
 }
@@ -503,6 +516,8 @@ async function hostResume(code){
   app.phase  = s.phase || 'lobby';
   app.round  = (s.round!=null) ? s.round : -1;
   app.stage  = s.stage || 0;
+  app.betStep = s.betStep!=null ? s.betStep : null;
+  app.checked = !!s.checked;
   app.scores = s.scores || {};
   app.names  = s.names  || {};
   app.results= s.results || null;
@@ -514,7 +529,13 @@ async function hostResume(code){
   startHost(); renderHost();
   return true;
 }
-function hostStart(){ app.round=0; app.stage=0; app.phase='question'; app.answeredCount=0; app.results=null; pushState(); renderHost(); }
+/* zet de sub-stappen klaar voor een nieuwe vraag */
+function initQuestion(){
+  const r = app.quiz[app.round];
+  app.stage=0; app.checked=false; app.answeredCount=0; app.results=null;
+  app.betStep = (r && r.betting) ? 'bet' : null;
+}
+function hostStart(){ app.round=0; app.phase='question'; initQuestion(); pushState(); renderHost(); }
 /* punten bepalen op basis van (eventueel overrulede) correctheid */
 function computeGain(r, correct, bet, lock){
   if(!correct) return { gained:0, won:false };
@@ -528,6 +549,25 @@ function computeGain(r, correct, bet, lock){
   }
   return { gained: r.points??100, won:true };
 }
+/* leesbare puntenweergave bij 'controleer antwoorden'
+   -> {text, kind}  kind: 'win' | 'bust' | 'open' (nog mogelijk, leeg) */
+function pointsInfo(r, correct, lock, bet, stage){
+  const base = r.points ?? 100;
+  if(r.betting){
+    if(correct){
+      const won = (bet!=null && lock!=null && lock<=bet);
+      if(won) return { text:`+${base} × ${r.betMultipliers[bet]||1}`, kind:'win' };
+      return { text:'0', kind:'bust' };
+    }
+    if(bet!=null && stage>=bet) return { text:'0', kind:'bust' };  // inzet-deadline verstreken
+    return { text:'', kind:'open' };                                // nog mogelijk
+  }
+  if(Array.isArray(r.stages) && r.pointsByStage){
+    if(correct){ const p=r.pointsByStage[lock] ?? base; return { text:`+${p}`, kind:'win' }; }
+    return stage>=r.stages.length-1 ? { text:'0', kind:'bust' } : { text:'', kind:'open' };
+  }
+  return correct ? { text:`+${base}`, kind:'win' } : { text:'0', kind:'bust' };
+}
 function hostReveal(){
   const r = app.quiz[app.round];
   if(Array.isArray(r.stages)) app.stage = r.stages.length-1;   // bij onthullen alles tonen
@@ -537,13 +577,19 @@ function hostReveal(){
     const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
     const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
+    const passed = !!(p.pass && p.pass[app.round]);
     const auto = a!=null && String(a)===String(r.answer);
     const g = computeGain(r, auto, bet, lock);
     app.scores[p.id] = (app.scores[p.id]||0) + g.gained;
-    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct:auto, gained:g.gained, won:g.won, bet, lock };
+    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct:auto, gained:g.gained, won:g.won, bet, lock, passed };
   });
   app.phase='reveal'; pushState(); renderHost();
 }
+/* ---- host sub-stappen binnen een vraag ---- */
+function hostRevealBets(){ app.betStep='reveal'; pushState(); renderHost(); }
+function hostStartPlay(){ app.betStep='play'; app.checked=false; pushState(); renderHost(); }
+function hostCheck(){ app.checked=true; pushState(); renderHost(); }
+function hostNextHint(){ app.stage++; app.checked=false; pushState(); renderHost(); }
 /* host overruled goed/fout; punten worden direct bijgewerkt */
 function hostToggleCorrect(pid){
   const r = app.quiz[app.round];
@@ -555,7 +601,7 @@ function hostToggleCorrect(pid){
   pushState(); renderHost();
 }
 function hostNext(){
-  if(app.round+1 < app.quiz.length){ app.round++; app.stage=0; app.phase='question'; app.answeredCount=0; app.results=null; }
+  if(app.round+1 < app.quiz.length){ app.round++; app.phase='question'; initQuestion(); }
   else app.phase='final';
   pushState(); renderHost();
 }
@@ -618,6 +664,13 @@ async function playerBet(k){
   const r = app.game.round;
   app.bet[r] = k;
   await set(ref(db, `games/${app.code}/players/${app.pid}/bet/${r}`), k);
+  renderPlayer();
+}
+async function playerPass(){
+  if(app.kicked) return;
+  const r = app.game.round;
+  app.confirmPass=false; app.passed[r]=true;
+  await set(ref(db, `games/${app.code}/players/${app.pid}/pass/${r}`), true);
   renderPlayer();
 }
 
@@ -723,20 +776,30 @@ function playerRowsHTML(mode){
     if(mode==='lobby')
       return `<div class="prow"><span class="nm">${esc(p.name)}</span>${kick}</div>`;
     const a = answered ? p.ans[app.round] : null;
-    let badge;
-    if(a==null) badge = `<span class="st wait">… moet nog</span>`;
-    else if(staged && String(a)===String(r.answer)) badge = `<span class="st good">🎯 goed</span>`;
-    else badge = `<span class="st ok">✓ geantwoord</span>`;
+    const passed = !!(p.pass && p.pass[app.round]);
+    const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
+    const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
+    const correct = a!=null && String(a)===String(r.answer);
+    let badge, ptxt='';
+    if(passed) badge = `<span class="st wait">⤴ gepast</span>`;
+    else if(a==null) badge = `<span class="st wait">… moet nog</span>`;
+    else if(!staged || !app.checked) badge = `<span class="st ok">✓ geantwoord</span>`;
+    else {
+      const pi = pointsInfo(r, correct, lock, bet, app.stage);
+      if(correct){ badge = `<span class="st good">🎯 goed</span>`; ptxt = `<span class="pwin">${pi.text}</span>`; }
+      else if(pi.kind==='open') badge = `<span class="st wait">✗ nog kans</span>`;
+      else { badge = `<span class="st bad">✗</span>`; ptxt = `<span class="pbust">0</span>`; }
+    }
     const sc = `<span class="psc">${score}</span>`;
     if(!canPick){
-      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${sc}${badge}${kick}</div>`;
+      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${sc}${badge}${ptxt}${kick}</div>`;
     }
     const picker = app.openPicker===p.id
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
     return `<div class="prow ${answered?'answered':''}">
         <button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span class="nm">${esc(p.name)}</span></button>
-        ${sc}${badge}${kick}
+        ${sc}${badge}${ptxt}${kick}
       </div>${picker}`;
   }).join('');
 }
@@ -785,6 +848,36 @@ function playerStagesHTML(c){
     return stageRowHTML(s.kind, s.label, idx, cur, !!s.revealed, media, false);
   }).join('')}</div>`;
 }
+/* inzet-overzicht per speler */
+function betOverviewHTML(entries, mults){
+  if(!entries.length) return `<p class="muted">Niemand heeft ingezet.</p>`;
+  return `<div class="plist">${entries.map(e=>{
+    const txt = e.bet!=null ? `uiterlijk hint ${e.bet+1} · ×${(mults||[])[e.bet]}` : 'gepast / geen inzet';
+    return `<div class="prow"><span class="nm">${esc(e.name)}</span><span class="betval">${esc(txt)}</span></div>`;
+  }).join('')}</div>`;
+}
+/* host-statuszijbalk */
+function hostAside(){
+  const r = app.quiz[app.round];
+  const hint = (r && r.optionsMode==='list') ? '<span class="muted" style="font-size:12px">Tik naam om in te vullen</span>' : '';
+  return `<aside class="hostaside"><div class="card stack" style="gap:10px">
+    <div class="statusbar"><b>Status</b>${hint}</div>
+    <div class="plist">${playerRowsHTML('question')}</div></div></aside>`;
+}
+/* pas-knop + bevestigingspopup (speler) */
+const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
+function passModalHTML(){
+  return app.confirmPass ? `<div class="modal"><div class="modalcard stack" style="gap:12px">
+      <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
+      <p class="muted" style="margin:0;font-size:13px">Je doet dan deze ronde niet mee voor punten.</p>
+      <div class="row"><button class="btn grow" id="b-passno">Nee</button><button class="btn grow danger" id="b-passyes">Ja, passen</button></div>
+    </div></div>` : '';
+}
+function wirePass(){
+  const pb=$('#b-pass'); if(pb) pb.onclick=()=>{ app.confirmPass=true; renderPlayer(); };
+  const py=$('#b-passyes'); if(py) py.onclick=playerPass;
+  const pn=$('#b-passno'); if(pn) pn.onclick=()=>{ app.confirmPass=false; renderPlayer(); };
+}
 function renderHost(){
   const wrap = document.querySelector('.wrap');
   if(wrap) wrap.classList.toggle('wide', app.phase==='question');
@@ -821,44 +914,81 @@ function hostLobby(){
 function hostQuestion(){
   const r = app.quiz[app.round];
   const staged = Array.isArray(r.stages);
+  const betting = !!r.betting;
+
+  // ---- INZET: stap 1 — wachten tot iedereen heeft gewed ----
+  if(betting && app.betStep==='bet'){
+    const placed = app.players.filter(p=> p.bet && p.bet[app.round]!=null).length;
+    const passed = app.players.filter(p=> p.pass && p.pass[app.round]).length;
+    el.innerHTML = `
+      <div class="hostgrid">
+        <div class="hostmain">
+          <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill">inzetten</span></div>
+          <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
+          <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
+          <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
+        </div>
+        ${hostAside()}
+      </div>`;
+    $('#b-revealbets').onclick = hostRevealBets;
+    wirePlayerControls();
+    return;
+  }
+  // ---- INZET: stap 2 — inzetten tonen, daarna de vraag starten ----
+  if(betting && app.betStep==='reveal'){
+    const entries = app.players.map(p=>({ name:p.name, bet:(p.bet&&p.bet[app.round]!=null)?p.bet[app.round]:null }));
+    el.innerHTML = `
+      <div class="hostgrid">
+        <div class="hostmain">
+          <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill ok">inzetten</span></div>
+          <div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div><div class="qtext" style="font-size:24px">De inzetten</div></div>
+          ${betOverviewHTML(entries, r.betMultipliers)}
+          <button class="btn big" id="b-startplay">Start de vraag</button>
+        </div>
+        ${hostAside()}
+      </div>`;
+    $('#b-startplay').onclick = hostStartPlay;
+    wirePlayerControls();
+    return;
+  }
+
+  // ---- SPELEN ----
   const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
   const opts = r.optionsMode==='list'
     ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
     : `<p class="muted center" style="font-size:13px">Spelers zoeken zelf het antwoord (${r.optionsMode==='tmdb'?'film':'nummer'}).</p>`;
-  let spot, hintBtn='', betPill='';
+  let spot, controls;
   if(staged){
-    const stages = r.stages;
-    const meta = r.betting ? `${esc(r.question||'')} · inzetronde`
-                           : `${esc(r.question||'')} · nu ${(r.pointsByStage||[])[app.stage] ?? (r.points??100)} punten`;
+    const meta = betting ? `${esc(r.question||'')} · inzetronde`
+                         : `${esc(r.question||'')} · nu ${(r.pointsByStage||[])[app.stage] ?? (r.points??100)} punten`;
     spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${hostStagesHTML(r, app.stage)}</div>`;
-    if(app.stage < stages.length-1)
-      hintBtn = `<button class="btn ghost" id="b-hint">Volgende hint (${app.stage+2}/${stages.length})</button>`;
-    if(r.betting){
-      const placed = app.players.filter(p=> p.bet && p.bet[app.round]!=null).length;
-      betPill = `<span class="pill">${placed}/${app.players.length} ingezet</span>`;
+    if(!app.checked){
+      const everyonePassed = app.players.length>0 && app.players.every(p=> p.pass && p.pass[app.round]);
+      controls = everyonePassed
+        ? `<button class="btn big" id="b-reveal">Toon het antwoord</button>`
+        : `<button class="btn big" id="b-check" ${answeredAny?'':'disabled'}>Controleer antwoorden</button>`;
+    } else {
+      const moreHints = app.stage < r.stages.length-1;
+      controls = `${moreHints?`<button class="btn ghost" id="b-hint">Volgende hint (${app.stage+2}/${r.stages.length})</button>`:''}
+                  <button class="btn big" id="b-reveal">Toon het antwoord</button>`;
     }
   } else {
     spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
+    controls = `<button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   }
-  const pickHint = r.optionsMode==='list' ? '<span class="muted" style="font-size:12px">Tik op een naam om in te vullen</span>' : '';
   el.innerHTML = `
     <div class="hostgrid">
       <div class="hostmain">
-        <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${betPill}</div>
+        <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${app.checked?'<span class="pill ok">gecontroleerd</span>':''}</div>
         ${spot}
         ${opts}
-        ${hintBtn}
-        <button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>
+        ${controls}
       </div>
-      <aside class="hostaside">
-        <div class="card stack" style="gap:10px">
-          <div class="statusbar"><b>Status</b>${pickHint}</div>
-          <div class="plist">${playerRowsHTML('question')}</div>
-        </div>
-      </aside>
+      ${hostAside()}
     </div>`;
-  const hb = $('#b-hint'); if(hb) hb.onclick = ()=>{ app.stage++; pushState(); renderHost(); };
-  $('#b-reveal').onclick = hostReveal;
+  const cb=$('#b-check'); if(cb) cb.onclick=hostCheck;
+  const hb=$('#b-hint'); if(hb) hb.onclick=hostNextHint;
+  const rb=$('#b-reveal'); if(rb) rb.onclick=hostReveal;
   wirePlayerControls();
 }
 function hostRevealView(){
@@ -886,7 +1016,8 @@ function hostRevealView(){
       <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
     </div>`;
   }).join('');
-  const noAns = app.players.filter(p=> !res[p.id] || res[p.id].answer==null).map(p=>p.name);
+  const noAns = app.players.filter(p=> (!res[p.id] || res[p.id].answer==null) && !(res[p.id] && res[p.id].passed)).map(p=>p.name);
+  const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill ok">Antwoord</span></div>
     <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div></div>
@@ -895,6 +1026,7 @@ function hostRevealView(){
       <p class="muted" style="margin:0;font-size:12px">Tik op goed/fout om handmatig te overrulen.</p>
       ${reviewRows || '<p class="muted" style="margin:0">Niemand heeft geantwoord.</p>'}</div>
     ${noAns.length?`<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>`:''}
+    ${passedNames.length?`<p class="footnote">Gepast: ${passedNames.map(esc).join(', ')}</p>`:''}
     ${leaderboardHTML(true)}
     <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende ronde'}</button>`;
   el.querySelectorAll('[data-judge]').forEach(b=> b.onclick=()=> hostToggleCorrect(b.dataset.judge));
@@ -1006,55 +1138,76 @@ function wireAnswerArea(r){
 function playerQuestion(){
   const g = app.game;
   const r = g.current;
-  // nieuwe ronde → zoek- en herkansstaat resetten
+  // nieuwe ronde → staat resetten
   if(app.searchRound!==g.round){
     app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null;
-    app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null; app.reguess=false;
+    app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null;
+    app.reguess=false; app.forFun=false; app.confirmPass=false;
   }
 
-  // al iets ingestuurd deze ronde?
-  if(app.submittedRound===g.round){
-    if(!r.staged) return playerWaiting();                    // niet-gestage: vergrendeld tot reveal
-    const advanced = (g.stage||0) > (app.myStage||0);        // host is naar de volgende hint
-    if(!advanced) return playerHold('hold');                 // oordeel pas ná de volgende hint
-    const verdict = g.judged ? g.judged[app.pid] : undefined;
-    if(verdict===true){
-      let note = 'Wachten op de host';
-      if(r.betting){
-        const bet = app.bet[g.round];
-        note = (bet!=null && app.myStage!=null && app.myStage<=bet)
-          ? 'Op tijd voor je inzet 🎉 — wachten op de host'
-          : 'Maar later dan je inzet, dus 0 punten — wachten op de host';
-      }
-      return playerHold('correct', note);
+  // gepast?
+  if(app.passed[g.round]) return playerPassed();
+
+  // ---- INZET: stap 1 — inzetten ----
+  if(r.betting && g.betStep==='bet'){
+    if(app.bet[g.round]==null){
+      const spot = `<div class="spotlight"><div class="qtext">${esc(r.question||'')}</div></div>`;
+      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
+      el.innerHTML = `
+        <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
+        ${spot}
+        <div class="card stack" style="gap:10px">
+          <b>Wanneer heb je 'm uiterlijk?</b>
+          <p class="muted" style="margin:0;font-size:13px">Eerder inzetten = hogere multiplier. Haal je 'm niet op tijd, dan 0 punten.</p>
+          <div class="bets">${bets}</div>
+        </div>
+        ${passBtnHTML}${passModalHTML()}`;
+      el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=> playerBet(parseInt(b.dataset.bet,10)));
+      wirePass();
+      return;
     }
-    // fout + nieuwe hint → opnieuw raden
-    app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText='';
-    app.searchResults=[]; app.searchOpen=false; app.reguess=true;
+    const m=(r.betMultipliers||[])[app.bet[g.round]];
+    return playerHold('betwait', `Je inzet: uiterlijk hint ${app.bet[g.round]+1} (×${m}) — wachten tot iedereen heeft gewed`);
   }
-
-  // gestage MET inzet: eerst inzetten (alleen de vraag/intro zichtbaar)
-  if(r.staged && r.betting && app.bet[g.round]==null){
-    const spot = `<div class="spotlight"><div class="qtext">${esc(r.question||'')}</div></div>`;
-    const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
+  // ---- INZET: stap 2 — inzetten van iedereen tonen ----
+  if(r.betting && g.betStep==='reveal'){
+    const entries = Object.keys(g.names||{}).map(pid=>({ name:g.names[pid], bet:(g.bets&&g.bets[pid]!=null)?g.bets[pid]:null }));
     el.innerHTML = `
-      <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
-      ${spot}
-      <div class="card stack" style="gap:10px">
-        <b>Wanneer heb je 'm uiterlijk?</b>
-        <p class="muted" style="margin:0;font-size:13px">Eerder inzetten = hogere multiplier. Haal je 'm niet op tijd, dan 0 punten.</p>
-        <div class="bets">${bets}</div>
-      </div>`;
-    el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=> playerBet(parseInt(b.dataset.bet,10)));
+      <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill ok">inzetten</span></div>
+      <div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div><div class="qtext" style="font-size:22px">De inzetten</div></div>
+      ${betOverviewHTML(entries, r.betMultipliers)}
+      <p class="footnote">Wachten tot de host de vraag start <span class="waiting-dots"></span></p>`;
     return;
   }
 
+  // ---- SPELEN: al iets ingestuurd? ----
+  if(app.submittedRound===g.round){
+    if(!r.staged) return playerWaiting();
+    const advanced = (g.stage||0) > (app.myStage||0);
+    if(!advanced){
+      if(!g.checked) return playerHold('hold');                 // wacht op 'controleer antwoorden'
+      const verdict = g.judged ? g.judged[app.pid] : undefined;
+      if(verdict===true) return playerHold('correct', winNote(r,g));
+      const pi = pointsInfo(r, false, app.myStage, app.bet[g.round], g.stage);
+      return pi.kind==='bust' ? playerHold('bust') : playerHold('wronghint');
+    }
+    // nieuwe hint: goed = vergrendeld blijven, fout = opnieuw raden
+    const verdict = g.judged ? g.judged[app.pid] : undefined;
+    if(verdict===true) return playerHold('correct', winNote(r,g));
+    const busted = pointsInfo(r, false, app.myStage, app.bet[g.round], g.stage).kind==='bust';
+    app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText='';
+    app.searchResults=[]; app.searchOpen=false; app.reguess=true; app.forFun=busted;
+  }
+
+  // ---- antwoord-UI ----
   let spot, pill;
   if(r.staged){
     if(r.betting){
-      const m = (r.betMultipliers||[])[app.bet[g.round]];
-      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · inzet uiterlijk hint ${app.bet[g.round]+1} (×${m})</div>${playerStagesHTML(r)}</div>`;
-      pill = `×${m}`;
+      const bi = app.bet[g.round];
+      const m = bi!=null ? (r.betMultipliers||[])[bi] : null;
+      const betTxt = bi!=null ? `inzet uiterlijk hint ${bi+1} (×${m})` : 'geen inzet';
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · ${betTxt}</div>${playerStagesHTML(r)}</div>`;
+      pill = bi!=null ? `×${m}` : 'voor de lol';
     } else {
       spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${r.points} punten</div>${playerStagesHTML(r)}</div>`;
       pill = `${r.points} punten`;
@@ -1063,17 +1216,30 @@ function playerQuestion(){
     spot = `<div class="spotlight">${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
     pill = `${r.points} punten`;
   }
-  const wrongBanner = app.reguess ? `<div class="card" style="border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)"><b style="color:var(--rood)">Vorige gok fout.</b> <span class="muted">Nieuwe hint — probeer opnieuw.</span></div>` : '';
+  const funBanner = app.forFun
+    ? `<div class="card funbanner"><b>Je speelt voor de lol 🎈</b> <span class="muted">Je inzet is verlopen, dit levert geen punten meer op — maar raad gerust mee!</span></div>`
+    : (app.reguess ? `<div class="card" style="border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)"><b style="color:var(--rood)">Vorige gok fout.</b> <span class="muted">Nieuwe hint — probeer opnieuw.</span></div>` : '');
   const lockReady = r.optionsMode==='list' ? app.sel!=null : app.searchPick!=null;
   const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
     ${spot}
-    ${wrongBanner}
+    ${funBanner}
     ${answerAreaHTML(r)}
-    <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>`;
+    <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>
+    ${passBtnHTML}${passModalHTML()}`;
   wireAnswerArea(r);
   $('#b-submit').onclick = playerSubmit;
+  wirePass();
+}
+function winNote(r,g){
+  const pi = pointsInfo(r, true, app.myStage, app.bet[g.round], g.stage);
+  return pi.kind==='win' ? `${pi.text} punten — wachten op de host` : 'Maar 0 punten (te laat voor je inzet) — voor de lol meegespeeld';
+}
+function playerPassed(){
+  const g=app.game;
+  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+    <h1>Je hebt gepast ⤴</h1><p class="muted">Wachten op de volgende ronde <span class="waiting-dots"></span></p></div>`;
 }
 function playerWaiting(){
   const g=app.game;
@@ -1083,12 +1249,15 @@ function playerWaiting(){
 }
 function playerHold(kind, note){
   const g=app.game;
-  const head = kind==='correct'
-    ? `<h1 style="color:var(--groen)">Goed geraden! ✓</h1>`
-    : `<h1>Antwoord binnen ✓</h1>`;
-  const sub = kind==='correct' ? (note||'Wachten op de host') : 'Wachten op de volgende hint';
+  let head, sub, color='';
+  if(kind==='correct'){ head='Goed geraden! ✓'; color='var(--groen)'; sub=note||'Wachten op de host'; }
+  else if(kind==='wronghint'){ head='Helaas, fout'; color='var(--rood)'; sub='Je krijgt zo een nieuwe hint om opnieuw te raden.'; }
+  else if(kind==='bust'){ head='Helaas, fout'; color='var(--rood)'; sub='0 punten — je inzet is verlopen. Je mag straks nog voor de lol meeraden.'; }
+  else if(kind==='betwait'){ head='Je inzet staat ✓'; sub=note||'Wachten tot iedereen heeft gewed'; }
+  else { head='Antwoord binnen ✓'; sub='Wachten op de controle'; }
+  const hStyle = color?` style="color:${color}"`:'';
   el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
-    ${head}<p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
+    <h1${hStyle}>${head}</h1><p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
 }
 function playerReveal(){
   const g=app.game, c=g.current, res = g.results && g.results[app.pid];
