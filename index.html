@@ -22,6 +22,7 @@
     background:radial-gradient(1200px 600px at 50% -10%, rgba(255,194,60,.10), transparent 60%),linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
     background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
+  .wrap.wide{max-width:1180px}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
   .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
   .brand b{font-family:var(--display);letter-spacing:.5px;font-size:15px;text-transform:uppercase}
@@ -159,6 +160,25 @@
   .judge{flex:none;padding:7px 12px;border-radius:9px;font-size:13px;font-weight:700;border:1px solid var(--line)}
   .judge.jok{background:rgba(67,214,160,.18);color:var(--groen);border-color:rgba(67,214,160,.5)}
   .judge.jbad{background:rgba(255,93,108,.16);color:var(--rood);border-color:rgba(255,93,108,.45)}
+  /* stage-lijst met omschrijvingen + indicator */
+  .stagelist{display:flex;flex-direction:column;gap:8px;text-align:left}
+  .stagerow{display:flex;gap:12px;align-items:flex-start;padding:9px 11px;border-radius:12px;border:1px solid transparent}
+  .stagerow.dim{opacity:.45}
+  .stagerow.cur{background:rgba(255,194,60,.10);border-color:rgba(255,194,60,.45)}
+  .stagerow .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .slabel{font-weight:600;font-size:15px}
+  .nowtag{margin-left:8px;font-size:12px;font-weight:700;color:var(--gold)}
+  .slocked{font-size:13px;color:var(--muted);font-style:italic}
+  /* host: twee koloms met statuszijbalk */
+  .hostgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
+  .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .hostaside{display:flex;flex-direction:column;gap:12px;min-width:0}
+  @media(min-width:900px){
+    .hostgrid{grid-template-columns:minmax(0,1fr) 320px}
+    .hostaside{position:sticky;top:16px}
+  }
+  .psc{margin-left:auto;font-family:var(--display);font-weight:700;color:var(--gold);font-size:15px;padding:0 4px}
+  .st.good{color:var(--groen)} .st.wait{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -273,6 +293,7 @@ function normStage(s){
   const o={};
   if(s.type && s.display!=null){ if(s.type==='image')o.image=s.display; else if(s.type==='audio')o.audio=s.display; else o.text=s.display; }
   if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio;
+  if(s.label!=null)o.label=s.label;
   if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
   return o;
 }
@@ -362,10 +383,19 @@ function publicCurrent(){
   if(!staged){
     base.image = r.image || null;
   } else {
-    const stages = r.stages;
-    const upto = app.phase==='reveal' ? stages.length : app.stage+1;
-    base.stagesShown = stages.slice(0, upto);
-    base.totalStages = stages.length;
+    const reveal = app.phase==='reveal';
+    base.stages = r.stages.map((s,idx)=>{
+      const revealed = reveal || idx<=app.stage;
+      const kind = s.audio?'audio':s.image?'image':'text';
+      const o = { kind, label:s.label||'', revealed };
+      if(revealed){
+        if(kind==='text') o.text = s.text||'';
+        if(kind==='image') o.image = s.image||'';
+        // audio-paden gaan NIET naar spelers: alleen de host speelt af
+      }
+      return o;
+    });
+    base.totalStages = r.stages.length;
     base.stage = app.stage;
     if(r.betting){ base.betting = true; base.betMultipliers = r.betMultipliers; }
     else if(r.pointsByStage){ base.points = r.pointsByStage[app.stage] ?? base.points; }
@@ -600,6 +630,7 @@ function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; 
    RENDER — HOME
    ============================================================ */
 function renderHome(){
+  const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   const saved = recall();
   el.innerHTML = `
     <div class="center stack" style="gap:6px">
@@ -684,24 +715,28 @@ function playerRowsHTML(mode){
   const canPick = mode==='question' && r && r.optionsMode==='list';
   return app.players.map(p=>{
     const answered = p.ans && p.ans[app.round]!=null;
+    const staged = r && Array.isArray(r.stages);
+    const score = app.scores[p.id]||0;
     const kick = app.confirmKick===p.id
       ? `<span class="kickconfirm">Verwijderen? <button class="mini danger" data-kickyes="${p.id}">Ja</button> <button class="mini" data-kickno="1">Nee</button></span>`
       : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">✕</button>`;
     if(mode==='lobby')
       return `<div class="prow"><span class="nm">${esc(p.name)}</span>${kick}</div>`;
-    const status = answered
-      ? `<span class="st ok">geantwoord ✓</span>`
-      : `<span class="st"><span class="waiting-dots"></span></span>`;
+    const a = answered ? p.ans[app.round] : null;
+    let badge;
+    if(a==null) badge = `<span class="st wait">… moet nog</span>`;
+    else if(staged && String(a)===String(r.answer)) badge = `<span class="st good">🎯 goed</span>`;
+    else badge = `<span class="st ok">✓ geantwoord</span>`;
+    const sc = `<span class="psc">${score}</span>`;
     if(!canPick){
-      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${status}${kick}</div>`;
+      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${sc}${badge}${kick}</div>`;
     }
     const picker = app.openPicker===p.id
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
     return `<div class="prow ${answered?'answered':''}">
-        <button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}">
-          <span class="nm">${esc(p.name)}</span>${status}
-        </button>${kick}
+        <button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span class="nm">${esc(p.name)}</span></button>
+        ${sc}${badge}${kick}
       </div>${picker}`;
   }).join('');
 }
@@ -718,7 +753,41 @@ function clueListHTML(stages){
   return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
     <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
 }
+/* één stage-rij; isHost bepaalt of audio afspeelbaar is */
+function stageRowHTML(kind, label, idx, cur, revealed, media, isHost){
+  const isCur = idx===cur;
+  let body;
+  if(kind==='audio'){
+    body = `<span class="slabel">${esc(label||('Fragment '+(idx+1)))}</span>${isCur?'<span class="nowtag">▶ nu</span>':''}`;
+    if(isHost && revealed) body += audioHTML(media);
+  } else if(kind==='image'){
+    body = revealed ? imgHTML(media) : `<span class="slocked">nog niet getoond</span>`;
+  } else {
+    body = revealed ? `<div class="qtext sm">${esc(media||'')}</div>` : `<span class="slocked">nog niet getoond</span>`;
+  }
+  const cls = `stagerow ${isCur?'cur':''} ${revealed?'':'dim'}`;
+  return `<div class="${cls}"><span class="cnum">${idx+1}</span><div class="cbody">${body}</div></div>`;
+}
+/* host: echte stages (incl. audio om af te spelen) */
+function hostStagesHTML(r, cur){
+  return `<div class="stagelist">${r.stages.map((s,idx)=>{
+    const kind = s.audio?'audio':s.image?'image':'text';
+    const revealed = idx<=cur;
+    const media = kind==='audio'?s.audio:kind==='image'?s.image:s.text;
+    return stageRowHTML(kind, s.label, idx, cur, revealed, media, true);
+  }).join('')}</div>`;
+}
+/* speler: stage-meta uit state (geen audio-paden) */
+function playerStagesHTML(c){
+  const cur = c.stage||0;
+  return `<div class="stagelist">${(c.stages||[]).map((s,idx)=>{
+    const media = s.kind==='image'?s.image:s.kind==='text'?s.text:null;
+    return stageRowHTML(s.kind, s.label, idx, cur, !!s.revealed, media, false);
+  }).join('')}</div>`;
+}
 function renderHost(){
+  const wrap = document.querySelector('.wrap');
+  if(wrap) wrap.classList.toggle('wide', app.phase==='question');
   if(app.phase==='lobby') return hostLobby();
   if(app.phase==='question') return hostQuestion();
   if(app.phase==='reveal') return hostRevealView();
@@ -761,7 +830,7 @@ function hostQuestion(){
     const stages = r.stages;
     const meta = r.betting ? `${esc(r.question||'')} · inzetronde`
                            : `${esc(r.question||'')} · nu ${(r.pointsByStage||[])[app.stage] ?? (r.points??100)} punten`;
-    spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${clueListHTML(stages.slice(0, app.stage+1))}</div>`;
+    spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${hostStagesHTML(r, app.stage)}</div>`;
     if(app.stage < stages.length-1)
       hintBtn = `<button class="btn ghost" id="b-hint">Volgende hint (${app.stage+2}/${stages.length})</button>`;
     if(r.betting){
@@ -771,17 +840,23 @@ function hostQuestion(){
   } else {
     spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
   }
-  const pickHint = r.optionsMode==='list' ? '<span class="muted" style="font-size:12px">Tik op een naam om zelf in te vullen</span>' : '';
+  const pickHint = r.optionsMode==='list' ? '<span class="muted" style="font-size:12px">Tik op een naam om in te vullen</span>' : '';
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${betPill}</div>
-    ${spot}
-    ${opts}
-    <div class="card stack" style="gap:10px">
-      <div class="statusbar"><b>Spelers</b>${pickHint}</div>
-      <div class="plist">${playerRowsHTML('question')}</div>
-    </div>
-    ${hintBtn}
-    <button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
+    <div class="hostgrid">
+      <div class="hostmain">
+        <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${betPill}</div>
+        ${spot}
+        ${opts}
+        ${hintBtn}
+        <button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>
+      </div>
+      <aside class="hostaside">
+        <div class="card stack" style="gap:10px">
+          <div class="statusbar"><b>Status</b>${pickHint}</div>
+          <div class="plist">${playerRowsHTML('question')}</div>
+        </div>
+      </aside>
+    </div>`;
   const hb = $('#b-hint'); if(hb) hb.onclick = ()=>{ app.stage++; pushState(); renderHost(); };
   $('#b-reveal').onclick = hostReveal;
   wirePlayerControls();
@@ -852,6 +927,7 @@ function podiumHTML(){
    RENDER — SPELER
    ============================================================ */
 function renderPlayer(){
+  const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
   if(g.phase==='lobby')   return playerLobby();
@@ -977,10 +1053,10 @@ function playerQuestion(){
   if(r.staged){
     if(r.betting){
       const m = (r.betMultipliers||[])[app.bet[g.round]];
-      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · inzet uiterlijk hint ${app.bet[g.round]+1} (×${m})</div>${clueListHTML(r.stagesShown||[])}</div>`;
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · inzet uiterlijk hint ${app.bet[g.round]+1} (×${m})</div>${playerStagesHTML(r)}</div>`;
       pill = `×${m}`;
     } else {
-      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${r.points} punten</div>${clueListHTML(r.stagesShown||[])}</div>`;
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${r.points} punten</div>${playerStagesHTML(r)}</div>`;
       pill = `${r.points} punten`;
     }
   } else {
