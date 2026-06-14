@@ -85,6 +85,42 @@
   .err{color:var(--rood)}
   .waiting-dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
   @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+  /* spelerlijst (host) */
+  .plist{display:flex;flex-direction:column;gap:8px}
+  .prow{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:6px 10px 6px 14px}
+  .prow.answered{border-color:rgba(67,214,160,.5);background:rgba(67,214,160,.08)}
+  .prow .nm{font-weight:600}
+  .nm-btn{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;background:transparent;color:var(--ink);padding:8px 6px;border-radius:10px;text-align:left}
+  .nm-btn:hover{background:rgba(255,255,255,.04)}
+  .st{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}
+  .st.ok{color:var(--groen)}
+  .kick{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:9px 11px;border-radius:10px;flex:none}
+  .kick:hover{background:rgba(255,93,108,.16);color:var(--rood)}
+  .kickconfirm{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .mini{font-size:13px;padding:6px 10px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+  .mini.danger{background:var(--rood);color:#3a0008;border-color:transparent}
+  /* host vult antwoord in */
+  .picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 4px 4px}
+  @media (max-width:520px){.picker{grid-template-columns:1fr}}
+  .popt{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px;text-align:left}
+  .popt:hover{background:var(--surface-2)}
+  .popt .shape{font-size:17px;width:24px;text-align:center;flex:none}
+  .popt[data-c="0"] .shape{color:var(--rood)} .popt[data-c="1"] .shape{color:var(--blauw)}
+  .popt[data-c="2"] .shape{color:var(--geel)} .popt[data-c="3"] .shape{color:var(--groen)}
+  /* reveal: wie koos wat */
+  .ansline{border-radius:14px;border:2px solid transparent;background:var(--surface-2);padding:12px 14px}
+  .ansline.correct{border-color:var(--groen);background:rgba(67,214,160,.14)}
+  .ansline.dim{opacity:.6}
+  .ans-head{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
+  .ansline[data-c="0"] .shape{color:var(--rood)} .ansline[data-c="1"] .shape{color:var(--blauw)}
+  .ansline[data-c="2"] .shape{color:var(--geel)} .ansline[data-c="3"] .shape{color:var(--groen)}
+  .ans-head .shape{font-size:18px;width:24px;text-align:center;flex:none}
+  .ans-head .otxt{flex:1}
+  .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0c3326;background:var(--groen);padding:3px 8px;border-radius:999px}
+  .whos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .who{font-size:13px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+  .who.empty{color:var(--muted);font-weight:500;border-style:dashed}
 </style>
 </head>
 <body>
@@ -102,7 +138,7 @@
    FIREBASE  — imports + jouw config
    ============================================================ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, get, set, remove, onValue, onDisconnect }
+import { getDatabase, ref, get, set, remove, onValue }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 /* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
@@ -125,6 +161,7 @@ const db = getDatabase(initializeApp(firebaseConfig));
 const stateRef   = c => ref(db, `games/${c}/state`);
 const playersRef = c => ref(db, `games/${c}/players`);
 const playerRef  = (c,p) => ref(db, `games/${c}/players/${p}`);
+const ansRef     = (c,p,r) => ref(db, `games/${c}/players/${p}/ans/${r}`);
 
 /* ============================================================
    SPELDATA — uitbreidbaar per 'type' (nu: multiple_choice)
@@ -151,6 +188,7 @@ const app = {
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
   pid:null, name:'', ans:{}, submittedRound:-1, sel:null, game:null,
   unsubPlayers:null, unsubState:null,
+  openPicker:null, confirmKick:null,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -229,6 +267,24 @@ function hostNext(){
 }
 async function hostEnd(){ cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
 
+/* host vult zelf een antwoord in namens een speler (backup) */
+async function hostSetAnswer(pid, idx){
+  app.openPicker=null;
+  const p = app.players.find(x=>x.id===pid);   // optimistisch updaten voor snappy feedback
+  if(p){ p.ans = p.ans||{}; p.ans[app.round]=idx; }
+  renderHost();
+  await set(ansRef(app.code, pid, app.round), idx);
+}
+/* host verwijdert een speler handmatig */
+async function hostKick(pid){
+  app.confirmKick=null; if(app.openPicker===pid) app.openPicker=null;
+  app.players = app.players.filter(p=>p.id!==pid);
+  delete app.names[pid]; delete app.scores[pid];
+  if(app.results) delete app.results[pid];
+  renderHost();
+  await remove(playerRef(app.code, pid));
+}
+
 /* ============================================================
    SPELER-ACTIES
    ============================================================ */
@@ -239,7 +295,6 @@ async function playerJoin(code, name){
   if(!snap.exists()) return false;
   const pr = playerRef(app.code, app.pid);
   await set(pr, { id:app.pid, name:app.name, ans:app.ans, seen:Date.now() });
-  onDisconnect(pr).remove();           // ruim speler op bij sluiten tab
   startPlayer();
   return true;
 }
@@ -247,7 +302,7 @@ async function playerSubmit(){
   if(app.sel==null) return;
   const r = app.game.round;
   app.ans[r] = app.sel; app.submittedRound = r;
-  await set(playerRef(app.code, app.pid), { id:app.pid, name:app.name, ans:app.ans, seen:Date.now() });
+  await set(ansRef(app.code, app.pid, r), app.sel);
   app.sel=null; renderPlayer();
 }
 
@@ -303,6 +358,37 @@ function renderJoin(){
 /* ============================================================
    RENDER — HOST
    ============================================================ */
+/* spelerlijst met status + kick (+ in vraagmodus: zelf antwoord invullen) */
+function playerRowsHTML(mode){
+  if(!app.players.length) return `<p class="muted">Nog niemand verbonden… <span class="waiting-dots"></span></p>`;
+  const r = ROUNDS[app.round];
+  return app.players.map(p=>{
+    const answered = p.ans && p.ans[app.round]!=null;
+    const kick = app.confirmKick===p.id
+      ? `<span class="kickconfirm">Verwijderen? <button class="mini danger" data-kickyes="${p.id}">Ja</button> <button class="mini" data-kickno="1">Nee</button></span>`
+      : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">✕</button>`;
+    if(mode==='lobby')
+      return `<div class="prow"><span class="nm">${esc(p.name)}</span>${kick}</div>`;
+    const status = answered
+      ? `<span class="st ok">geantwoord ✓</span>`
+      : `<span class="st">bezig<span class="waiting-dots"></span></span>`;
+    const picker = app.openPicker===p.id
+      ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
+      : '';
+    return `<div class="prow ${answered?'answered':''}">
+        <button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}">
+          <span class="nm">${esc(p.name)}</span>${status}
+        </button>${kick}
+      </div>${picker}`;
+  }).join('');
+}
+function wirePlayerControls(){
+  el.querySelectorAll('[data-kick]').forEach(b=> b.onclick=()=>{ app.confirmKick=b.dataset.kick; renderHost(); });
+  el.querySelectorAll('[data-kickyes]').forEach(b=> b.onclick=()=> hostKick(b.dataset.kickyes));
+  el.querySelectorAll('[data-kickno]').forEach(b=> b.onclick=()=>{ app.confirmKick=null; renderHost(); });
+  el.querySelectorAll('[data-pick]').forEach(b=> b.onclick=()=>{ const id=b.dataset.pick; app.openPicker = app.openPicker===id?null:id; renderHost(); });
+  el.querySelectorAll('[data-setans]').forEach(b=> b.onclick=()=>{ const [id,i]=b.dataset.setans.split(':'); hostSetAnswer(id, parseInt(i,10)); });
+}
 function renderHost(){
   if(app.phase==='lobby') return hostLobby();
   if(app.phase==='question') return hostQuestion();
@@ -310,45 +396,59 @@ function renderHost(){
   if(app.phase==='final') return hostFinal();
 }
 function hostLobby(){
-  const names = Object.values(app.names);
-  const chips = names.length
-    ? `<div class="chips">${names.map(n=>`<span class="pill ok">✓ ${esc(n)}</span>`).join('')}</div>`
-    : `<p class="muted">Nog niemand verbonden… <span class="waiting-dots"></span></p>`;
+  const count = app.players.length;
   el.innerHTML = `
     <div class="center stack" style="gap:4px">
       <div class="qmeta">Open deze site en vul de code in</div>
       <div class="code">${app.code}</div>
     </div>
-    <div class="card stack"><div class="statusbar"><b>Spelers (${names.length})</b></div>${chips}</div>
+    <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
+      <div class="plist">${playerRowsHTML('lobby')}</div></div>
     <div class="row">
-      <button class="btn grow big" id="b-start" ${names.length?'':'disabled'}>Quiz starten</button>
+      <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
     </div>
     <p class="footnote">${ROUNDS.length} rondes klaar om te spelen.</p>`;
   $('#b-start').onclick = hostStart;
   $('#b-end').onclick = hostEnd;
+  wirePlayerControls();
 }
 function hostQuestion(){
   const r = ROUNDS[app.round];
-  const total = Object.keys(app.names).length, done = app.answeredCount;
-  const pct = total? Math.round(done/total*100):0, allIn = total>0 && done>=total;
+  const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
   const opts = r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('');
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill ${allIn?'ok':''}">${done}/${total} geantwoord</span></div>
-    <div class="spotlight"><div class="qmeta">${r.points} punten</div><div class="qtext">${esc(r.question)}</div></div>
+    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill">${r.points} punten</span></div>
+    <div class="spotlight"><div class="qtext">${esc(r.question)}</div></div>
     <div class="answers">${opts}</div>
-    <div class="progress"><i style="width:${pct}%"></i></div>
-    <button class="btn big" id="b-reveal" ${done>0?'':'disabled'}>${allIn?'Toon het antwoord':'Toch al onthullen'}</button>`;
+    <div class="card stack" style="gap:10px">
+      <div class="statusbar"><b>Spelers</b><span class="muted" style="font-size:12px">Tik op een naam om zelf in te vullen</span></div>
+      <div class="plist">${playerRowsHTML('question')}</div>
+    </div>
+    <button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   $('#b-reveal').onclick = hostReveal;
+  wirePlayerControls();
 }
 function hostRevealView(){
   const r = ROUNDS[app.round];
-  const opts = r.options.map((o,i)=>`<div class="ans ${i===r.correctIndex?'correct':'dim'}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('');
+  const res = app.results || {};
+  const namesFor = i => Object.keys(res).filter(pid=> res[pid].answer===i).map(pid=> app.names[pid]).filter(Boolean);
+  const noAns = Object.keys(res).filter(pid=> res[pid].answer==null).map(pid=> app.names[pid]).filter(Boolean);
+  const opts = r.options.map((o,i)=>{
+    const who = namesFor(i).map(n=>`<span class="who">${esc(n)}</span>`).join('');
+    const correct = i===r.correctIndex;
+    return `<div class="ansline ${correct?'correct':'dim'}" data-c="${i}">
+        <div class="ans-head"><span class="shape">${SHAPES[i]}</span><span class="otxt">${esc(o)}</span>${correct?'<span class="tag">goed</span>':''}</div>
+        <div class="whos">${who || '<span class="who empty">niemand</span>'}</div>
+      </div>`;
+  }).join('');
+  const noAnsHTML = noAns.length ? `<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>` : '';
   const last = app.round===ROUNDS.length-1;
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill ok">Antwoord</span></div>
     <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(r.options[r.correctIndex])}</div></div>
-    <div class="answers">${opts}</div>
+    <div class="stack">${opts}</div>
+    ${noAnsHTML}
     ${leaderboardHTML(true)}
     <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende ronde'}</button>`;
   $('#b-next').onclick = hostNext;
