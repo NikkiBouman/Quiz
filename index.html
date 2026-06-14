@@ -123,6 +123,42 @@
   .whos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .who{font-size:13px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
   .who.empty{color:var(--muted);font-weight:500;border-style:dashed}
+  /* afbeeldingen in vragen */
+  .qimg{display:block;max-width:100%;max-height:300px;margin:0 auto 14px;border-radius:12px;border:1px solid var(--line)}
+  .qtext.sm{font-size:clamp(17px,3.5vw,21px)}
+  /* progressive hints */
+  .clues{display:flex;flex-direction:column;gap:12px;text-align:left}
+  .clue{display:flex;gap:12px;align-items:flex-start}
+  .cnum{flex:none;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#2a1d00;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+  .cbody{flex:1}
+  .cbody .qimg{margin-bottom:6px;max-height:220px}
+  /* inzet-knoppen */
+  .bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media (max-width:520px){.bets{grid-template-columns:1fr}}
+  .betopt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px}
+  .betopt:hover{background:#3b2f60;border-color:var(--gold)}
+  .betopt .mult{font-family:var(--display);font-weight:700;color:var(--gold);font-size:18px}
+  /* open zoeken */
+  .searchwrap{display:flex;flex-direction:column;gap:0}
+  .sinput{margin-bottom:8px}
+  .sresults{display:flex;flex-direction:column;gap:6px}
+  .sresult{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px;text-align:left;width:100%}
+  .sresult:hover{background:#3b2f60} .sresult.sel{border-color:var(--gold);background:#3b2f60}
+  .sresult img{width:34px;height:50px;object-fit:cover;border-radius:5px;flex:none;background:var(--bg2)}
+  .picked{margin-top:10px;padding:10px 12px;border-radius:11px;background:rgba(255,194,60,.12);border:1px solid var(--gold);font-size:14px}
+  /* audio in stages */
+  .qaudio{width:100%;margin:4px 0 8px;height:38px}
+  /* gok bij reveal (host) */
+  .guess{font-size:14px;font-weight:600}
+  .guess.gok-ok{color:var(--groen)} .guess.gok-bad{color:var(--rood)}
+  /* beoordeel-paneel host */
+  .reviewrow{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface-2);border-radius:10px}
+  .reviewrow .rnm{font-weight:600;flex:none;min-width:64px}
+  .reviewrow .rguess{flex:1;font-size:14px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .reviewrow .pts{color:var(--groen);font-weight:700}
+  .judge{flex:none;padding:7px 12px;border-radius:9px;font-size:13px;font-weight:700;border:1px solid var(--line)}
+  .judge.jok{background:rgba(67,214,160,.18);color:var(--groen);border-color:rgba(67,214,160,.5)}
+  .judge.jbad{background:rgba(255,93,108,.16);color:var(--rood);border-color:rgba(255,93,108,.45)}
 </style>
 </head>
 <body>
@@ -164,23 +200,131 @@ const stateRef   = c => ref(db, `games/${c}/state`);
 const playersRef = c => ref(db, `games/${c}/players`);
 const playerRef  = (c,p) => ref(db, `games/${c}/players/${p}`);
 const ansRef     = (c,p,r) => ref(db, `games/${c}/players/${p}/ans/${r}`);
+const quizRef    = c => ref(db, `games/${c}/quiz`);
 
 /* ============================================================
-   SPELDATA — uitbreidbaar per 'type' (nu: multiple_choice)
+   OPEN ZOEKEN — TMDB (films) + Deezer (liedjes)
+   TMDB Read Access Token: read-only, mag in de client.
    ============================================================ */
-const ROUNDS = [
-  { type:'multiple_choice', points:100, question:'Welke planeet staat het dichtst bij de zon?',
-    options:['Mercurius','Venus','Mars','Aarde'], correctIndex:0 },
-  { type:'multiple_choice', points:100, question:'Welke studio maakte de film Spirited Away?',
-    options:['Pixar','Studio Ghibli','Disney','DreamWorks'], correctIndex:1 },
-  { type:'multiple_choice', points:100, question:'Welke programmeertaal draait op de BEAM virtual machine?',
-    options:['Python','Elixir','Ruby','Go'], correctIndex:1 },
-  { type:'multiple_choice', points:100, question:'Hoeveel spelers staan er per team op het veld bij voetbal?',
-    options:['9','10','11','12'], correctIndex:2 },
-  { type:'multiple_choice', points:100, question:'In welk land beklim je de berg Fuji?',
-    options:['China','Japan','Zuid-Korea','Nepal'], correctIndex:1 },
+const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiZGY5YjE0ZDE0OTJiNmMyNzg2ZjBjYmFiMmRlMjE4YyIsIm5iZiI6MTc4MTQ0MDAyNS44MjksInN1YiI6IjZhMmU5ZTE5ZDQ1M2U2OWM1MzMxYTA0NyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.FE-6g4citeiccBI9HQy5zNLIaYR6U_Rz1V_UZx-68ZY";
+
+async function tmdbSearch(q){
+  const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(q)}&include_adult=false&language=nl-NL&page=1`;
+  const res = await fetch(url, { headers:{ Authorization:'Bearer '+TMDB_TOKEN, accept:'application/json' } });
+  const data = await res.json();
+  return (data.results||[]).slice(0,8).map(m=>({
+    id:m.id,
+    label:m.title + (m.release_date?` (${m.release_date.slice(0,4)})`:''),
+    thumb:m.poster_path?`https://image.tmdb.org/t/p/w92${m.poster_path}`:null,
+  }));
+}
+function deezerSearch(q){
+  return new Promise(resolve=>{
+    const cb='dz_'+Math.random().toString(36).slice(2,9);
+    const s=document.createElement('script');
+    const done=items=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(items); };
+    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,8).map(t=>({
+      id:t.id, label:`${t.artist?t.artist.name+' – ':''}${t.title}`,
+      thumb:t.album&&t.album.cover_small?t.album.cover_small:null,
+    })));
+    s.onerror=()=>done([]);
+    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=8`;
+    document.body.appendChild(s);
+  });
+}
+async function searchOptions(mode,q){ try{ return mode==='tmdb'?await tmdbSearch(q):mode==='deezer'?await deezerSearch(q):[]; }catch(e){ return []; } }
+
+/* ============================================================
+   INGEBOUWDE VOORBEELDSET — gebruikt tot je een JSON laadt.
+   Uniform schema:
+   - question, points
+   - options: lijst ["A","B"]  óf  ":tmdb" (films) / ":deezer" (liedjes)
+   - answer: index (bij lijst) óf API-id (bij :tmdb/:deezer)
+   - answerLabel: leesbaar juist antwoord (bij API aanbevolen)
+   - stages: [{text?,image?,audio?,betMultiplier?}]  → gestage vraag
+       betMultiplier per stage  → inzetronde
+       anders pointsByStage[..]  → eerder = meer punten
+   ============================================================ */
+const SAMPLE = [
+  { question:'Welke planeet staat het dichtst bij de zon?', points:100,
+    options:['Mercurius','Venus','Mars','Aarde'], answer:0 },
+  { question:'Welke studio maakte de film Spirited Away?', points:100,
+    options:['Pixar','Studio Ghibli','Disney','DreamWorks'], answer:1 },
+  { question:'Welke film?',
+    stages:[ {text:'Animatiefilm uit 2001.'}, {text:'Gemaakt door Studio Ghibli.'}, {text:'Hoofdpersoon is een meisje genaamd Chihiro.'} ],
+    options:['Spirited Away','Princess Mononoke','Ponyo','Howl\'s Moving Castle'], answer:0,
+    pointsByStage:[300,200,100] },
+  { question:'Welk land? (inzetronde)',
+    stages:[ {text:'Ligt in Azië.', betMultiplier:3}, {text:'Bestaat uit duizenden eilanden.', betMultiplier:2},
+             {text:'Bekend om sushi en anime.', betMultiplier:1.5}, {text:'De hoofdstad is Tokio.', betMultiplier:1} ],
+    options:['Japan','Zuid-Korea','China','Thailand'], answer:0, points:100 },
+  { question:'Welke film? (zoek zelf + inzet)',
+    stages:[ {text:'Psychologische film uit 1999 van David Fincher.', betMultiplier:3},
+             {text:'Met Brad Pitt en Edward Norton.', betMultiplier:2},
+             {text:'Bekend om zijn twist-einde en een ondergrondse club.', betMultiplier:1} ],
+    options:':tmdb', answer:550, answerLabel:'Fight Club', points:100 },
+  { question:'In welk land beklim je de berg Fuji?', points:100,
+    options:['China','Japan','Zuid-Korea','Nepal'], answer:1 },
 ];
 const SHAPES = ['▲','◆','●','■'];
+
+/* normaliseer een vraag naar het interne model (accepteert ook {type,display}-stages en correctIndex) */
+function normStage(s){
+  const o={};
+  if(s.type && s.display!=null){ if(s.type==='image')o.image=s.display; else if(s.type==='audio')o.audio=s.display; else o.text=s.display; }
+  if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio;
+  if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
+  return o;
+}
+function normalizeQuiz(arr){
+  return arr.map(q=>{
+    const out = Object.assign({}, q);
+    if(Array.isArray(q.stages)) out.stages = q.stages.map(normStage);
+    if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':'list';
+    else if(Array.isArray(q.options))      out.optionsMode = 'list';
+    else if(q.optionsMode==='tmdb'||q.optionsMode==='deezer') out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
+    else { out.optionsMode='list'; out.options = out.options||[]; }
+    if(out.optionsMode!=='list') delete out.options;
+    if(out.answer==null && q.correctIndex!=null) out.answer = q.correctIndex;
+    if(Array.isArray(out.stages)){
+      const muls = out.stages.map(s=>s.betMultiplier);
+      if(muls.some(m=>m!=null)){ out.betting=true; out.betMultipliers = out.stages.map(s=>s.betMultiplier!=null?s.betMultiplier:1); }
+    }
+    if(out.answerLabel==null && out.optionsMode==='list' && Array.isArray(out.options) && out.options[out.answer]!=null)
+      out.answerLabel = out.options[out.answer];
+    if(out.points==null) out.points = 100;
+    return out;
+  });
+}
+
+/* validatie van een geladen vragenset */
+function validateQuiz(data){
+  if(!Array.isArray(data) || !data.length) return 'Het bestand moet een niet-lege lijst met vragen zijn.';
+  for(let i=0;i<data.length;i++){
+    const q=data[i], n=i+1;
+    if(!q || typeof q!=='object') return `Vraag ${n} is ongeldig.`;
+    const apiOpts = typeof q.options==='string' && [':tmdb',':deezer'].includes(q.options);
+    const listOpts = Array.isArray(q.options);
+    if(!apiOpts && !listOpts) return `Vraag ${n}: 'options' moet een lijst zijn of ":tmdb"/":deezer".`;
+    if(listOpts && q.options.length<2) return `Vraag ${n}: minstens 2 opties nodig.`;
+    const ans = q.answer!=null ? q.answer : q.correctIndex;
+    if(ans==null) return `Vraag ${n}: 'answer' ontbreekt.`;
+    if(listOpts && (typeof ans!=='number' || ans<0 || ans>=q.options.length)) return `Vraag ${n}: 'answer' moet een geldige index zijn.`;
+    if(apiOpts && !q.answerLabel) return `Vraag ${n}: bij ":tmdb"/":deezer" is 'answerLabel' nodig.`;
+    if(q.stages!=null){
+      if(!Array.isArray(q.stages)||!q.stages.length) return `Vraag ${n}: 'stages' moet een niet-lege lijst zijn.`;
+      for(let j=0;j<q.stages.length;j++){
+        const s=q.stages[j];
+        const has = s && (s.text!=null||s.image!=null||s.audio!=null||(s.type&&s.display!=null));
+        if(!has) return `Vraag ${n}, stage ${j+1}: heeft tekst, image of audio nodig.`;
+      }
+      if(Array.isArray(q.pointsByStage) && q.pointsByStage.length!==q.stages.length) return `Vraag ${n}: 'pointsByStage' moet even lang zijn als 'stages'.`;
+    } else if(!q.question && !q.image){
+      return `Vraag ${n}: 'question' of 'image' nodig.`;
+    }
+  }
+  return null;
+}
 
 /* ============================================================
    APP-STATE
@@ -188,7 +332,9 @@ const SHAPES = ['▲','◆','●','■'];
 const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
-  pid:null, name:'', ans:{}, submittedRound:-1, sel:null, game:null,
+  quiz:[], quizName:'', quizErr:'', stage:0,
+  pid:null, name:'', ans:{}, bet:{}, submittedRound:-1, sel:null, game:null,
+  searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null,
   unsubPlayers:null, unsubState:null, unsubMe:null, kicked:false,
   openPicker:null, confirmKick:null,
 };
@@ -206,13 +352,33 @@ const recall   = () => { try{ return localStorage.getItem('quizHost'); }catch(e)
 /* ============================================================
    HOST → state schrijven
    ============================================================ */
+/* publiek deel van de huidige vraag dat spelers mogen zien (zonder juist antwoord, behalve bij reveal) */
+function publicCurrent(){
+  const r = app.quiz[app.round]; if(!r) return null;
+  const staged = Array.isArray(r.stages);
+  const base = { question:r.question||'', optionsMode:r.optionsMode||'list', staged, points:r.points ?? 100 };
+  if(base.optionsMode==='list') base.options = r.options||[];
+  if(!staged){
+    base.image = r.image || null;
+  } else {
+    const stages = r.stages;
+    const upto = app.phase==='reveal' ? stages.length : app.stage+1;
+    base.stagesShown = stages.slice(0, upto);
+    base.totalStages = stages.length;
+    base.stage = app.stage;
+    if(r.betting){ base.betting = true; base.betMultipliers = r.betMultipliers; }
+    else if(r.pointsByStage){ base.points = r.pointsByStage[app.stage] ?? base.points; }
+  }
+  if(app.phase==='reveal'){
+    base.answer = r.answer;
+    base.answerLabel = r.answerLabel || (base.optionsMode==='list' && base.options ? base.options[r.answer] : '') || '';
+  }
+  return base;
+}
 function pushState(){
-  const r = ROUNDS[app.round];
   set(stateRef(app.code), {
-    phase: app.phase, round: app.round, totalRounds: ROUNDS.length,
-    current: (app.phase==='question'||app.phase==='reveal') && r
-      ? { type:r.type, question:r.question, options:r.options, points:r.points } : null,
-    correctIndex: app.phase==='reveal' && r ? r.correctIndex : null,
+    phase: app.phase, round: app.round, totalRounds: app.quiz.length, stage: app.stage,
+    current: (app.phase==='question'||app.phase==='reveal') ? publicCurrent() : null,
     scores: app.scores, names: app.names,
     results: app.phase==='reveal' ? app.results : null,
     answeredCount: app.answeredCount, totalPlayers: Object.keys(app.names).length, ts: Date.now(),
@@ -256,13 +422,34 @@ function cleanup(){
    HOST-ACTIES
    ============================================================ */
 function hostCreate(){
-  app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1;
+  app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1; app.stage=0;
   app.scores={}; app.names={}; app.players=[]; app.results=null;
-  app.openPicker=null; app.confirmKick=null; app.kicked=false;
+  app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
+  app.quiz = normalizeQuiz(SAMPLE); app.quizName = 'Voorbeeldset';
   remember(app.code);
+  set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
   pushState(); startHost(); renderHost();
 }
-/* host hervat een lopend spel: status terughalen uit Firebase */
+/* nieuwe vragenset toepassen (uit geladen JSON) */
+function setQuiz(data, name){
+  app.quiz = normalizeQuiz(data); app.quizName = name; app.quizErr='';
+  if(app.code) set(quizRef(app.code), app.quiz);
+  renderHost();
+}
+function handleQuizFile(ev){
+  const file = ev.target.files && ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    let data; try{ data = JSON.parse(reader.result); }
+    catch(e){ app.quizErr='Ongeldige JSON: '+e.message; renderHost(); return; }
+    const err = validateQuiz(data);
+    if(err){ app.quizErr=err; renderHost(); return; }
+    setQuiz(data, file.name);
+  };
+  reader.onerror = ()=>{ app.quizErr='Bestand kon niet gelezen worden.'; renderHost(); };
+  reader.readAsText(file);
+}
+/* host hervat een lopend spel: status + vragenset terughalen uit Firebase */
 async function hostResume(code){
   code = code.toUpperCase();
   const snap = await get(stateRef(code));
@@ -271,27 +458,60 @@ async function hostResume(code){
   app.role='host'; app.code=code;
   app.phase  = s.phase || 'lobby';
   app.round  = (s.round!=null) ? s.round : -1;
+  app.stage  = s.stage || 0;
   app.scores = s.scores || {};
   app.names  = s.names  || {};
   app.results= s.results || null;
-  app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false;
+  app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
+  const qs = await get(quizRef(code));
+  app.quiz = normalizeQuiz(qs.exists() ? qs.val() : SAMPLE);
+  app.quizName = qs.exists() ? 'geladen set' : 'Voorbeeldset';
   remember(code);
   startHost(); renderHost();
   return true;
 }
-function hostStart(){ app.round=0; app.phase='question'; app.answeredCount=0; app.results=null; pushState(); renderHost(); }
+function hostStart(){ app.round=0; app.stage=0; app.phase='question'; app.answeredCount=0; app.results=null; pushState(); renderHost(); }
+/* punten bepalen op basis van (eventueel overrulede) correctheid */
+function computeGain(r, correct, bet, lock){
+  if(!correct) return { gained:0, won:false };
+  if(r.betting){
+    const won = bet!=null && lock!=null && lock<=bet;
+    return { gained: won ? Math.round((r.points??100)*(r.betMultipliers[bet]||1)) : 0, won };
+  }
+  if(Array.isArray(r.stages) && r.pointsByStage){
+    const st = lock!=null ? lock : r.pointsByStage.length-1;
+    return { gained: r.pointsByStage[st] ?? (r.points??100), won:true };
+  }
+  return { gained: r.points??100, won:true };
+}
 function hostReveal(){
-  const r = ROUNDS[app.round]; app.results={};
+  const r = app.quiz[app.round];
+  if(Array.isArray(r.stages)) app.stage = r.stages.length-1;   // bij onthullen alles tonen
+  app.results={};
   app.players.forEach(p=>{
-    const a = p.ans ? p.ans[app.round] : null;
-    const correct = a===r.correctIndex, gained = correct ? r.points : 0;
-    app.scores[p.id] = (app.scores[p.id]||0) + gained;
-    app.results[p.id] = { answer:a, correct, gained };
+    const a  = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
+    const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
+    const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
+    const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
+    const auto = a!=null && String(a)===String(r.answer);
+    const g = computeGain(r, auto, bet, lock);
+    app.scores[p.id] = (app.scores[p.id]||0) + g.gained;
+    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct:auto, gained:g.gained, won:g.won, bet, lock };
   });
   app.phase='reveal'; pushState(); renderHost();
 }
+/* host overruled goed/fout; punten worden direct bijgewerkt */
+function hostToggleCorrect(pid){
+  const r = app.quiz[app.round];
+  const res = app.results && app.results[pid]; if(!res) return;
+  const nc = !res.correct;
+  const g = computeGain(r, nc, res.bet, res.lock);
+  app.scores[pid] = (app.scores[pid]||0) - (res.gained||0) + g.gained;
+  res.correct = nc; res.gained = g.gained; res.won = g.won;
+  pushState(); renderHost();
+}
 function hostNext(){
-  if(app.round+1 < ROUNDS.length){ app.round++; app.phase='question'; app.answeredCount=0; app.results=null; }
+  if(app.round+1 < app.quiz.length){ app.round++; app.stage=0; app.phase='question'; app.answeredCount=0; app.results=null; }
   else app.phase='final';
   pushState(); renderHost();
 }
@@ -320,7 +540,7 @@ async function hostKick(pid){
    ============================================================ */
 async function playerJoin(code, name){
   app.role='player'; app.code=code.toUpperCase(); app.pid=genId(); app.name=name.trim();
-  app.ans={}; app.submittedRound=-1; app.sel=null;
+  app.ans={}; app.bet={}; app.submittedRound=-1; app.sel=null;
   const snap = await get(stateRef(app.code));
   if(!snap.exists()) return false;
   const pr = playerRef(app.code, app.pid);
@@ -329,11 +549,31 @@ async function playerJoin(code, name){
   return true;
 }
 async function playerSubmit(){
-  if(app.kicked || app.sel==null) return;
+  if(app.kicked) return;
+  const cur = app.game.current, r = app.game.round;
+  let val, label;
+  if(cur.optionsMode==='list'){
+    if(app.sel==null) return;
+    val = app.sel; label = (cur.options||[])[app.sel];
+  } else {
+    if(!app.searchPick) return;
+    val = app.searchPick.id; label = app.searchPick.label;
+  }
+  app.ans[r] = val; app.submittedRound = r;
+  await set(ansRef(app.code, app.pid, r), val);
+  await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), label||'');
+  if(cur.staged){
+    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), cur.stage||0);
+  }
+  app.sel=null; app.searchPick=null;
+  renderPlayer();
+}
+async function playerBet(k){
+  if(app.kicked) return;
   const r = app.game.round;
-  app.ans[r] = app.sel; app.submittedRound = r;
-  await set(ansRef(app.code, app.pid, r), app.sel);
-  app.sel=null; renderPlayer();
+  app.bet[r] = k;
+  await set(ref(db, `games/${app.code}/players/${app.pid}/bet/${r}`), k);
+  renderPlayer();
 }
 
 /* ============================================================
@@ -425,7 +665,8 @@ function renderJoin(){
 /* spelerlijst met status + kick (+ in vraagmodus: zelf antwoord invullen) */
 function playerRowsHTML(mode){
   if(!app.players.length) return `<p class="muted">Nog niemand verbonden… <span class="waiting-dots"></span></p>`;
-  const r = ROUNDS[app.round];
+  const r = app.quiz[app.round];
+  const canPick = mode==='question' && r && r.optionsMode==='list';
   return app.players.map(p=>{
     const answered = p.ans && p.ans[app.round]!=null;
     const kick = app.confirmKick===p.id
@@ -436,6 +677,9 @@ function playerRowsHTML(mode){
     const status = answered
       ? `<span class="st ok">geantwoord ✓</span>`
       : `<span class="st"><span class="waiting-dots"></span></span>`;
+    if(!canPick){
+      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${status}${kick}</div>`;
+    }
     const picker = app.openPicker===p.id
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
@@ -453,6 +697,12 @@ function wirePlayerControls(){
   el.querySelectorAll('[data-pick]').forEach(b=> b.onclick=()=>{ const id=b.dataset.pick; app.openPicker = app.openPicker===id?null:id; renderHost(); });
   el.querySelectorAll('[data-setans]').forEach(b=> b.onclick=()=>{ const [id,i]=b.dataset.setans.split(':'); hostSetAnswer(id, parseInt(i,10)); });
 }
+const imgHTML = src => src ? `<img class="qimg" src="${esc(src)}" alt="">` : '';
+const audioHTML = src => src ? `<audio class="qaudio" controls preload="none" src="${esc(src)}"></audio>` : '';
+function clueListHTML(stages){
+  return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
+    <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
+}
 function renderHost(){
   if(app.phase==='lobby') return hostLobby();
   if(app.phase==='question') return hostQuestion();
@@ -466,55 +716,98 @@ function hostLobby(){
       <div class="qmeta">Open deze site en vul de code in</div>
       <div class="code">${app.code}</div>
     </div>
+    <div class="card stack" style="gap:10px">
+      <div class="statusbar"><b>Vragenset</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen · ${esc(app.quizName||'eigen set')}</span></div>
+      <button class="btn ghost" id="b-loadq">JSON-bestand laden</button>
+      <input type="file" id="qfile" accept=".json,application/json" style="display:none">
+      ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}
+    </div>
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
     <div class="row">
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
-    </div>
-    <p class="footnote">${ROUNDS.length} rondes klaar om te spelen.</p>`;
+    </div>`;
+  $('#b-loadq').onclick = ()=> $('#qfile').click();
+  $('#qfile').onchange = handleQuizFile;
   $('#b-start').onclick = hostStart;
   $('#b-end').onclick = hostEnd;
   wirePlayerControls();
 }
 function hostQuestion(){
-  const r = ROUNDS[app.round];
+  const r = app.quiz[app.round];
+  const staged = Array.isArray(r.stages);
   const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
-  const opts = r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('');
+  const opts = r.optionsMode==='list'
+    ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
+    : `<p class="muted center" style="font-size:13px">Spelers zoeken zelf het antwoord (${r.optionsMode==='tmdb'?'film':'nummer'}).</p>`;
+  let spot, hintBtn='', betPill='';
+  if(staged){
+    const stages = r.stages;
+    const meta = r.betting ? `${esc(r.question||'')} · inzetronde`
+                           : `${esc(r.question||'')} · nu ${(r.pointsByStage||[])[app.stage] ?? (r.points??100)} punten`;
+    spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${clueListHTML(stages.slice(0, app.stage+1))}</div>`;
+    if(app.stage < stages.length-1)
+      hintBtn = `<button class="btn ghost" id="b-hint">Volgende hint (${app.stage+2}/${stages.length})</button>`;
+    if(r.betting){
+      const placed = app.players.filter(p=> p.bet && p.bet[app.round]!=null).length;
+      betPill = `<span class="pill">${placed}/${app.players.length} ingezet</span>`;
+    }
+  } else {
+    spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
+  }
+  const pickHint = r.optionsMode==='list' ? '<span class="muted" style="font-size:12px">Tik op een naam om zelf in te vullen</span>' : '';
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill">${r.points} punten</span></div>
-    <div class="spotlight"><div class="qtext">${esc(r.question)}</div></div>
-    <div class="answers">${opts}</div>
+    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${betPill}</div>
+    ${spot}
+    ${opts}
     <div class="card stack" style="gap:10px">
-      <div class="statusbar"><b>Spelers</b><span class="muted" style="font-size:12px">Tik op een naam om zelf in te vullen</span></div>
+      <div class="statusbar"><b>Spelers</b>${pickHint}</div>
       <div class="plist">${playerRowsHTML('question')}</div>
     </div>
+    ${hintBtn}
     <button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
+  const hb = $('#b-hint'); if(hb) hb.onclick = ()=>{ app.stage++; pushState(); renderHost(); };
   $('#b-reveal').onclick = hostReveal;
   wirePlayerControls();
 }
 function hostRevealView(){
-  const r = ROUNDS[app.round];
+  const r = app.quiz[app.round];
   const res = app.results || {};
-  const namesFor = i => Object.keys(res).filter(pid=> res[pid].answer===i).map(pid=> app.names[pid]).filter(Boolean);
-  const noAns = Object.keys(res).filter(pid=> res[pid].answer==null).map(pid=> app.names[pid]).filter(Boolean);
-  const opts = r.options.map((o,i)=>{
-    const who = namesFor(i).map(n=>`<span class="who">${esc(n)}</span>`).join('');
-    const correct = i===r.correctIndex;
-    return `<div class="ansline ${correct?'correct':'dim'}" data-c="${i}">
-        <div class="ans-head"><span class="shape">${SHAPES[i]}</span><span class="otxt">${esc(o)}</span>${correct?'<span class="tag">goed</span>':''}</div>
-        ${who ? `<div class="whos">${who}</div>` : ''}
-      </div>`;
+  const last = app.round===app.quiz.length-1;
+  const correctLabel = r.answerLabel || (r.optionsMode==='list' && r.options ? r.options[r.answer] : '') || '';
+  let grouping='';
+  if(r.optionsMode==='list'){
+    const namesFor = i => Object.keys(res).filter(pid=> String(res[pid].answer)===String(i)).map(pid=> app.names[pid]).filter(Boolean);
+    grouping = `<div class="stack">${r.options.map((o,i)=>{
+      const who = namesFor(i).map(n=>`<span class="who">${esc(n)}</span>`).join('');
+      const correct = i===r.answer;
+      return `<div class="ansline ${correct?'correct':'dim'}" data-c="${i}">
+          <div class="ans-head"><span class="shape">${SHAPES[i]}</span><span class="otxt">${esc(o)}</span>${correct?'<span class="tag">goed</span>':''}</div>
+          ${who ? `<div class="whos">${who}</div>` : ''}
+        </div>`;}).join('')}</div>`;
+  }
+  const answered = app.players.filter(p=> res[p.id] && res[p.id].answer!=null);
+  const reviewRows = answered.map(p=>{
+    const rr = res[p.id];
+    return `<div class="reviewrow">
+      <span class="rnm">${esc(p.name)}</span>
+      <span class="rguess">${esc(rr.label||'—')}${rr.gained>0?` <span class="pts">+${rr.gained}</span>`:''}</span>
+      <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
+    </div>`;
   }).join('');
-  const noAnsHTML = noAns.length ? `<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>` : '';
-  const last = app.round===ROUNDS.length-1;
+  const noAns = app.players.filter(p=> !res[p.id] || res[p.id].answer==null).map(p=>p.name);
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${ROUNDS.length}</span><span class="pill ok">Antwoord</span></div>
-    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(r.options[r.correctIndex])}</div></div>
-    <div class="stack">${opts}</div>
-    ${noAnsHTML}
+    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill ok">Antwoord</span></div>
+    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div></div>
+    ${grouping}
+    <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
+      <p class="muted" style="margin:0;font-size:12px">Tik op goed/fout om handmatig te overrulen.</p>
+      ${reviewRows || '<p class="muted" style="margin:0">Niemand heeft geantwoord.</p>'}</div>
+    ${noAns.length?`<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>`:''}
     ${leaderboardHTML(true)}
     <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende ronde'}</button>`;
+  el.querySelectorAll('[data-judge]').forEach(b=> b.onclick=()=> hostToggleCorrect(b.dataset.judge));
   $('#b-next').onclick = hostNext;
 }
 function hostFinal(){
@@ -565,17 +858,97 @@ function playerLobby(){
       <p class="muted">Wachten tot de host start <span class="waiting-dots"></span></p></div>
     <div class="card"><b>Spelers (${others.length})</b><div class="chips" style="margin-top:10px">${others.map(n=>`<span class="pill ${n===app.name?'ok':''}">${esc(n)}</span>`).join('')}</div></div>`;
 }
+function answerAreaHTML(r){
+  if(r.optionsMode==='list'){
+    return `<div class="answers">${r.options.map((o,i)=>`<button class="ans ${app.sel===i?'sel':''}" data-i="${i}" data-c="${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`;
+  }
+  const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : 'Zoek een nummer…';
+  return `<div class="searchwrap">
+    <input id="s-input" class="sinput" type="text" placeholder="${ph}" value="${esc(app.searchText||'')}" autocomplete="off" autocapitalize="off">
+    <div id="sout"></div></div>`;
+}
+function searchOutHTML(){
+  const busy = app.searchBusy ? '<p class="muted" style="margin:6px 0 0;font-size:13px">Zoeken…</p>' : '';
+  const results = (app.searchResults||[]).map(x=>`<button class="sresult ${app.searchPick&&String(app.searchPick.id)===String(x.id)?'sel':''}" data-id="${esc(String(x.id))}" data-label="${esc(x.label)}">${x.thumb?`<img src="${esc(x.thumb)}" alt="">`:''}<span>${esc(x.label)}</span></button>`).join('');
+  const picked = app.searchPick ? `<div class="picked">Gekozen: <b>${esc(app.searchPick.label)}</b></div>` : '';
+  return busy + `<div class="sresults">${results}</div>` + picked;
+}
+function wireSearchResults(){
+  el.querySelectorAll('.sresult').forEach(b=> b.onclick=()=>{
+    const id=b.dataset.id, n=Number(id);
+    app.searchPick = { id:(id!==''&&!isNaN(n))?n:id, label:b.dataset.label };
+    renderPlayer();
+  });
+}
+function refreshSearchOut(){ const out=el.querySelector('#sout'); if(out){ out.innerHTML=searchOutHTML(); wireSearchResults(); } }
+function wireAnswerArea(r){
+  if(r.optionsMode==='list'){
+    el.querySelectorAll('.ans').forEach(b=> b.onclick=()=>{ app.sel=parseInt(b.dataset.i,10); renderPlayer(); });
+    return;
+  }
+  const inp = $('#s-input');
+  if(inp){
+    inp.oninput = ()=>{
+      app.searchText = inp.value;
+      clearTimeout(app._sTimer);
+      const q = inp.value.trim();
+      if(q.length<2){ app.searchResults=[]; app.searchBusy=false; refreshSearchOut(); return; }
+      app._sTimer = setTimeout(async ()=>{
+        app.searchBusy=true; refreshSearchOut();
+        const res = await searchOptions(r.optionsMode, q);
+        app.searchBusy=false; app.searchResults=res; refreshSearchOut();
+      }, 300);
+    };
+    inp.focus();
+    const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){}
+  }
+  refreshSearchOut();
+}
 function playerQuestion(){
   const g = app.game;
   if(app.submittedRound===g.round) return playerWaiting();
   const r = g.current;
-  const opts = r.options.map((o,i)=>`<button class="ans ${app.sel===i?'sel':''}" data-i="${i}" data-c="${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('');
+  // nieuwe ronde → zoekstaat resetten
+  if(app.searchRound!==g.round){ app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null; app.searchBusy=false; app.sel=null; }
+
+  // gestage MET inzet: eerst inzetten (alleen de vraag/intro zichtbaar)
+  if(r.staged && r.betting && app.bet[g.round]==null){
+    const spot = `<div class="spotlight"><div class="qtext">${esc(r.question||'')}</div></div>`;
+    const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
+    el.innerHTML = `
+      <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
+      ${spot}
+      <div class="card stack" style="gap:10px">
+        <b>Wanneer heb je 'm uiterlijk?</b>
+        <p class="muted" style="margin:0;font-size:13px">Eerder inzetten = hogere multiplier. Haal je 'm niet op tijd, dan 0 punten.</p>
+        <div class="bets">${bets}</div>
+      </div>`;
+    el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=> playerBet(parseInt(b.dataset.bet,10)));
+    return;
+  }
+
+  let spot, pill;
+  if(r.staged){
+    if(r.betting){
+      const m = (r.betMultipliers||[])[app.bet[g.round]];
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · inzet uiterlijk hint ${app.bet[g.round]+1} (×${m})</div>${clueListHTML(r.stagesShown||[])}</div>`;
+      pill = `×${m}`;
+    } else {
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${r.points} punten</div>${clueListHTML(r.stagesShown||[])}</div>`;
+      pill = `${r.points} punten`;
+    }
+  } else {
+    spot = `<div class="spotlight">${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
+    pill = `${r.points} punten`;
+  }
+  const lockReady = r.optionsMode==='list' ? app.sel!=null : app.searchPick!=null;
+  const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${r.points} punten</span></div>
-    <div class="spotlight"><div class="qtext">${esc(r.question)}</div></div>
-    <div class="answers">${opts}</div>
-    <button class="btn big" id="b-submit" ${app.sel==null?'disabled':''}>Antwoord bevestigen</button>`;
-  el.querySelectorAll('.ans').forEach(b=>{ b.onclick=()=>{ app.sel=parseInt(b.dataset.i,10); renderPlayer(); }; });
+    <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
+    ${spot}
+    ${answerAreaHTML(r)}
+    <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>`;
+  wireAnswerArea(r);
   $('#b-submit').onclick = playerSubmit;
 }
 function playerWaiting(){
@@ -585,13 +958,20 @@ function playerWaiting(){
     <span class="pill" style="align-self:center">${g.answeredCount}/${g.totalPlayers} geantwoord</span></div>`;
 }
 function playerReveal(){
-  const g=app.game, res = g.results && g.results[app.pid];
-  const correct = res && res.correct, myAns = res ? res.answer : null;
-  const opts = g.current.options.map((o,i)=>{ let cls='dim'; if(i===g.correctIndex) cls='correct'; else if(i===myAns) cls='wrong';
-    return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('');
+  const g=app.game, c=g.current, res = g.results && g.results[app.pid];
+  const correct = res && res.correct;
+  const correctLabel = c.answerLabel || (c.optionsMode==='list' && c.options ? c.options[c.answer] : '') || '';
+  let body;
+  if(c.optionsMode==='list'){
+    const myAns = res ? res.answer : null;
+    body = `<div class="answers">${(c.options||[]).map((o,i)=>{ let cls='dim'; if(i===c.answer)cls='correct'; else if(i===myAns)cls='wrong';
+      return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('')}</div>`;
+  } else {
+    body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>`;
+  }
   const banner = res ? (correct ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>` : `<h1 style="color:var(--rood)">Helaas, fout</h1>`)
     : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
-  el.innerHTML = `<div class="center stack">${banner}</div><div class="answers">${opts}</div>${playerLeaderboardHTML()}
+  el.innerHTML = `<div class="center stack">${banner}</div>${body}${playerLeaderboardHTML()}
     <p class="footnote">Wachten op de host voor de volgende ronde <span class="waiting-dots"></span></p>`;
 }
 function playerFinal(){
