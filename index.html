@@ -43,6 +43,8 @@
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
   .btn.ghost:hover{background:var(--surface-2)}
   .btn.big{font-size:18px;padding:18px;width:100%}
+  .linkbtn{align-self:center;background:transparent;border:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px}
+  .linkbtn:hover{color:var(--ink)}
   input{font-family:var(--body);font-size:18px;padding:15px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);width:100%}
   input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
   input::placeholder{color:#7a6fa0}
@@ -196,6 +198,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&
 const setConn = t => { $('#conn').textContent = t||''; };
 const genCode = () => { const a='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s=''; for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)]; return s; };
 const genId = () => 'p'+Math.random().toString(36).slice(2,9);
+/* onthoud laatste host-code (werkt op GitHub Pages; valt stil terug indien niet beschikbaar) */
+const remember = c => { try{ localStorage.setItem('quizHost', c); }catch(e){} };
+const forget   = () => { try{ localStorage.removeItem('quizHost'); }catch(e){} };
+const recall   = () => { try{ return localStorage.getItem('quizHost'); }catch(e){ return null; } };
 
 /* ============================================================
    HOST → state schrijven
@@ -226,7 +232,7 @@ function startHost(){
       app.answeredCount = present.filter(p=> p.ans && p.ans[app.round]!=null).length;
     }
     pushState();
-    setConn(present.length+' verbonden');
+    setConn(app.code+' · '+present.length+' verbonden');
     renderHost();
   });
 }
@@ -252,7 +258,26 @@ function cleanup(){
 function hostCreate(){
   app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1;
   app.scores={}; app.names={}; app.players=[]; app.results=null;
+  app.openPicker=null; app.confirmKick=null; app.kicked=false;
+  remember(app.code);
   pushState(); startHost(); renderHost();
+}
+/* host hervat een lopend spel: status terughalen uit Firebase */
+async function hostResume(code){
+  code = code.toUpperCase();
+  const snap = await get(stateRef(code));
+  if(!snap.exists()) return false;
+  const s = snap.val();
+  app.role='host'; app.code=code;
+  app.phase  = s.phase || 'lobby';
+  app.round  = (s.round!=null) ? s.round : -1;
+  app.scores = s.scores || {};
+  app.names  = s.names  || {};
+  app.results= s.results || null;
+  app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false;
+  remember(code);
+  startHost(); renderHost();
+  return true;
 }
 function hostStart(){ app.round=0; app.phase='question'; app.answeredCount=0; app.results=null; pushState(); renderHost(); }
 function hostReveal(){
@@ -270,7 +295,7 @@ function hostNext(){
   else app.phase='final';
   pushState(); renderHost();
 }
-async function hostEnd(){ cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
+async function hostEnd(){ forget(); cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
 
 /* host vult zelf een antwoord in namens een speler (backup) */
 async function hostSetAnswer(pid, idx){
@@ -320,6 +345,7 @@ function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; 
    RENDER — HOME
    ============================================================ */
 function renderHome(){
+  const saved = recall();
   el.innerHTML = `
     <div class="center stack" style="gap:6px">
       <div class="qmeta">Party-quiz · meerdere apparaten</div>
@@ -329,9 +355,42 @@ function renderHome(){
     <div class="card stack">
       <button class="btn big" id="b-host">Quiz hosten</button>
       <button class="btn big ghost" id="b-join">Meedoen met een code</button>
-    </div>`;
+    </div>
+    ${saved ? `<div class="card stack" style="gap:10px"><b>Verder met je quiz</b>
+        <button class="btn" id="b-resume">Hervat quiz ${saved}</button></div>` : ''}
+    <button id="b-host-code" class="linkbtn">Hervatten als host met een code</button>`;
   $('#b-host').onclick = hostCreate;
   $('#b-join').onclick = renderJoin;
+  $('#b-host-code').onclick = renderHostResume;
+  if(saved) $('#b-resume').onclick = async ()=>{
+    const ok = await hostResume(saved);
+    if(!ok){ forget(); renderHome(); }
+  };
+}
+function renderHostResume(){
+  const saved = recall() || '';
+  el.innerHTML = `
+    <h1 style="font-size:clamp(30px,7vw,46px)">Spel hervatten</h1>
+    <div class="card stack">
+      <div class="stack"><label class="lbl" for="i-rcode">Spelcode</label>
+        <input id="i-rcode" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" value="${saved}" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
+      <p id="r-err" class="err" style="min-height:18px;margin:0"></p>
+      <button class="btn big" id="b-rgo">Hervatten</button>
+      <button class="btn ghost" id="b-rback">Terug</button>
+    </div>
+    <p class="footnote">Je code staat tijdens het spelen linksboven in beeld.</p>`;
+  $('#b-rback').onclick = renderHome;
+  const code=$('#i-rcode'), err=$('#r-err');
+  $('#b-rgo').onclick = async ()=>{
+    const c = code.value.trim().toUpperCase();
+    if(c.length!==4){ err.textContent='Vul een geldige code van 4 letters in.'; return; }
+    $('#b-rgo').disabled=true; err.textContent='';
+    try{
+      const ok = await hostResume(c);
+      if(!ok){ err.textContent='Geen spel gevonden met die code.'; $('#b-rgo').disabled=false; }
+    }catch(e){ err.textContent='Hervatten mislukt — check je verbinding.'; $('#b-rgo').disabled=false; }
+  };
+  code.addEventListener('keydown',e=>{ if(e.key==='Enter') $('#b-rgo').click(); });
 }
 function renderJoin(){
   el.innerHTML = `
