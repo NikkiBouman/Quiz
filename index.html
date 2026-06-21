@@ -361,7 +361,7 @@ function validateQuiz(data){
 const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
-  quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false,
+  quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
   pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
   searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false,
   myStage:null, reguess:false, forFun:false,
@@ -389,7 +389,7 @@ function publicCurrent(){
   const base = { question:r.question||'', optionsMode:r.optionsMode||'list', staged, points:r.points ?? 100 };
   if(base.optionsMode==='list') base.options = r.options||[];
   if(!staged){
-    base.image = r.image || null;
+    base.image = resolveMedia(r.image) || null;
   } else {
     const reveal = app.phase==='reveal';
     base.stages = r.stages.map((s,idx)=>{
@@ -398,7 +398,7 @@ function publicCurrent(){
       const o = { kind, label:s.label||'', revealed };
       if(revealed){
         if(kind==='text') o.text = s.text||'';
-        if(kind==='image') o.image = s.image||'';
+        if(kind==='image') o.image = resolveMedia(s.image) || '';
         // audio-paden gaan NIET naar spelers: alleen de host speelt af
       }
       return o;
@@ -810,6 +810,62 @@ function wirePlayerControls(){
   el.querySelectorAll('[data-pick]').forEach(b=> b.onclick=()=>{ const id=b.dataset.pick; app.openPicker = app.openPicker===id?null:id; renderHost(); });
   el.querySelectorAll('[data-setans]').forEach(b=> b.onclick=()=>{ const [id,i]=b.dataset.setans.split(':'); hostSetAnswer(id, parseInt(i,10)); });
 }
+/* ---- lokaal ingeladen media (host) ----
+   De host kan audio/afbeeldingen van de eigen schijf laden, zodat ze niet op
+   GitHub hoeven. Audio speelt alleen de host af; afbeeldingen gaan via de
+   state-node (als data-URI) naar de spelers. Niet gevonden? Dan valt resolveMedia
+   terug op het oorspronkelijke pad, dus een GitHub-URL blijft ook werken. */
+let mediaMap = {};
+function resolveMedia(p){
+  if(!p) return p;
+  if(mediaMap[p]) return mediaMap[p];
+  for(const k in mediaMap){ if(k===p || k.endsWith('/'+p) || p.endsWith('/'+k)) return mediaMap[k]; }
+  const base = p.split('/').pop().toLowerCase();
+  for(const k in mediaMap){ if(k.split('/').pop().toLowerCase()===base) return mediaMap[k]; }
+  return p;
+}
+function fileToDataURL(file){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsDataURL(file); });
+}
+async function loadMediaFiles(files){
+  let added=0, big=0;
+  for(const f of files){
+    if(f.size > 8*1024*1024){ big++; continue; }              // sla heel grote bestanden over
+    const key = f.webkitRelativePath || f.name;
+    try{ mediaMap[key] = await fileToDataURL(f); added++; }catch(e){}
+  }
+  app.mediaCount = Object.keys(mediaMap).length;
+  app.mediaWarn = big ? `${big} bestand(en) overgeslagen (> 8 MB).` : '';
+  renderHost();
+}
+/* één map inladen: pak de JSON uit de root, laad alle media */
+const MEDIA_RE = /\.(m4a|mp3|wav|ogg|oga|aac|flac|m4b|png|jpe?g|webp|gif|avif|svg|bmp)$/i;
+async function loadFolder(files){
+  const arr = Array.from(files);
+  // root-JSON = het .json-bestand met de minste mappen in z'n pad
+  const jsons = arr.filter(f=> /\.json$/i.test(f.name||''));
+  jsons.sort((a,b)=> (a.webkitRelativePath||a.name).split('/').length - (b.webkitRelativePath||b.name).split('/').length);
+  const jf = jsons[0];
+  // media: alles behalve het gekozen json
+  let big=0;
+  for(const f of arr){
+    if(f===jf) continue;
+    if(!/^(image|audio)\//.test(f.type||'') && !MEDIA_RE.test(f.name||'')) continue;
+    if(f.size > 8*1024*1024){ big++; continue; }
+    const key = f.webkitRelativePath || f.name;
+    try{ mediaMap[key] = await fileToDataURL(f); }catch(e){}
+  }
+  app.mediaCount = Object.keys(mediaMap).length;
+  app.mediaWarn = big ? `${big} bestand(en) overgeslagen (> 8 MB).` : '';
+  // JSON toepassen
+  if(!jf){ app.quizErr='Geen .json gevonden in de map.'; renderHost(); return; }
+  let text; try{ text = await jf.text(); }catch(e){ app.quizErr='JSON kon niet gelezen worden.'; renderHost(); return; }
+  let data; try{ data = JSON.parse(text); }catch(e){ app.quizErr='Ongeldige JSON: '+e.message; renderHost(); return; }
+  const err = validateQuiz(data);
+  if(err){ app.quizErr=err; renderHost(); return; }
+  setQuiz(data, jf.name);   // roept renderHost (toont meteen ook de media-teller)
+}
+
 const imgHTML = src => src ? `<img class="qimg" src="${esc(src)}" alt="">` : '';
 const audioHTML = src => src ? `<audio class="qaudio" controls preload="none" src="${esc(src)}"></audio>` : '';
 function clueListHTML(stages){
@@ -836,7 +892,7 @@ function hostStagesHTML(r, cur){
   return `<div class="stagelist">${r.stages.map((s,idx)=>{
     const kind = s.audio?'audio':s.image?'image':'text';
     const revealed = idx<=cur;
-    const media = kind==='audio'?s.audio:kind==='image'?s.image:s.text;
+    const media = kind==='audio'?resolveMedia(s.audio):kind==='image'?resolveMedia(s.image):s.text;
     return stageRowHTML(kind, s.label, idx, cur, revealed, media, true);
   }).join('')}</div>`;
 }
@@ -894,10 +950,14 @@ function hostLobby(){
       <div class="code">${app.code}</div>
     </div>
     <div class="card stack" style="gap:10px">
-      <div class="statusbar"><b>Vragenset</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen · ${esc(app.quizName||'eigen set')}</span></div>
-      <button class="btn ghost" id="b-loadq">JSON-bestand laden</button>
+      <div class="statusbar"><b>Vragen &amp; media</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen${app.mediaCount?` · ${app.mediaCount} media`:''} · ${esc(app.quizName||'eigen set')}</span></div>
+      <p class="muted" style="margin:0;font-size:12px">Laad in één keer je map met daarin <code>questions.json</code> (in de root) plus alle audio en afbeeldingen.</p>
+      <button class="btn ghost" id="b-loadfolder">Map laden (JSON + media)</button>
+      <input type="file" id="ffolder" webkitdirectory directory multiple style="display:none">
+      <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">Alleen een JSON-bestand laden</button>
       <input type="file" id="qfile" accept=".json,application/json" style="display:none">
       ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}
+      ${app.mediaWarn?`<p class="err" style="margin:0;font-size:12px">${esc(app.mediaWarn)}</p>`:''}
     </div>
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
@@ -905,6 +965,8 @@ function hostLobby(){
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
     </div>`;
+  $('#b-loadfolder').onclick = ()=> $('#ffolder').click();
+  $('#ffolder').onchange = e=>{ if(e.target.files&&e.target.files.length) loadFolder(e.target.files); };
   $('#b-loadq').onclick = ()=> $('#qfile').click();
   $('#qfile').onchange = handleQuizFile;
   $('#b-start').onclick = hostStart;
@@ -973,7 +1035,7 @@ function hostQuestion(){
                   <button class="btn big" id="b-reveal">Toon het antwoord</button>`;
     }
   } else {
-    spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
+    spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(resolveMedia(r.image))}<div class="qtext">${esc(r.question)}</div></div>`;
     controls = `<button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   }
   el.innerHTML = `
