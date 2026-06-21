@@ -169,6 +169,8 @@
   .slabel{font-weight:600;font-size:15px}
   .nowtag{margin-left:8px;font-size:12px;font-weight:700;color:var(--gold)}
   .slocked{font-size:13px;color:var(--muted);font-style:italic}
+  .hintlist{display:flex;flex-wrap:wrap;gap:6px}
+  .hintlabel{display:flex;align-items:center;gap:7px;background:var(--surface-2);border-radius:9px;padding:5px 10px;font-size:14px;font-weight:600}
   /* host: twee koloms met statuszijbalk */
   .hostgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
   .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -187,6 +189,8 @@
   .modal{position:fixed;inset:0;background:rgba(10,6,24,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
   .modalcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .funbanner{border-color:rgba(255,194,60,.5)!important;background:rgba(255,194,60,.10)}
+  .checkrow{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--muted);cursor:pointer}
+  .checkrow input{margin-top:2px;flex:none}
 </style>
 </head>
 <body>
@@ -309,9 +313,9 @@ function normalizeQuiz(arr){
   return arr.map(q=>{
     const out = Object.assign({}, q);
     if(Array.isArray(q.stages)) out.stages = q.stages.map(normStage);
-    if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':'list';
+    if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':q.options===':text'?'text':'list';
     else if(Array.isArray(q.options))      out.optionsMode = 'list';
-    else if(q.optionsMode==='tmdb'||q.optionsMode==='deezer') out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
+    else if(['tmdb','deezer','text'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
     else { out.optionsMode='list'; out.options = out.options||[]; }
     if(out.optionsMode!=='list') delete out.options;
     if(out.answer==null && q.correctIndex!=null) out.answer = q.correctIndex;
@@ -321,9 +325,22 @@ function normalizeQuiz(arr){
     }
     if(out.answerLabel==null && out.optionsMode==='list' && Array.isArray(out.options) && out.options[out.answer]!=null)
       out.answerLabel = out.options[out.answer];
+    if(out.optionsMode==='text' && out.answerLabel==null && out.answer!=null) out.answerLabel = String(out.answer);
     if(out.points==null) out.points = 100;
     return out;
   });
+}
+/* tekst normaliseren voor losse antwoordvergelijking */
+function normTxt(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+/* is dit antwoord goed? ondersteunt lijst/zoek (id of index), tekst, én meerdere juiste antwoorden (array) */
+function isCorrectAns(r, a){
+  if(a==null) return false;
+  if(r.optionsMode==='text'){
+    const ok = [r.answerLabel, r.answer, ...((r.accept)||[])].filter(x=>x!=null).map(normTxt);
+    return ok.includes(normTxt(a));
+  }
+  const ans = r.answer;
+  return Array.isArray(ans) ? ans.map(String).includes(String(a)) : String(a)===String(ans);
 }
 
 /* validatie van een geladen vragenset */
@@ -333,13 +350,18 @@ function validateQuiz(data){
     const q=data[i], n=i+1;
     if(!q || typeof q!=='object') return `Vraag ${n} is ongeldig.`;
     const apiOpts = typeof q.options==='string' && [':tmdb',':deezer'].includes(q.options);
+    const textOpts = q.options===':text';
     const listOpts = Array.isArray(q.options);
-    if(!apiOpts && !listOpts) return `Vraag ${n}: 'options' moet een lijst zijn of ":tmdb"/":deezer".`;
+    if(!apiOpts && !textOpts && !listOpts) return `Vraag ${n}: 'options' moet een lijst zijn of ":tmdb"/":deezer"/":text".`;
     if(listOpts && q.options.length<2) return `Vraag ${n}: minstens 2 opties nodig.`;
-    const ans = q.answer!=null ? q.answer : q.correctIndex;
-    if(ans==null) return `Vraag ${n}: 'answer' ontbreekt.`;
-    if(listOpts && (typeof ans!=='number' || ans<0 || ans>=q.options.length)) return `Vraag ${n}: 'answer' moet een geldige index zijn.`;
-    if(apiOpts && !q.answerLabel) return `Vraag ${n}: bij ":tmdb"/":deezer" is 'answerLabel' nodig.`;
+    if(textOpts){
+      if(q.answer==null && !q.answerLabel) return `Vraag ${n}: bij ":text" is 'answer' of 'answerLabel' nodig.`;
+    } else {
+      const ans = q.answer!=null ? q.answer : q.correctIndex;
+      if(ans==null) return `Vraag ${n}: 'answer' ontbreekt.`;
+      if(listOpts && (typeof ans!=='number' || ans<0 || ans>=q.options.length)) return `Vraag ${n}: 'answer' moet een geldige index zijn.`;
+      if(apiOpts && !q.answerLabel) return `Vraag ${n}: bij ":tmdb"/":deezer" is 'answerLabel' nodig.`;
+    }
     if(q.stages!=null){
       if(!Array.isArray(q.stages)||!q.stages.length) return `Vraag ${n}: 'stages' moet een niet-lege lijst zijn.`;
       for(let j=0;j<q.stages.length;j++){
@@ -363,9 +385,10 @@ const app = {
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
   quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
   pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
-  searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false,
+  searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false, textAns:'',
   myStage:null, reguess:false, forFun:false,
-  unsubPlayers:null, unsubState:null, unsubMe:null, kicked:false,
+  unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
+  judges:{}, preRoundScores:{},
   openPicker:null, confirmKick:null,
 };
 const $ = s => document.querySelector(s);
@@ -423,7 +446,7 @@ function pushState(){
       judged = {};
       app.players.forEach(p=>{
         const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
-        if(a!=null) judged[p.id] = (String(a)===String(r.answer));
+        if(a!=null) judged[p.id] = effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
       });
     }
     if(r && r.betting){
@@ -454,8 +477,16 @@ function startHost(){
     if(app.phase==='question'){
       app.answeredCount = present.filter(p=> p.ans && p.ans[app.round]!=null).length;
     }
+    if(app.phase==='reveal') buildResults();
     pushState();
     setConn(app.code+' · '+present.length+' verbonden');
+    renderHost();
+  });
+  // handmatige oordelen (van host of controleur) → herbereken + opnieuw tonen
+  app.unsubJudges = onValue(ref(db, `games/${app.code}/judge`), snap=>{
+    app.judges = snap.val() || {};
+    if(app.phase==='reveal') buildResults();
+    pushState();
     renderHost();
   });
 }
@@ -473,6 +504,7 @@ function cleanup(){
   if(app.unsubPlayers){ app.unsubPlayers(); app.unsubPlayers=null; }
   if(app.unsubState){ app.unsubState(); app.unsubState=null; }
   if(app.unsubMe){ app.unsubMe(); app.unsubMe=null; }
+  if(app.unsubJudges){ app.unsubJudges(); app.unsubJudges=null; }
 }
 
 /* ============================================================
@@ -521,6 +553,14 @@ async function hostResume(code){
   app.scores = s.scores || {};
   app.names  = s.names  || {};
   app.results= s.results || null;
+  // oordelen terughalen + pre-ronde scores reconstrueren (scores nu = pre-ronde + winst deze ronde)
+  const js = await get(ref(db, `games/${code}/judge`));
+  app.judges = js.exists() ? js.val() : {};
+  app.preRoundScores = {};
+  Object.keys(app.scores).forEach(pid=>{
+    const g = (app.results && app.results[pid]) ? (app.results[pid].gained||0) : 0;
+    app.preRoundScores[pid] = app.scores[pid] - g;
+  });
   app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
   const qs = await get(quizRef(code));
   app.quiz = normalizeQuiz(qs.exists() ? qs.val() : SAMPLE);
@@ -533,6 +573,7 @@ async function hostResume(code){
 function initQuestion(){
   const r = app.quiz[app.round];
   app.stage=0; app.checked=false; app.answeredCount=0; app.results=null;
+  app.preRoundScores = {...app.scores};
   app.betStep = (r && r.betting) ? 'bet' : null;
 }
 function hostStart(){ app.round=0; app.phase='question'; initQuestion(); pushState(); renderHost(); }
@@ -568,21 +609,34 @@ function pointsInfo(r, correct, lock, bet, stage){
   }
   return correct ? { text:`+${base}`, kind:'win' } : { text:'0', kind:'bust' };
 }
-function hostReveal(){
+/* effectieve correctheid: handmatig oordeel (host/controleur) overruult de auto-check */
+function effectiveCorrect(round, pid, auto){
+  const o = app.judges && app.judges[round] ? app.judges[round][pid] : undefined;
+  return (o===true||o===false) ? o : auto;
+}
+/* resultaten + score voor de huidige ronde (her)berekenen */
+function buildResults(){
   const r = app.quiz[app.round];
-  if(Array.isArray(r.stages)) app.stage = r.stages.length-1;   // bij onthullen alles tonen
-  app.results={};
+  app.results = {};
   app.players.forEach(p=>{
     const a  = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
     const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
     const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
     const passed = !!(p.pass && p.pass[app.round]);
-    const auto = a!=null && String(a)===String(r.answer);
-    const g = computeGain(r, auto, bet, lock);
-    app.scores[p.id] = (app.scores[p.id]||0) + g.gained;
-    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct:auto, gained:g.gained, won:g.won, bet, lock, passed };
+    const auto = isCorrectAns(r,a);
+    const correct = effectiveCorrect(app.round, p.id, auto);
+    const g = computeGain(r, correct, bet, lock);
+    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct, gained:g.gained, won:g.won, bet, lock, passed };
   });
+  Object.keys(app.names).forEach(pid=>{
+    app.scores[pid] = (app.preRoundScores[pid]||0) + (app.results[pid] ? app.results[pid].gained : 0);
+  });
+}
+function hostReveal(){
+  const r = app.quiz[app.round];
+  if(Array.isArray(r.stages)) app.stage = r.stages.length-1;   // bij onthullen alles tonen
+  buildResults();
   app.phase='reveal'; pushState(); renderHost();
 }
 /* ---- host sub-stappen binnen een vraag ---- */
@@ -590,15 +644,14 @@ function hostRevealBets(){ app.betStep='reveal'; pushState(); renderHost(); }
 function hostStartPlay(){ app.betStep='play'; app.checked=false; pushState(); renderHost(); }
 function hostCheck(){ app.checked=true; pushState(); renderHost(); }
 function hostNextHint(){ app.stage++; app.checked=false; pushState(); renderHost(); }
-/* host overruled goed/fout; punten worden direct bijgewerkt */
+/* schrijf handmatig oordeel naar gedeelde opslag (host of controleur) */
+function setJudge(round, pid, val){
+  set(ref(db, `games/${app.code}/judge/${round}/${pid}`), val);
+}
+/* host overruled goed/fout (schrijft naar judge-opslag; listener herberekent) */
 function hostToggleCorrect(pid){
-  const r = app.quiz[app.round];
   const res = app.results && app.results[pid]; if(!res) return;
-  const nc = !res.correct;
-  const g = computeGain(r, nc, res.bet, res.lock);
-  app.scores[pid] = (app.scores[pid]||0) - (res.gained||0) + g.gained;
-  res.correct = nc; res.gained = g.gained; res.won = g.won;
-  pushState(); renderHost();
+  setJudge(app.round, pid, !res.correct);
 }
 function hostNext(){
   if(app.round+1 < app.quiz.length){ app.round++; app.phase='question'; initQuestion(); }
@@ -638,6 +691,61 @@ async function playerJoin(code, name){
   startPlayer();
   return true;
 }
+/* ---- controleur (jurylid): ziet antwoorden, keurt goed/fout, telt mee in de score ---- */
+async function controllerJoin(code){
+  code = code.toUpperCase();
+  const snap = await get(stateRef(code));
+  if(!snap.exists()) return false;
+  app.role='controller'; app.code=code; app.kicked=false;
+  const qs = await get(quizRef(code));
+  app.quiz = normalizeQuiz(qs.exists()?qs.val():SAMPLE);
+  app.unsubState   = onValue(stateRef(code), s=>{ app.game = s.val(); renderController(); });
+  app.unsubPlayers = onValue(playersRef(code), s=>{ app.players = Object.values(s.val()||{}).filter(p=>p&&p.id&&p.name); renderController(); });
+  app.unsubJudges  = onValue(ref(db,`games/${code}/judge`), s=>{ app.judges = s.val()||{}; renderController(); });
+  setConn('controleur · '+code);
+  renderController();
+  return true;
+}
+function renderController(){
+  const wrap=document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
+  const g = app.game;
+  if(!g || (g.phase!=='question' && g.phase!=='reveal')){
+    el.innerHTML = `<div class="center stack"><div class="qmeta">Controleur · ${esc(app.code||'')}</div>
+      <h1>${g&&g.phase==='final'?'Het spel is afgelopen':'Wachten op een vraag…'}</h1>
+      <p class="muted">Je ziet hier straks alle antwoorden om goed/fout te keuren.</p></div>`;
+    return;
+  }
+  const round = g.round, r = app.quiz[round] || {};
+  const correctLabel = r.answerLabel || (r.optionsMode==='list'&&r.options?r.options[r.answer]:'') || '—';
+  const rows = app.players.map(p=>{
+    const a = (p.ans&&p.ans[round]!=null)?p.ans[round]:null;
+    const al = (p.anslabel&&p.anslabel[round]!=null)?p.anslabel[round]:null;
+    const passed = !!(p.pass&&p.pass[round]);
+    const auto = isCorrectAns(r,a);
+    const eff = effectiveCorrect(round, p.id, auto);
+    const ans = passed?'⤴ gepast':(a==null?'— nog niet':(al||String(a)));
+    const dis = (a==null||passed)?'disabled':'';
+    return `<div class="reviewrow">
+      <span class="rnm">${esc(p.name)}</span>
+      <span class="rguess">${esc(ans)}</span>
+      <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="statusbar"><span class="pill">Ronde ${round+1}/${g.totalRounds}</span><span class="pill ok">controleur</span></div>
+    <div class="spotlight"><div class="qmeta">Juiste antwoord</div><div class="qtext" style="font-size:22px">${esc(correctLabel)}</div></div>
+    <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
+      <p class="muted" style="margin:0;font-size:12px">Tik om goed/fout te zetten — telt direct mee in de score.</p>
+      ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
+  el.querySelectorAll('[data-cjudge]').forEach(b=> b.onclick=()=> ctrlToggle(b.dataset.cjudge));
+}
+function ctrlToggle(pid){
+  const round = app.game.round, r = app.quiz[round]||{};
+  const p = app.players.find(x=>x.id===pid);
+  const a = (p&&p.ans&&p.ans[round]!=null)?p.ans[round]:null;
+  const auto = isCorrectAns(r,a);
+  setJudge(round, pid, !effectiveCorrect(round, pid, auto));
+}
 async function playerSubmit(){
   if(app.kicked) return;
   const cur = app.game.current, r = app.game.round;
@@ -645,6 +753,9 @@ async function playerSubmit(){
   if(cur.optionsMode==='list'){
     if(app.sel==null) return;
     val = app.sel; label = (cur.options||[])[app.sel];
+  } else if(cur.optionsMode==='text'){
+    if(!app.textAns || !app.textAns.trim()) return;
+    val = app.textAns.trim(); label = val;
   } else {
     if(!app.searchPick) return;
     val = app.searchPick.id; label = app.searchPick.label;
@@ -737,21 +848,23 @@ function renderJoin(){
     <div class="card stack">
       <div class="stack"><label class="lbl" for="i-code">Spelcode</label>
         <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
-      <div class="stack"><label class="lbl" for="i-name">Jouw naam</label>
+      <div class="stack" id="namewrap"><label class="lbl" for="i-name">Jouw naam</label>
         <input id="i-name" maxlength="16" placeholder="Bijv. Nikki"></div>
+      <label class="checkrow"><input type="checkbox" id="i-ctrl"> <span>Ik ben de controleur (jurylid) — ik zie de antwoorden en keur goed/fout</span></label>
       <p id="join-err" class="err" style="min-height:18px;margin:0"></p>
       <button class="btn big" id="b-go">Verbinden</button>
       <button class="btn ghost" id="b-back">Terug</button>
     </div>`;
   $('#b-back').onclick = renderHome;
-  const code=$('#i-code'), name=$('#i-name'), err=$('#join-err');
+  const code=$('#i-code'), name=$('#i-name'), err=$('#join-err'), ctrl=$('#i-ctrl');
+  ctrl.onchange = ()=>{ $('#namewrap').style.display = ctrl.checked ? 'none' : ''; };
   $('#b-go').onclick = async ()=>{
-    const c=code.value.trim().toUpperCase(), n=name.value.trim();
+    const c=code.value.trim().toUpperCase(), n=name.value.trim(), asCtrl=ctrl.checked;
     if(c.length!==4){ err.textContent='Vul een geldige code van 4 letters in.'; return; }
-    if(!n){ err.textContent='Vul een naam in.'; return; }
+    if(!asCtrl && !n){ err.textContent='Vul een naam in.'; return; }
     $('#b-go').disabled=true; err.textContent='';
     try{
-      const ok = await playerJoin(c,n);
+      const ok = asCtrl ? await controllerJoin(c) : await playerJoin(c,n);
       if(!ok){ err.textContent='Geen spel gevonden met die code.'; $('#b-go').disabled=false; }
     }catch(e){ err.textContent='Verbinden mislukt — check je Firebase-config.'; $('#b-go').disabled=false; }
   };
@@ -779,7 +892,7 @@ function playerRowsHTML(mode){
     const passed = !!(p.pass && p.pass[app.round]);
     const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
-    const correct = a!=null && String(a)===String(r.answer);
+    const correct = a!=null && effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
     let badge, ptxt='';
     if(passed) badge = `<span class="st wait">⤴ gepast</span>`;
     else if(a==null) badge = `<span class="st wait">… moet nog</span>`;
@@ -787,7 +900,7 @@ function playerRowsHTML(mode){
     else {
       const pi = pointsInfo(r, correct, lock, bet, app.stage);
       if(correct){ badge = `<span class="st good">🎯 goed</span>`; ptxt = `<span class="pwin">${pi.text}</span>`; }
-      else if(pi.kind==='open') badge = `<span class="st wait">✗ nog kans</span>`;
+      else if(pi.kind==='open') badge = `<span class="st wait">✗ mag nog raden</span>`;
       else { badge = `<span class="st bad">✗</span>`; ptxt = `<span class="pbust">0</span>`; }
     }
     const sc = `<span class="psc">${score}</span>`;
@@ -822,6 +935,14 @@ function resolveMedia(p){
   for(const k in mediaMap){ if(k===p || k.endsWith('/'+p) || p.endsWith('/'+k)) return mediaMap[k]; }
   const base = p.split('/').pop().toLowerCase();
   for(const k in mediaMap){ if(k.split('/').pop().toLowerCase()===base) return mediaMap[k]; }
+  // losse match: zelfde (sub)map + zelfde begin-token (bv "1", "5", "full") — negeert rest van naam/extensie.
+  // Hiermee werken bv puzzle-delen ("1-eye", "3.nose", "full.jpg") en bandle-lagen ("1-drums.m4a") via paden als ".../1" of ".../full".
+  const lastDir = s => { const a=s.toLowerCase().split('/'); return a.length>1?a[a.length-2]:''; };
+  const tok = s => s.split('/').pop().toLowerCase().replace(/\.[^.]+$/,'').split(/[-_. ]/)[0];
+  const pdir=lastDir(p), ptok=tok(p);
+  if(pdir && ptok){
+    for(const k in mediaMap){ if(lastDir(k)===pdir && tok(k)===ptok) return mediaMap[k]; }
+  }
   return p;
 }
 function fileToDataURL(file){
@@ -897,6 +1018,11 @@ function hostStagesHTML(r, cur){
   }).join('')}</div>`;
 }
 /* speler: stage-meta uit state (geen audio-paden) */
+/* lijst met hint-namen (vooraf zichtbaar, bv bij inzetten) */
+function hintLabelsHTML(r){
+  if(!Array.isArray(r.stages)) return '';
+  return `<div class="hintlist">${r.stages.map((s,i)=>`<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(s.label||('Hint '+(i+1)))}</span></div>`).join('')}</div>`;
+}
 function playerStagesHTML(c){
   const cur = c.stage||0;
   return `<div class="stagelist">${(c.stages||[]).map((s,idx)=>{
@@ -986,7 +1112,8 @@ function hostQuestion(){
       <div class="hostgrid">
         <div class="hostmain">
           <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill">inzetten</span></div>
-          <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
+          <div class="spotlight"><div class="qmeta">${r.points??100} punten × inzet</div><div class="qtext">${esc(r.question||'')}</div></div>
+          <div class="card stack" style="gap:8px"><b>Hints</b>${hintLabelsHTML(r)}</div>
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
         </div>
@@ -1018,7 +1145,7 @@ function hostQuestion(){
   const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
   const opts = r.optionsMode==='list'
     ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
-    : `<p class="muted center" style="font-size:13px">Spelers zoeken zelf het antwoord (${r.optionsMode==='tmdb'?'film':'nummer'}).</p>`;
+    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':'Spelers zoeken zelf het antwoord ('+(r.optionsMode==='tmdb'?'film':'nummer')+')'}.</p>`;
   let spot, controls;
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
@@ -1147,6 +1274,11 @@ function answerAreaHTML(r){
   if(r.optionsMode==='list'){
     return `<div class="answers">${r.options.map((o,i)=>`<button class="ans ${app.sel===i?'sel':''}" data-i="${i}" data-c="${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`;
   }
+  if(r.optionsMode==='text'){
+    return `<div class="searchwrap">
+      <input id="t-input" class="sinput" type="text" placeholder="Typ je antwoord…" value="${esc(app.textAns||'')}" maxlength="60" autocomplete="off">
+    </div>`;
+  }
   const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : 'Zoek een nummer…';
   return `<div class="searchwrap">
     <input id="s-input" class="sinput" type="text" placeholder="${ph}" value="${esc(app.searchText||'')}" autocomplete="off" autocapitalize="off">
@@ -1178,6 +1310,14 @@ function wireAnswerArea(r){
     el.querySelectorAll('.ans').forEach(b=> b.onclick=()=>{ app.sel=parseInt(b.dataset.i,10); renderPlayer(); });
     return;
   }
+  if(r.optionsMode==='text'){
+    const ti=$('#t-input');
+    if(ti){
+      ti.oninput=()=>{ app.textAns=ti.value; const b=$('#b-submit'); if(b) b.disabled = !ti.value.trim(); };
+      ti.focus(); const L=ti.value.length; try{ ti.setSelectionRange(L,L); }catch(e){}
+    }
+    return;
+  }
   const inp = $('#s-input');
   if(inp){
     inp.onfocus = ()=>{ if(!app.searchOpen){ app.searchOpen=true; refreshSearchOut(); } };
@@ -1203,7 +1343,7 @@ function playerQuestion(){
   // nieuwe ronde → staat resetten
   if(app.searchRound!==g.round){
     app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null;
-    app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null;
+    app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null; app.textAns='';
     app.reguess=false; app.forFun=false; app.confirmPass=false;
   }
 
@@ -1213,14 +1353,19 @@ function playerQuestion(){
   // ---- INZET: stap 1 — inzetten ----
   if(r.betting && g.betStep==='bet'){
     if(app.bet[g.round]==null){
-      const spot = `<div class="spotlight"><div class="qtext">${esc(r.question||'')}</div></div>`;
-      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
+      const base = r.points ?? 100;
+      const spot = `<div class="spotlight"><div class="qmeta">${base} punten × je inzet</div><div class="qtext">${esc(r.question||'')}</div></div>`;
+      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk bij hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
       el.innerHTML = `
         <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
         ${spot}
+        <div class="card stack" style="gap:8px">
+          <b>De hints die je gaat krijgen</b>
+          ${hintLabelsHTML(r)}
+        </div>
         <div class="card stack" style="gap:10px">
-          <b>Wanneer heb je 'm uiterlijk?</b>
-          <p class="muted" style="margin:0;font-size:13px">Eerder inzetten = hogere multiplier. Haal je 'm niet op tijd, dan 0 punten.</p>
+          <b>Bij welke hint denk je het te weten?</b>
+          <p class="muted" style="margin:0;font-size:13px">Zet in op de laatste hint die je nodig hebt. Eerder = hogere multiplier. Lukt het niet op tijd, dan 0 punten.</p>
           <div class="bets">${bets}</div>
         </div>
         ${passBtnHTML}${passModalHTML()}`;
@@ -1229,7 +1374,7 @@ function playerQuestion(){
       return;
     }
     const m=(r.betMultipliers||[])[app.bet[g.round]];
-    return playerHold('betwait', `Je inzet: uiterlijk hint ${app.bet[g.round]+1} (×${m}) — wachten tot iedereen heeft gewed`);
+    return playerHold('betwait', `Je inzet: uiterlijk bij hint ${app.bet[g.round]+1} (×${m}) — wachten tot iedereen heeft ingezet`);
   }
   // ---- INZET: stap 2 — inzetten van iedereen tonen ----
   if(r.betting && g.betStep==='reveal'){
@@ -1256,7 +1401,9 @@ function playerQuestion(){
     // nieuwe hint: goed = vergrendeld blijven, fout = opnieuw raden
     const verdict = g.judged ? g.judged[app.pid] : undefined;
     if(verdict===true) return playerHold('correct', winNote(r,g));
-    const busted = pointsInfo(r, false, app.myStage, app.bet[g.round], g.stage).kind==='bust';
+    // fout + nieuwe hint → opnieuw raden; pas 'voor de lol' als de hint voorbij je inzet is
+    const bet = app.bet[g.round];
+    const busted = r.betting && bet!=null && (g.stage > bet);
     app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText='';
     app.searchResults=[]; app.searchOpen=false; app.reguess=true; app.forFun=busted;
   }
@@ -1281,7 +1428,7 @@ function playerQuestion(){
   const funBanner = app.forFun
     ? `<div class="card funbanner"><b>Je speelt voor de lol 🎈</b> <span class="muted">Je inzet is verlopen, dit levert geen punten meer op — maar raad gerust mee!</span></div>`
     : (app.reguess ? `<div class="card" style="border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)"><b style="color:var(--rood)">Vorige gok fout.</b> <span class="muted">Nieuwe hint — probeer opnieuw.</span></div>` : '');
-  const lockReady = r.optionsMode==='list' ? app.sel!=null : app.searchPick!=null;
+  const lockReady = r.optionsMode==='list' ? app.sel!=null : r.optionsMode==='text' ? !!(app.textAns&&app.textAns.trim()) : app.searchPick!=null;
   const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
