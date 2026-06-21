@@ -9,17 +9,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#1e1635; --bg2:#160f29; --surface:#2a2147; --surface-2:#332a55;
-    --ink:#f4f0ff; --muted:#a99fce; --line:#41376a; --gold:#ffc23c;
-    --rood:#ff5d6c; --blauw:#3fa0ff; --geel:#ffc23c; --groen:#43d6a0;
-    --radius:18px; --shadow:0 18px 40px -20px rgba(0,0,0,.7);
+    --bg:#eaf1fb; --bg2:#ffffff; --surface:#ffffff; --surface-2:#eef4fc;
+    --ink:#142944; --muted:#5d6b82; --line:#d6e3f2; --gold:#2b7fff;
+    --rood:#e5484d; --blauw:#2b7fff; --geel:#e29400; --groen:#16a173;
+    --radius:18px; --shadow:0 16px 34px -20px rgba(31,68,128,.30);
     --display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
     --body:"Inter", ui-sans-serif, system-ui, sans-serif;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{font-family:var(--body);color:var(--ink);
-    background:radial-gradient(1200px 600px at 50% -10%, rgba(255,194,60,.10), transparent 60%),linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background:radial-gradient(1200px 600px at 50% -10%, rgba(43,127,255,.12), transparent 60%),linear-gradient(180deg, var(--bg) 0%, #dce8f8 100%);
     background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
   .wrap.wide{max-width:1180px}
@@ -38,7 +38,7 @@
   button{font-family:var(--body);cursor:pointer;border:none;border-radius:14px;font-size:16px;font-weight:600;transition:transform .08s ease, filter .15s ease, background .15s}
   button:active{transform:translateY(1px) scale(.99)}
   button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-  .btn{padding:15px 18px;background:var(--gold);color:#2a1d00}
+  .btn{padding:15px 18px;background:var(--gold);color:#fff}
   .btn:hover{filter:brightness(1.05)}
   .btn[disabled]{opacity:.4;cursor:not-allowed;filter:none}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
@@ -48,13 +48,13 @@
   .linkbtn:hover{color:var(--ink)}
   input{font-family:var(--body);font-size:18px;padding:15px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);width:100%}
   input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
-  input::placeholder{color:#7a6fa0}
+  input::placeholder{color:#94a3b8}
   label.lbl{font-size:13px;color:var(--muted);font-weight:600}
-  .code{font-family:var(--display);font-weight:700;letter-spacing:.18em;font-size:clamp(44px,11vw,76px);color:var(--gold);text-shadow:0 0 30px rgba(255,194,60,.35)}
+  .code{font-family:var(--display);font-weight:700;letter-spacing:.18em;font-size:clamp(44px,11vw,76px);color:var(--gold);text-shadow:0 0 30px rgba(43,127,255,.35)}
   .pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px;font-weight:600}
   .pill.ok{color:var(--groen)} .chips{display:flex;flex-wrap:wrap;gap:8px}
   .spotlight{position:relative;border-radius:var(--radius);padding:30px 22px;text-align:center;
-    background:radial-gradient(420px 240px at 50% 0%, rgba(255,194,60,.18), transparent 70%), var(--surface);border:1px solid var(--line)}
+    background:radial-gradient(420px 240px at 50% 0%, rgba(43,127,255,.18), transparent 70%), var(--surface);border:1px solid var(--line)}
   .qmeta{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
   .qtext{font-family:var(--display);font-weight:700;font-size:clamp(22px,5vw,34px);line-height:1.15}
   .answers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -65,7 +65,7 @@
   .ans[data-c="2"]{box-shadow:inset 4px 0 0 var(--geel)} .ans[data-c="3"]{box-shadow:inset 4px 0 0 var(--groen)}
   .ans[data-c="0"] .shape{color:var(--rood)} .ans[data-c="1"] .shape{color:var(--blauw)}
   .ans[data-c="2"] .shape{color:var(--geel)} .ans[data-c="3"] .shape{color:var(--groen)}
-  .ans.sel{border-color:var(--gold);background:#3b2f60}
+  .ans.sel{border-color:var(--gold);background:#dce9fb}
   .ans.correct{border-color:var(--groen);background:rgba(67,214,160,.16)}
   .ans.wrong{border-color:var(--rood);background:rgba(255,93,108,.14);opacity:.85}
   .ans.dim{opacity:.45} .ans[disabled]{cursor:default}
@@ -95,14 +95,14 @@
   .prow.answered{border-color:rgba(67,214,160,.5);background:rgba(67,214,160,.08)}
   .prow .nm{font-weight:600}
   .nm-btn{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;background:transparent;color:var(--ink);padding:8px 6px;border-radius:10px;text-align:left}
-  .nm-btn:hover{background:rgba(255,255,255,.04)}
+  .nm-btn:hover{background:rgba(20,40,80,.05)}
   .st{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}
   .st.ok{color:var(--groen)}
   .kick{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:9px 11px;border-radius:10px;flex:none}
   .kick:hover{background:rgba(255,93,108,.16);color:var(--rood)}
   .kickconfirm{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
   .mini{font-size:13px;padding:6px 10px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink)}
-  .mini.danger{background:var(--rood);color:#3a0008;border-color:transparent}
+  .mini.danger{background:var(--rood);color:#fff;border-color:transparent}
   /* host vult antwoord in */
   .picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 4px 4px}
   @media (max-width:520px){.picker{grid-template-columns:1fr}}
@@ -120,7 +120,7 @@
   .ansline[data-c="2"] .shape{color:var(--geel)} .ansline[data-c="3"] .shape{color:var(--groen)}
   .ans-head .shape{font-size:18px;width:24px;text-align:center;flex:none}
   .ans-head .otxt{flex:1}
-  .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0c3326;background:var(--groen);padding:3px 8px;border-radius:999px}
+  .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:var(--groen);padding:3px 8px;border-radius:999px}
   .whos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .who{font-size:13px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
   .who.empty{color:var(--muted);font-weight:500;border-style:dashed}
@@ -130,23 +130,23 @@
   /* progressive hints */
   .clues{display:flex;flex-direction:column;gap:12px;text-align:left}
   .clue{display:flex;gap:12px;align-items:flex-start}
-  .cnum{flex:none;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#2a1d00;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+  .cnum{flex:none;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-top:2px}
   .cbody{flex:1}
   .cbody .qimg{margin-bottom:6px;max-height:220px}
   /* inzet-knoppen */
   .bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   @media (max-width:520px){.bets{grid-template-columns:1fr}}
   .betopt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px}
-  .betopt:hover{background:#3b2f60;border-color:var(--gold)}
+  .betopt:hover{background:#dce9fb;border-color:var(--gold)}
   .betopt .mult{font-family:var(--display);font-weight:700;color:var(--gold);font-size:18px}
   /* open zoeken */
   .searchwrap{display:flex;flex-direction:column;gap:0}
   .sinput{margin-bottom:8px}
   .sresults{display:flex;flex-direction:column;gap:6px}
   .sresult{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px;text-align:left;width:100%}
-  .sresult:hover{background:#3b2f60} .sresult.sel{border-color:var(--gold);background:#3b2f60}
+  .sresult:hover{background:#dce9fb} .sresult.sel{border-color:var(--gold);background:#dce9fb}
   .sresult img{width:34px;height:50px;object-fit:cover;border-radius:5px;flex:none;background:var(--bg2)}
-  .picked{margin-top:10px;padding:10px 12px;border-radius:11px;background:rgba(255,194,60,.12);border:1px solid var(--gold);font-size:14px}
+  .picked{margin-top:10px;padding:10px 12px;border-radius:11px;background:rgba(43,127,255,.12);border:1px solid var(--gold);font-size:14px}
   /* audio in stages */
   .qaudio{width:100%;margin:4px 0 8px;height:38px}
   /* gok bij reveal (host) */
@@ -164,13 +164,32 @@
   .stagelist{display:flex;flex-direction:column;gap:8px;text-align:left}
   .stagerow{display:flex;gap:12px;align-items:flex-start;padding:9px 11px;border-radius:12px;border:1px solid transparent}
   .stagerow.dim{opacity:.45}
-  .stagerow.cur{background:rgba(255,194,60,.10);border-color:rgba(255,194,60,.45)}
+  .stagerow.cur{background:rgba(43,127,255,.10);border-color:rgba(43,127,255,.45)}
   .stagerow .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
   .slabel{font-weight:600;font-size:15px}
   .nowtag{margin-left:8px;font-size:12px;font-weight:700;color:var(--gold)}
   .slocked{font-size:13px;color:var(--muted);font-style:italic}
   .hintlist{display:flex;flex-wrap:wrap;gap:6px}
   .hintlabel{display:flex;align-items:center;gap:7px;background:var(--surface-2);border-radius:9px;padding:5px 10px;font-size:14px;font-weight:600}
+  .metarow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:-2px}
+  .pointsbig{text-align:center;background:linear-gradient(180deg,rgba(43,127,255,.10),rgba(43,127,255,.04));border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:16px;color:var(--ink)}
+  .pointsbig b{font-family:var(--display);font-size:30px;color:var(--blauw);vertical-align:-2px;margin:0 2px}
+  .pointsbig span{color:var(--muted);font-size:14px}
+  /* spelerslijst-tabel */
+  .ptable{display:flex;flex-direction:column;gap:6px}
+  .ptable .phead,.ptable .prow2{display:grid;grid-template-columns:1.4fr 1.3fr 1.2fr auto;gap:8px;align-items:center}
+  .ptable .phead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;padding:0 12px}
+  .ptable .prow2{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
+  .ptable .prow2 .pnm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .ptable .pscore{font-family:var(--display);font-weight:700;text-align:right}
+  .stbadge{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .stbadge.wait{color:var(--muted)} .stbadge.done{color:var(--blauw)}
+  .stbadge.good{color:var(--groen)} .stbadge.bad{color:var(--rood)} .stbadge.pass{color:var(--muted)}
+  .betcell{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+  .betcell.over{color:var(--rood)}
+  .wronglist{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 2px}
+  .wronglist .wl-h{font-size:13px;font-weight:700;color:var(--rood)}
+  .wronglist .wl-chip{font-size:13px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;text-decoration:line-through}
   /* host: twee koloms met statuszijbalk */
   .hostgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
   .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -188,7 +207,7 @@
   .pasbtn{margin-top:10px}
   .modal{position:fixed;inset:0;background:rgba(10,6,24,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
   .modalcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-  .funbanner{border-color:rgba(255,194,60,.5)!important;background:rgba(255,194,60,.10)}
+  .funbanner{border-color:rgba(43,127,255,.5)!important;background:rgba(43,127,255,.10)}
   .checkrow{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--muted);cursor:pointer}
   .checkrow input{margin-top:2px;flex:none}
 </style>
@@ -314,21 +333,36 @@ function normalizeQuiz(arr){
     const out = Object.assign({}, q);
     if(Array.isArray(q.stages)) out.stages = q.stages.map(normStage);
     if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':q.options===':text'?'text':'list';
-    else if(Array.isArray(q.options))      out.optionsMode = 'list';
-    else if(['tmdb','deezer','text'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
+    else if(Array.isArray(q.options))      out.optionsMode = q.search ? 'listsearch' : 'list';   // search:true → autocomplete-veld
+    else if(['tmdb','deezer','text','listsearch'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
     else { out.optionsMode='list'; out.options = out.options||[]; }
-    if(out.optionsMode!=='list') delete out.options;
+    if(!['list','listsearch'].includes(out.optionsMode)) delete out.options;
     if(out.answer==null && q.correctIndex!=null) out.answer = q.correctIndex;
     if(Array.isArray(out.stages)){
       const muls = out.stages.map(s=>s.betMultiplier);
       if(muls.some(m=>m!=null)){ out.betting=true; out.betMultipliers = out.stages.map(s=>s.betMultiplier!=null?s.betMultiplier:1); }
+      // bandle-metadata uit de mapnaam halen, bv "..._(1974_143M_par-2)/1" → jaar 1974, 143M views, par 2
+      const ap = out.stages.find(s=>s.audio);
+      if(ap){
+        const folder = ap.audio.split('/').slice(-2,-1)[0]||'';
+        const m = folder.match(/\(\s*(\d{4})\s*[_ ]\s*([\d.]+\s*[kmbKMB]?)\s*[_ ]\s*par[-_ ]*(\d+)\s*\)/);
+        if(m){ if(out.year==null) out.year=+m[1]; if(out.views==null) out.views=m[2].toUpperCase().replace(/\s+/g,''); if(out.par==null) out.par=+m[3]; }
+      }
     }
-    if(out.answerLabel==null && out.optionsMode==='list' && Array.isArray(out.options) && out.options[out.answer]!=null)
+    if(out.answerLabel==null && ['list','listsearch'].includes(out.optionsMode) && Array.isArray(out.options) && out.options[out.answer]!=null)
       out.answerLabel = out.options[out.answer];
     if(out.optionsMode==='text' && out.answerLabel==null && out.answer!=null) out.answerLabel = String(out.answer);
     if(out.points==null) out.points = 100;
     return out;
   });
+}
+/* metaregel (jaar · views · moeilijkheid) voor bv bandle-vragen */
+function metaHTML(r){
+  const bits=[];
+  if(r.year) bits.push(String(r.year));
+  if(r.views) bits.push(`${r.views} views`);
+  if(r.par!=null) bits.push(`par ${r.par}`);
+  return bits.length ? `<div class="metarow">${bits.map(b=>`<span class="pill">${esc(b)}</span>`).join('')}</div>` : '';
 }
 /* tekst normaliseren voor losse antwoordvergelijking */
 function normTxt(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
@@ -386,6 +420,7 @@ const app = {
   quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
   pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
   searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false, textAns:'',
+  wrongGuesses:{}, lastSubmitLabel:null,
   myStage:null, reguess:false, forFun:false,
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
@@ -397,6 +432,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&
 const setConn = t => { $('#conn').textContent = t||''; };
 const genCode = () => { const a='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s=''; for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)]; return s; };
 const genId = () => 'p'+Math.random().toString(36).slice(2,9);
+const genToken = () => Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
 /* onthoud laatste host-code (werkt op GitHub Pages; valt stil terug indien niet beschikbaar) */
 const remember = c => { try{ localStorage.setItem('quizHost', c); }catch(e){} };
 const forget   = () => { try{ localStorage.removeItem('quizHost'); }catch(e){} };
@@ -410,7 +446,10 @@ function publicCurrent(){
   const r = app.quiz[app.round]; if(!r) return null;
   const staged = Array.isArray(r.stages);
   const base = { question:r.question||'', optionsMode:r.optionsMode||'list', staged, points:r.points ?? 100 };
-  if(base.optionsMode==='list') base.options = r.options||[];
+  if(['list','listsearch'].includes(base.optionsMode)) base.options = r.options||[];
+  if(r.year!=null) base.year=r.year;
+  if(r.views!=null) base.views=r.views;
+  if(r.par!=null) base.par=r.par;
   if(!staged){
     base.image = resolveMedia(r.image) || null;
   } else {
@@ -514,9 +553,11 @@ function hostCreate(){
   app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1; app.stage=0;
   app.scores={}; app.names={}; app.players=[]; app.results=null;
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
+  app.judgeToken = genToken(); app.loadInfo=null;
   app.quiz = normalizeQuiz(SAMPLE); app.quizName = 'Voorbeeldset';
   remember(app.code);
   set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
+  set(ref(db, `games/${app.code}/judgeToken`), app.judgeToken);   // geheime sleutel voor de jurylid-link
   pushState(); startHost(); renderHost();
 }
 /* nieuwe vragenset toepassen (uit geladen JSON) */
@@ -557,6 +598,9 @@ async function hostResume(code){
   // oordelen terughalen + pre-ronde scores reconstrueren (scores nu = pre-ronde + winst deze ronde)
   const js = await get(ref(db, `games/${code}/judge`));
   app.judges = js.exists() ? js.val() : {};
+  const tk = await get(ref(db, `games/${code}/judgeToken`));
+  app.judgeToken = tk.exists() ? tk.val() : (app.judgeToken||genToken());
+  if(!tk.exists()) set(ref(db, `games/${code}/judgeToken`), app.judgeToken);
   app.preRoundScores = {};
   Object.keys(app.scores).forEach(pid=>{
     const g = (app.results && app.results[pid]) ? (app.results[pid].gained||0) : 0;
@@ -693,10 +737,12 @@ async function playerJoin(code, name){
   return true;
 }
 /* ---- controleur (jurylid): ziet antwoorden, keurt goed/fout, telt mee in de score ---- */
-async function controllerJoin(code){
+async function controllerJoin(code, token){
   code = code.toUpperCase();
   const snap = await get(stateRef(code));
-  if(!snap.exists()) return false;
+  if(!snap.exists()) return 'nogame';
+  const tk = await get(ref(db, `games/${code}/judgeToken`));
+  if(!tk.exists() || String(tk.val())!==String(token||'')) return 'badtoken';
   app.role='controller'; app.code=code; app.kicked=false;
   const qs = await get(quizRef(code));
   app.quiz = normalizeQuiz(qs.exists()?qs.val():SAMPLE);
@@ -705,7 +751,7 @@ async function controllerJoin(code){
   app.unsubJudges  = onValue(ref(db,`games/${code}/judge`), s=>{ app.judges = s.val()||{}; renderController(); });
   setConn('controleur · '+code);
   renderController();
-  return true;
+  return 'ok';
 }
 function renderController(){
   const wrap=document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
@@ -762,6 +808,7 @@ async function playerSubmit(){
     val = app.searchPick.id; label = app.searchPick.label;
   }
   app.ans[r] = val; app.submittedRound = r;
+  app.lastSubmitLabel = label;
   await set(ansRef(app.code, app.pid, r), val);
   await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), label||'');
   if(cur.staged){
@@ -851,21 +898,19 @@ function renderJoin(){
         <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
       <div class="stack" id="namewrap"><label class="lbl" for="i-name">Jouw naam</label>
         <input id="i-name" maxlength="16" placeholder="Bijv. Nikki"></div>
-      <label class="checkrow"><input type="checkbox" id="i-ctrl"> <span>Ik ben de controleur (jurylid) — ik zie de antwoorden en keur goed/fout</span></label>
       <p id="join-err" class="err" style="min-height:18px;margin:0"></p>
       <button class="btn big" id="b-go">Verbinden</button>
       <button class="btn ghost" id="b-back">Terug</button>
     </div>`;
   $('#b-back').onclick = renderHome;
-  const code=$('#i-code'), name=$('#i-name'), err=$('#join-err'), ctrl=$('#i-ctrl');
-  ctrl.onchange = ()=>{ $('#namewrap').style.display = ctrl.checked ? 'none' : ''; };
+  const code=$('#i-code'), name=$('#i-name'), err=$('#join-err');
   $('#b-go').onclick = async ()=>{
-    const c=code.value.trim().toUpperCase(), n=name.value.trim(), asCtrl=ctrl.checked;
+    const c=code.value.trim().toUpperCase(), n=name.value.trim();
     if(c.length!==4){ err.textContent='Vul een geldige code van 4 letters in.'; return; }
-    if(!asCtrl && !n){ err.textContent='Vul een naam in.'; return; }
+    if(!n){ err.textContent='Vul een naam in.'; return; }
     $('#b-go').disabled=true; err.textContent='';
     try{
-      const ok = asCtrl ? await controllerJoin(c) : await playerJoin(c,n);
+      const ok = await playerJoin(c,n);
       if(!ok){ err.textContent='Geen spel gevonden met die code.'; $('#b-go').disabled=false; }
     }catch(e){ err.textContent='Verbinden mislukt — check je Firebase-config.'; $('#b-go').disabled=false; }
   };
@@ -879,43 +924,45 @@ function renderJoin(){
 function playerRowsHTML(mode){
   if(!app.players.length) return `<p class="muted">Nog niemand verbonden… <span class="waiting-dots"></span></p>`;
   const r = app.quiz[app.round];
+  const kickHTML = p => app.confirmKick===p.id
+    ? `<span class="kickconfirm">Verwijderen? <button class="mini danger" data-kickyes="${p.id}">Ja</button> <button class="mini" data-kickno="1">Nee</button></span>`
+    : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">✕</button>`;
+  if(mode==='lobby')
+    return app.players.map(p=>`<div class="prow"><span class="nm">${esc(p.name)}</span>${kickHTML(p)}</div>`).join('');
+
+  const staged = r && Array.isArray(r.stages);
+  const betting = r && r.betting;
   const canPick = mode==='question' && r && r.optionsMode==='list';
-  return app.players.map(p=>{
-    const answered = p.ans && p.ans[app.round]!=null;
-    const staged = r && Array.isArray(r.stages);
-    const score = app.scores[p.id]||0;
-    const kick = app.confirmKick===p.id
-      ? `<span class="kickconfirm">Verwijderen? <button class="mini danger" data-kickyes="${p.id}">Ja</button> <button class="mini" data-kickno="1">Nee</button></span>`
-      : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">✕</button>`;
-    if(mode==='lobby')
-      return `<div class="prow"><span class="nm">${esc(p.name)}</span>${kick}</div>`;
-    const a = answered ? p.ans[app.round] : null;
+  const rows = app.players.map(p=>{
+    const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
     const passed = !!(p.pass && p.pass[app.round]);
-    const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
     const correct = a!=null && effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
-    let badge, ptxt='';
-    if(passed) badge = `<span class="st wait">⤴ gepast</span>`;
-    else if(a==null) badge = `<span class="st wait">… moet nog</span>`;
-    else if(!staged || !app.checked) badge = `<span class="st ok">✓ geantwoord</span>`;
-    else {
-      const pi = pointsInfo(r, correct, lock, bet, app.stage);
-      if(correct){ badge = `<span class="st good">🎯 goed</span>`; ptxt = `<span class="pwin">${pi.text}</span>`; }
-      else if(pi.kind==='open') badge = `<span class="st wait">✗ mag nog raden</span>`;
-      else { badge = `<span class="st bad">✗</span>`; ptxt = `<span class="pbust">0</span>`; }
+    const score = app.scores[p.id]||0;
+    // STATUS
+    let st;
+    if(passed) st = `<span class="stbadge pass">⤴ gepast</span>`;
+    else if(a==null) st = `<span class="stbadge wait">nadenken…</span>`;
+    else if(!staged || !app.checked) st = `<span class="stbadge done">✓ geantwoord</span>`;
+    else if(correct) st = `<span class="stbadge good">goed ✓</span>`;
+    else st = `<span class="stbadge bad">fout ✗</span>`;
+    // INZET
+    let betCell = '<span class="betcell">—</span>';
+    if(betting){
+      if(passed) betCell = '<span class="betcell">—</span>';
+      else if(bet!=null){ const over = app.stage>bet && !correct; betCell = `<span class="betcell ${over?'over':''}">uiterlijk hint ${bet+1}${over?' · te laat':''}</span>`; }
+      else betCell = '<span class="betcell">nog niet</span>';
     }
-    const sc = `<span class="psc">${score}</span>`;
-    if(!canPick){
-      return `<div class="prow ${answered?'answered':''}"><span class="nm">${esc(p.name)}</span>${sc}${badge}${ptxt}${kick}</div>`;
-    }
-    const picker = app.openPicker===p.id
+    // NAAM (+ kick, + evt. host-picker voor losse meerkeuze)
+    const nameInner = canPick
+      ? `<button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span>${esc(p.name)}</span></button>`
+      : `<span>${esc(p.name)}</span>`;
+    const picker = (canPick && app.openPicker===p.id)
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
-    return `<div class="prow ${answered?'answered':''}">
-        <button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span class="nm">${esc(p.name)}</span></button>
-        ${sc}${badge}${ptxt}${kick}
-      </div>${picker}`;
+    return `<div class="prow2"><span class="pnm">${nameInner}${kickHTML(p)}</span>${st}${betCell}<span class="pscore">${score}</span></div>${picker}`;
   }).join('');
+  return `<div class="ptable"><div class="phead"><span>Speler</span><span>Status</span><span>Inzet</span><span>Punten</span></div>${rows}</div>`;
 }
 function wirePlayerControls(){
   el.querySelectorAll('[data-kick]').forEach(b=> b.onclick=()=>{ app.confirmKick=b.dataset.kick; renderHost(); });
@@ -944,6 +991,14 @@ function resolveMediaKey(p){
   const tok = s => s.split('/').pop().toLowerCase().replace(/\.[^.]+$/,'').split(/[-_. ]/)[0];
   const pdir=folderKey(p), ptok=tok(p);
   if(pdir && ptok){ for(const k in mediaMap){ if(folderKey(k)===pdir && tok(k)===ptok) return k; } }
+  // laatste redmiddel: mapnaam wijkt licht af (bv typefout in bandnaam). Alleen als precies één
+  // kandidaat met hetzelfde begin-token een lange gemeenschappelijke voor- óf achterkant deelt.
+  if(pdir && ptok){
+    const affix=(a,b)=>{let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;let j=0;while(j<a.length&&j<b.length&&a[a.length-1-j]===b[b.length-1-j])j++;return Math.max(i,j);};
+    const cands=[];
+    for(const k in mediaMap){ if(tok(k)===ptok && affix(folderKey(k),pdir)>=10) cands.push(k); }
+    if(cands.length===1) return cands[0];
+  }
   return null;
 }
 function resolveMedia(p){
@@ -1024,12 +1079,19 @@ async function loadFolder(files){
 }
 /* controleer welke door de vragenset genoemde media gekoppeld kon worden */
 function quizMediaReport(){
+  const folderKey = s => { const a=s.split('/'); const d=(a.length>1?a[a.length-2]:''); return d.replace(/\([^)]*\)/g,'').toLowerCase().replace(/[^a-z0-9]+/g,''); };
   const miss=[]; let total=0;
   (app.quiz||[]).forEach(q=>{
     const ps=[];
     if(q.image) ps.push(q.image);
     if(Array.isArray(q.stages)) q.stages.forEach(s=>{ if(s.image)ps.push(s.image); if(s.audio)ps.push(s.audio); });
-    ps.forEach(p=>{ total++; if(!resolveMediaKey(p)) miss.push(p); });
+    ps.forEach(p=>{ total++;
+      if(!resolveMediaKey(p)){
+        const fk = folderKey(p);
+        const cands = Object.keys(mediaMap).filter(k=>folderKey(k)===fk).map(k=>k.split('/').pop());
+        miss.push({ path:p, cands });
+      }
+    });
   });
   return { total, missing: miss };
 }
@@ -1124,7 +1186,19 @@ function hostLobby(){
     </div>
     <div class="card stack" style="gap:10px">
       <div class="statusbar"><b>Vragen &amp; media</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen${app.mediaCount?` · ${app.mediaCount} media`:''} · ${esc(app.quizName||'eigen set')}</span></div>
-      ${app.loadInfo?`<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(app.loadInfo.file)}</b> — ${app.loadInfo.count} vragen · ${app.loadInfo.mediaTotal-app.loadInfo.missing.length}/${app.loadInfo.mediaTotal} media gekoppeld${app.loadInfo.missing.length?` · <span class="err">niet gevonden: ${esc(app.loadInfo.missing.slice(0,5).join(', '))}${app.loadInfo.missing.length>5?` (+${app.loadInfo.missing.length-5})`:''}</span>`:''}</p>`:''}
+      ${app.loadInfo?(()=>{
+        const li=app.loadInfo, miss=li.missing||[];
+        const okN=li.mediaTotal-miss.length;
+        let extra='';
+        if(miss.length){
+          const paths = miss.slice(0,5).map(m=>esc(m.path)).join(', ')+(miss.length>5?` (+${miss.length-5})`:'');
+          const withC = miss.find(m=>m.cands&&m.cands.length);
+          if(withC) extra = `<br><span class="muted">Die map is wél gevonden; de bestanden daarin heten: <b>${esc([...new Set(withC.cands)].slice(0,8).join(', '))}</b>. De paden in de JSON moeten dus naar die namen verwijzen (of hernoem de bestanden naar <code>1-…</code>, <code>2-…</code>).</span>`;
+          else extra = `<br><span class="muted">In géén geladen map matcht deze naam — de mapnaam zelf wijkt af van wat in de JSON staat.</span>`;
+          extra = `<span class="err">niet gevonden: ${paths}</span>${extra}`;
+        }
+        return `<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(li.file)}</b> — ${li.count} vragen · ${okN}/${li.mediaTotal} media gekoppeld${miss.length?` · ${extra}`:''}</p>`;
+      })():''}
       <p class="muted" style="margin:0;font-size:12px">Laad in één keer je map met daarin <code>questions.json</code> (in de root) plus alle audio en afbeeldingen.</p>
       <button class="btn ghost" id="b-loadfolder">Map laden (JSON + media)</button>
       <input type="file" id="ffolder" webkitdirectory directory multiple style="display:none">
@@ -1135,6 +1209,11 @@ function hostLobby(){
     </div>
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
+    <div class="card stack" style="gap:8px">
+      <div class="statusbar"><b>Jurylid-link</b><span class="muted" style="font-size:12px">optioneel</span></div>
+      <p class="muted" style="margin:0;font-size:12px">Stuur deze link naar wie de antwoorden mag goed-/afkeuren. Alleen met deze link kun je jurylid worden — niet met de gewone code.</p>
+      <div class="row"><input id="ctrl-link" class="sinput" readonly value="${esc(ctrlLinkFor(app.code, app.judgeToken||''))}" style="flex:1;font-size:12px" onclick="this.select()"><button class="btn ghost" id="b-copyctrl">Kopieer</button></div>
+    </div>
     <div class="row">
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
@@ -1143,6 +1222,13 @@ function hostLobby(){
   $('#ffolder').onchange = e=>{ if(e.target.files&&e.target.files.length) loadFolder(e.target.files); };
   $('#b-loadq').onclick = ()=> $('#qfile').click();
   $('#qfile').onchange = handleQuizFile;
+  const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
+    const inp=$('#ctrl-link'); if(!inp) return;
+    const txt=inp.value;
+    const done=()=>{ cc.textContent='Gekopieerd!'; setTimeout(()=>{ cc.textContent='Kopieer'; },1500); };
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{ inp.select(); try{document.execCommand('copy');}catch(e){} done(); }); }
+    else { inp.select(); try{document.execCommand('copy');}catch(e){} done(); }
+  };
   $('#b-start').onclick = hostStart;
   $('#b-end').onclick = hostEnd;
   wirePlayerControls();
@@ -1160,8 +1246,10 @@ function hostQuestion(){
       <div class="hostgrid">
         <div class="hostmain">
           <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill">inzetten</span></div>
-          <div class="spotlight"><div class="qmeta">${r.points??100} punten × inzet</div><div class="qtext">${esc(r.question||'')}</div></div>
-          <div class="card stack" style="gap:8px"><b>Hints</b>${hintLabelsHTML(r)}</div>
+          <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
+          ${metaHTML(r)}
+          <div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>
+          <div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(r)}</div>
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
         </div>
@@ -1193,7 +1281,7 @@ function hostQuestion(){
   const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
   const opts = r.optionsMode==='list'
     ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
-    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':'Spelers zoeken zelf het antwoord ('+(r.optionsMode==='tmdb'?'film':'nummer')+')'}.</p>`;
+    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
   let spot, controls;
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
@@ -1218,6 +1306,7 @@ function hostQuestion(){
       <div class="hostmain">
         <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${app.checked?'<span class="pill ok">gecontroleerd</span>':''}</div>
         ${spot}
+        ${metaHTML(r)}
         ${opts}
         ${controls}
       </div>
@@ -1327,7 +1416,7 @@ function answerAreaHTML(r){
       <input id="t-input" class="sinput" type="text" placeholder="Typ je antwoord…" value="${esc(app.textAns||'')}" maxlength="60" autocomplete="off">
     </div>`;
   }
-  const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : 'Zoek een nummer…';
+  const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : r.optionsMode==='deezer' ? 'Zoek een nummer…' : 'Zoek in de lijst…';
   return `<div class="searchwrap">
     <input id="s-input" class="sinput" type="text" placeholder="${ph}" value="${esc(app.searchText||'')}" autocomplete="off" autocapitalize="off">
     <div id="sout"></div></div>`;
@@ -1366,6 +1455,22 @@ function wireAnswerArea(r){
     }
     return;
   }
+  if(r.optionsMode==='listsearch'){
+    const inp=$('#s-input');
+    const all = ()=> (r.options||[]).map((o,i)=>({id:i,label:o}));
+    if(inp){
+      inp.onfocus=()=>{ if(!app.searchOpen){ app.searchOpen=true; if(!app.searchResults.length) app.searchResults=all(); refreshSearchOut(); } };
+      inp.oninput=()=>{
+        app.searchText=inp.value; app.searchOpen=true;
+        const ql=inp.value.trim().toLowerCase();
+        app.searchResults = all().filter(x=> !ql || x.label.toLowerCase().includes(ql)).slice(0,40);
+        app.searchBusy=false; refreshSearchOut();
+      };
+      if(app.searchOpen){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
+    }
+    refreshSearchOut();
+    return;
+  }
   const inp = $('#s-input');
   if(inp){
     inp.onfocus = ()=>{ if(!app.searchOpen){ app.searchOpen=true; refreshSearchOut(); } };
@@ -1393,6 +1498,7 @@ function playerQuestion(){
     app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null;
     app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null; app.textAns='';
     app.reguess=false; app.forFun=false; app.confirmPass=false;
+    app.wrongGuesses[g.round]=[]; app.lastSubmitLabel=null;
   }
 
   // gepast?
@@ -1403,17 +1509,19 @@ function playerQuestion(){
     if(app.bet[g.round]==null){
       const base = r.points ?? 100;
       const spot = `<div class="spotlight"><div class="qmeta">${base} punten × je inzet</div><div class="qtext">${esc(r.question||'')}</div></div>`;
-      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Uiterlijk bij hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
+      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
       el.innerHTML = `
         <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
         ${spot}
+        ${metaHTML(r)}
+        <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
         <div class="card stack" style="gap:8px">
-          <b>De hints die je gaat krijgen</b>
+          <b>Hints die je gaat krijgen</b>
           ${hintLabelsHTML(r)}
         </div>
         <div class="card stack" style="gap:10px">
-          <b>Bij welke hint denk je het te weten?</b>
-          <p class="muted" style="margin:0;font-size:13px">Zet in op de laatste hint die je nodig hebt. Eerder = hogere multiplier. Lukt het niet op tijd, dan 0 punten.</p>
+          <b>Bij welke hint denk je het uiterlijk te weten?</b>
+          <p class="muted" style="margin:0;font-size:13px">Zet in op wanneer jij denkt het antwoord te weten. Hoe meer risico je neemt, hoe hoger de beloning. Maar let op: heb je het niet uiterlijk bij die hint goed? Dan krijg je 0 punten voor deze vraag!</p>
           <div class="bets">${bets}</div>
         </div>
         ${passBtnHTML}${passModalHTML()}`;
@@ -1422,7 +1530,7 @@ function playerQuestion(){
       return;
     }
     const m=(r.betMultipliers||[])[app.bet[g.round]];
-    return playerHold('betwait', `Je inzet: uiterlijk bij hint ${app.bet[g.round]+1} (×${m}) — wachten tot iedereen heeft ingezet`);
+    return playerHold('betwait', `Je inzet: hint ${app.bet[g.round]+1} (×${m}) — wachten tot iedereen heeft ingezet`);
   }
   // ---- INZET: stap 2 — inzetten van iedereen tonen ----
   if(r.betting && g.betStep==='reveal'){
@@ -1452,7 +1560,8 @@ function playerQuestion(){
     // fout + nieuwe hint → opnieuw raden; pas 'voor de lol' als de hint voorbij je inzet is
     const bet = app.bet[g.round];
     const busted = r.betting && bet!=null && (g.stage > bet);
-    app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText='';
+    if(app.lastSubmitLabel){ app.wrongGuesses[g.round]=app.wrongGuesses[g.round]||[]; app.wrongGuesses[g.round].push(app.lastSubmitLabel); app.lastSubmitLabel=null; }
+    app.submittedRound=-1; app.sel=null; app.searchPick=null; app.searchText=''; app.textAns='';
     app.searchResults=[]; app.searchOpen=false; app.reguess=true; app.forFun=busted;
   }
 
@@ -1473,14 +1582,16 @@ function playerQuestion(){
     spot = `<div class="spotlight">${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
     pill = `${r.points} punten`;
   }
+  const wrongs = (app.wrongGuesses&&app.wrongGuesses[g.round])||[];
   const funBanner = app.forFun
     ? `<div class="card funbanner"><b>Je speelt voor de lol 🎈</b> <span class="muted">Je inzet is verlopen, dit levert geen punten meer op — maar raad gerust mee!</span></div>`
-    : (app.reguess ? `<div class="card" style="border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)"><b style="color:var(--rood)">Vorige gok fout.</b> <span class="muted">Nieuwe hint — probeer opnieuw.</span></div>` : '');
+    : (wrongs.length ? `<div class="wronglist"><span class="wl-h">Foute gokken:</span> ${wrongs.map(w=>`<span class="wl-chip">${esc(w)}</span>`).join('')}</div>` : '');
   const lockReady = r.optionsMode==='list' ? app.sel!=null : r.optionsMode==='text' ? !!(app.textAns&&app.textAns.trim()) : app.searchPick!=null;
   const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
     ${spot}
+    ${metaHTML(r)}
     ${funBanner}
     ${answerAreaHTML(r)}
     <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>
@@ -1508,7 +1619,7 @@ function playerHold(kind, note){
   const g=app.game;
   let head, sub, color='';
   if(kind==='correct'){ head='Goed geraden! ✓'; color='var(--groen)'; sub=note||'Wachten op de host'; }
-  else if(kind==='wronghint'){ head='Helaas, fout'; color='var(--rood)'; sub='Je krijgt zo een nieuwe hint om opnieuw te raden.'; }
+  else if(kind==='wronghint'){ head='Helaas, fout'; color='var(--rood)'; sub='Wacht op de volgende hint.'; }
   else if(kind==='bust'){ head='Helaas, fout'; color='var(--rood)'; sub='0 punten — je inzet is verlopen. Je mag straks nog voor de lol meeraden.'; }
   else if(kind==='betwait'){ head='Je inzet staat ✓'; sub=note||'Wachten tot iedereen heeft gewed'; }
   else { head='Antwoord binnen ✓'; sub='Wachten op de controle'; }
@@ -1551,7 +1662,29 @@ function playerLeaderboardHTML(){
 }
 
 /* ============================================================ */
-renderHome();
+function ctrlLinkFor(code, token){
+  return location.origin + location.pathname + '?judge=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(token);
+}
+async function boot(){
+  const params = new URLSearchParams(location.search);
+  const jc = params.get('judge');
+  if(jc){
+    el.innerHTML = `<div class="center stack"><div class="qmeta">Jurylid</div><h1>Verbinden…</h1></div>`;
+    let r='err';
+    try{ r = await controllerJoin(jc, params.get('t')||''); }catch(e){ r='err'; }
+    if(r!=='ok'){
+      const msg = r==='nogame' ? 'Geen spel gevonden met die code.'
+                : r==='badtoken' ? 'Deze jurylid-link is ongeldig of verlopen. Vraag de host om een nieuwe link.'
+                : 'Verbinden mislukt — check de internetverbinding.';
+      el.innerHTML = `<div class="center stack"><div class="qmeta">Jurylid</div><h1>Niet gelukt</h1>
+        <p class="muted">${esc(msg)}</p><button class="btn ghost" id="b-home">Naar startscherm</button></div>`;
+      const hb=$('#b-home'); if(hb) hb.onclick=()=>{ history.replaceState(null,'',location.pathname); renderHome(); };
+    }
+    return;
+  }
+  renderHome();
+}
+boot();
 </script>
 </body>
 </html>
