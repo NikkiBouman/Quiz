@@ -178,6 +178,7 @@
   /* spelerslijst-tabel */
   .ptable{display:flex;flex-direction:column;gap:6px}
   .ptable .phead,.ptable .prow2{display:grid;grid-template-columns:1.4fr 1.3fr 1.2fr auto;gap:8px;align-items:center}
+  .ptable.noinzet .phead,.ptable.noinzet .prow2{grid-template-columns:1.4fr 1.3fr auto}
   .ptable .phead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;padding:0 12px}
   .ptable .prow2{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
   .ptable .prow2 .pnm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
@@ -190,6 +191,22 @@
   .wronglist{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 2px}
   .wronglist .wl-h{font-size:13px;font-weight:700;color:var(--rood)}
   .wronglist .wl-chip{font-size:13px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;text-decoration:line-through}
+  /* bovenbalk */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .tb-round{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow)}
+  .tb-round small{font-weight:600;color:var(--muted);font-family:var(--body)}
+  .tb-conn{font-size:13px;color:var(--muted);font-weight:600}
+  .introtext{font-size:17px;line-height:1.5;max-width:46ch;margin:0 auto;color:var(--ink)}
+  .qnote{font-size:14px;color:var(--muted);text-align:center;margin:6px 0 0;max-width:50ch;margin-left:auto;margin-right:auto}
+  .roundtag{font-family:var(--display);font-weight:700;font-size:14px;color:var(--blauw)}
+  .betminirow{display:flex;gap:5px;flex:none}
+  .betmini{width:34px;height:34px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:14px}
+  .betmini.sel{background:var(--blauw);color:#fff;border-color:var(--blauw)}
+  .reviewrow.me{background:var(--surface-2);border-radius:10px;padding-left:8px;padding-right:8px}
+  .tb-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tb-skip{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  .tb-skip:hover{color:var(--rood);border-color:var(--rood)}
+  .tb-skipconfirm{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
   /* host: twee koloms met statuszijbalk */
   .hostgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
   .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -215,8 +232,6 @@
 <body>
 <div class="wrap">
   <div class="brand">
-    <span class="dot" aria-hidden="true"></span>
-    <b>Quizshow</b>
     <span id="conn"></span>
   </div>
   <main id="app" class="screen" aria-live="polite"></main>
@@ -252,6 +267,8 @@ const playersRef = c => ref(db, `games/${c}/players`);
 const playerRef  = (c,p) => ref(db, `games/${c}/players/${p}`);
 const ansRef     = (c,p,r) => ref(db, `games/${c}/players/${p}/ans/${r}`);
 const quizRef    = c => ref(db, `games/${c}/quiz`);
+const roundsRef  = c => ref(db, `games/${c}/rounds`);
+const readyRef   = (c,p,ri) => ref(db, `games/${c}/players/${p}/ready/${ri}`);
 
 /* ============================================================
    OPEN ZOEKEN — TMDB (films) + Deezer (liedjes)
@@ -377,8 +394,46 @@ function isCorrectAns(r, a){
   return Array.isArray(ans) ? ans.map(String).includes(String(a)) : String(a)===String(ans);
 }
 
-/* validatie van een geladen vragenset */
-function validateQuiz(data){
+/* vragenset kan plat zijn (lijst van vragen) of ingedeeld in rondes ({rounds:[{name,intro,questions:[]}]}) */
+function flattenQuiz(data){
+  if(Array.isArray(data)) return { questions:data.slice(), rounds:[{name:'',intro:'',start:0,end:data.length}] };
+  if(data && Array.isArray(data.rounds)){
+    const questions=[], rounds=[];
+    data.rounds.forEach(rd=>{
+      const qs = Array.isArray(rd.questions)?rd.questions:[];
+      const start=questions.length;
+      qs.forEach(q=>questions.push(q));
+      rounds.push({ name:rd.name||'', intro:rd.intro||'', start, end:questions.length });
+    });
+    return { questions, rounds };
+  }
+  return { questions:[], rounds:[{name:'',intro:'',start:0,end:0}] };
+}
+/* welke ronde + positie hoort bij platte vraagindex i */
+function roundCtx(i){
+  const rounds = app.rounds||[];
+  for(let ri=0; ri<rounds.length; ri++){
+    const rd=rounds[ri];
+    if(i>=rd.start && i<rd.end) return { ri, name:rd.name, intro:rd.intro, qIn:i-rd.start, qCount:rd.end-rd.start, roundCount:rounds.length, start:rd.start, end:rd.end };
+  }
+  return { ri:0, name:'', intro:'', qIn:i, qCount:(app.quiz||[]).length, roundCount:rounds.length||1, start:0, end:(app.quiz||[]).length };
+}
+/* is platte index i de eerste vraag van een ronde? */
+function isRoundStart(i){ return (app.rounds||[]).some(rd=> rd.start===i && rd.end>rd.start); }
+
+/* validatie van een geladen vragenset (plat of met rondes) */
+function validateQuiz(raw){
+  if(raw && !Array.isArray(raw) && Array.isArray(raw.rounds)){
+    for(let ri=0; ri<raw.rounds.length; ri++){
+      const rd=raw.rounds[ri];
+      if(!rd || typeof rd!=='object') return `Ronde ${ri+1} is ongeldig.`;
+      if(!Array.isArray(rd.questions) || !rd.questions.length) return `Ronde ${ri+1} ("${rd.name||''}") heeft geen vragen.`;
+    }
+  }
+  const data = flattenQuiz(raw).questions;
+  return validateQuestions(data);
+}
+function validateQuestions(data){
   if(!Array.isArray(data) || !data.length) return 'Het bestand moet een niet-lege lijst met vragen zijn.';
   for(let i=0;i<data.length;i++){
     const q=data[i], n=i+1;
@@ -417,14 +472,14 @@ function validateQuiz(data){
 const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
-  quiz:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
+  quiz:[], rounds:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
   pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
   searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false, textAns:'',
-  wrongGuesses:{}, lastSubmitLabel:null,
+  wrongGuesses:{}, lastSubmitLabel:null, readyRounds:{},
   myStage:null, reguess:false, forFun:false,
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
-  openPicker:null, confirmKick:null,
+  openPicker:null, confirmKick:null, confirmSkip:false,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -495,6 +550,7 @@ function pushState(){
   }
   set(stateRef(app.code), {
     phase: app.phase, round: app.round, totalRounds: app.quiz.length, stage: app.stage,
+    rc: app.round>=0 ? roundCtx(app.round) : null,
     betStep: app.betStep, checked: app.checked,
     current: (app.phase==='question'||app.phase==='reveal') ? publicCurrent() : null,
     scores: app.scores, names: app.names,
@@ -554,17 +610,20 @@ function hostCreate(){
   app.scores={}; app.names={}; app.players=[]; app.results=null;
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
   app.judgeToken = genToken(); app.loadInfo=null;
-  app.quiz = normalizeQuiz(SAMPLE); app.quizName = 'Voorbeeldset';
+  const f = flattenQuiz(SAMPLE);
+  app.quiz = normalizeQuiz(f.questions); app.rounds = f.rounds; app.quizName = 'Voorbeeldset';
   remember(app.code);
   set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
+  set(roundsRef(app.code), app.rounds);
   set(ref(db, `games/${app.code}/judgeToken`), app.judgeToken);   // geheime sleutel voor de jurylid-link
   pushState(); startHost(); renderHost();
 }
-/* nieuwe vragenset toepassen (uit geladen JSON) */
+/* nieuwe vragenset toepassen (uit geladen JSON, plat of met rondes) */
 function setQuiz(data, name){
-  app.quiz = normalizeQuiz(data); app.quizName = name; app.quizErr='';
+  const f = flattenQuiz(data);
+  app.quiz = normalizeQuiz(f.questions); app.rounds = f.rounds; app.quizName = name; app.quizErr='';
   applyAudioLabels();                    // instrumentnamen uit bestandsnamen overnemen (audio-stages)
-  if(app.code) set(quizRef(app.code), app.quiz);
+  if(app.code){ set(quizRef(app.code), app.quiz); set(roundsRef(app.code), app.rounds); }
   renderHost();
 }
 function handleQuizFile(ev){
@@ -609,6 +668,8 @@ async function hostResume(code){
   app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
   const qs = await get(quizRef(code));
   app.quiz = normalizeQuiz(qs.exists() ? qs.val() : SAMPLE);
+  const rs = await get(roundsRef(code));
+  app.rounds = rs.exists() ? rs.val() : flattenQuiz(qs.exists()?qs.val():SAMPLE).rounds;
   app.quizName = qs.exists() ? 'geladen set' : 'Voorbeeldset';
   remember(code);
   startHost(); renderHost();
@@ -617,11 +678,23 @@ async function hostResume(code){
 /* zet de sub-stappen klaar voor een nieuwe vraag */
 function initQuestion(){
   const r = app.quiz[app.round];
-  app.stage=0; app.checked=false; app.answeredCount=0; app.results=null;
+  app.stage=0; app.checked=false; app.answeredCount=0; app.results=null; app.confirmSkip=false;
   app.preRoundScores = {...app.scores};
   app.betStep = (r && r.betting) ? 'bet' : null;
 }
-function hostStart(){ app.round=0; app.phase='question'; initQuestion(); pushState(); renderHost(); }
+function hostStart(){ app.round=0; app.phase='roundintro'; pushState(); renderHost(); }
+function hostBeginRound(){ app.phase='question'; initQuestion(); pushState(); renderHost(); }
+/* host slaat de huidige vraag over: geen punten, gewoon door (zelfde sprong als 'volgende') */
+function hostSkip(){
+  app.confirmSkip=false;
+  if(app.round+1 < app.quiz.length){
+    app.round++;
+    if(isRoundStart(app.round)) app.phase='roundintro';
+    else { app.phase='question'; initQuestion(); }
+  }
+  else app.phase='final';
+  pushState(); renderHost();
+}
 /* punten bepalen op basis van (eventueel overrulede) correctheid */
 function computeGain(r, correct, bet, lock){
   if(!correct) return { gained:0, won:false };
@@ -699,7 +772,11 @@ function hostToggleCorrect(pid){
   setJudge(app.round, pid, !res.correct);
 }
 function hostNext(){
-  if(app.round+1 < app.quiz.length){ app.round++; app.phase='question'; initQuestion(); }
+  if(app.round+1 < app.quiz.length){
+    app.round++;
+    if(isRoundStart(app.round)) app.phase='roundintro';      // nieuwe ronde → eerst de uitleg
+    else { app.phase='question'; initQuestion(); }
+  }
   else app.phase='final';
   pushState(); renderHost();
 }
@@ -746,6 +823,8 @@ async function controllerJoin(code, token){
   app.role='controller'; app.code=code; app.kicked=false;
   const qs = await get(quizRef(code));
   app.quiz = normalizeQuiz(qs.exists()?qs.val():SAMPLE);
+  const rs = await get(roundsRef(code));
+  app.rounds = rs.exists() ? rs.val() : flattenQuiz(qs.exists()?qs.val():SAMPLE).rounds;
   app.unsubState   = onValue(stateRef(code), s=>{ app.game = s.val(); renderController(); });
   app.unsubPlayers = onValue(playersRef(code), s=>{ app.players = Object.values(s.val()||{}).filter(p=>p&&p.id&&p.name); renderController(); });
   app.unsubJudges  = onValue(ref(db,`games/${code}/judge`), s=>{ app.judges = s.val()||{}; renderController(); });
@@ -756,13 +835,47 @@ async function controllerJoin(code, token){
 function renderController(){
   const wrap=document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   const g = app.game;
-  if(!g || (g.phase!=='question' && g.phase!=='reveal')){
+  const rc = (g && g.rc) || {};
+  const roundLbl = g && g.rc ? `Ronde ${rc.ri+1}/${rc.roundCount} · vraag ${rc.qIn+1}/${rc.qCount}` : '';
+  if(!g || g.phase==='lobby' || g.phase==='final'){
     el.innerHTML = `<div class="center stack"><div class="qmeta">Controleur · ${esc(app.code||'')}</div>
-      <h1>${g&&g.phase==='final'?'Het spel is afgelopen':'Wachten op een vraag…'}</h1>
-      <p class="muted">Je ziet hier straks alle antwoorden om goed/fout te keuren.</p></div>`;
+      <h1>${g&&g.phase==='final'?'Het spel is afgelopen':'Wachten op het spel…'}</h1>
+      <p class="muted">Je ziet hier straks alle antwoorden en inzetten.</p></div>`;
+    return;
+  }
+  if(g.phase==='roundintro'){
+    el.innerHTML = `<div class="center stack" style="gap:12px">
+      <div class="qmeta">Controleur · nieuwe ronde</div>
+      <h1 style="font-size:clamp(28px,7vw,42px)">${esc(rc.name||('Ronde '+((rc.ri??0)+1)))}</h1>
+      ${rc.intro?`<p class="introtext">${esc(rc.intro)}</p>`:''}
+      <p class="muted">Wachten tot de host de ronde start <span class="waiting-dots"></span></p></div>`;
     return;
   }
   const round = g.round, r = app.quiz[round] || {};
+  // ---- inzetfase: inzetten zien én wijzigen ----
+  if(g.phase==='question' && r.betting && (g.betStep==='bet' || g.betStep==='reveal')){
+    const muls = r.betMultipliers||[];
+    const rows = app.players.map(p=>{
+      const bet = (p.bet&&p.bet[round]!=null)?p.bet[round]:null;
+      const passed = !!(p.pass&&p.pass[round]);
+      const btns = muls.map((m,i)=>`<button class="betmini ${bet===i?'sel':''}" data-cbet="${p.id}:${i}">${i+1}</button>`).join('');
+      return `<div class="reviewrow" style="flex-wrap:wrap">
+        <span class="rnm">${esc(p.name)}</span>
+        <span class="rguess">${passed?'⤴ gepast':(bet!=null?`uiterlijk hint ${bet+1} (×${muls[bet]})`:'nog niet ingezet')}</span>
+        <div class="betminirow">${btns}</div>
+      </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="statusbar"><span class="pill">${esc(roundLbl)}</span><span class="pill ok">controleur · inzet</span></div>
+      <div class="spotlight"><div class="qmeta">${esc(rc.name||'')}</div><div class="qtext" style="font-size:20px">${esc(r.question||'')}</div></div>
+      ${metaHTML(r)}
+      <div class="card stack" style="gap:8px"><b>Inzetten — zien en wijzigen</b>
+        <p class="muted" style="margin:0;font-size:12px">Tik een hintnummer om iemands inzet te zetten of te corrigeren, vóórdat de vraag begint.</p>
+        ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
+    el.querySelectorAll('[data-cbet]').forEach(b=> b.onclick=()=>{ const [pid,i]=b.dataset.cbet.split(':'); ctrlSetBet(pid, parseInt(i,10)); });
+    return;
+  }
+  // ---- speel/onthul: beoordelen ----
   const correctLabel = r.answerLabel || (r.optionsMode==='list'&&r.options?r.options[r.answer]:'') || '—';
   const rows = app.players.map(p=>{
     const a = (p.ans&&p.ans[round]!=null)?p.ans[round]:null;
@@ -779,12 +892,16 @@ function renderController(){
     </div>`;
   }).join('');
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${round+1}/${g.totalRounds}</span><span class="pill ok">controleur</span></div>
+    <div class="statusbar"><span class="pill">${esc(roundLbl)}</span><span class="pill ok">controleur</span></div>
     <div class="spotlight"><div class="qmeta">Juiste antwoord</div><div class="qtext" style="font-size:22px">${esc(correctLabel)}</div></div>
     <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
       <p class="muted" style="margin:0;font-size:12px">Tik om goed/fout te zetten — telt direct mee in de score.</p>
       ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
   el.querySelectorAll('[data-cjudge]').forEach(b=> b.onclick=()=> ctrlToggle(b.dataset.cjudge));
+}
+function ctrlSetBet(pid, k){
+  const round = app.game.round;
+  set(ref(db, `games/${app.code}/players/${pid}/bet/${round}`), k);
 }
 function ctrlToggle(pid){
   const round = app.game.round, r = app.quiz[round]||{};
@@ -932,6 +1049,7 @@ function playerRowsHTML(mode){
 
   const staged = r && Array.isArray(r.stages);
   const betting = r && r.betting;
+  const betsRevealed = betting && app.betStep!=='bet';   // inzetten pas zichtbaar na "Toon de inzetten"
   const canPick = mode==='question' && r && r.optionsMode==='list';
   const rows = app.players.map(p=>{
     const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
@@ -946,25 +1064,32 @@ function playerRowsHTML(mode){
     else if(!staged || !app.checked) st = `<span class="stbadge done">✓ geantwoord</span>`;
     else if(correct) st = `<span class="stbadge good">goed ✓</span>`;
     else st = `<span class="stbadge bad">fout ✗</span>`;
-    // INZET
-    let betCell = '<span class="betcell">—</span>';
+    // INZET (kolom alleen getoond bij inzetvragen; waarde pas ná de reveal)
+    let betCell = '';
     if(betting){
       if(passed) betCell = '<span class="betcell">—</span>';
-      else if(bet!=null){ const over = app.stage>bet && !correct; betCell = `<span class="betcell ${over?'over':''}">uiterlijk hint ${bet+1}${over?' · te laat':''}</span>`; }
-      else betCell = '<span class="betcell">nog niet</span>';
+      else if(bet==null) betCell = '<span class="betcell">nog niet</span>';
+      else if(!betsRevealed) betCell = '<span class="betcell">✓ ingezet</span>';   // verbergen tot reveal
+      else { const over = app.stage>bet && !correct; betCell = `<span class="betcell ${over?'over':''}">uiterlijk hint ${bet+1}${over?' · te laat':''}</span>`; }
     }
-    // NAAM (+ kick, + evt. host-picker voor losse meerkeuze)
+    // NAAM (+ evt. host-picker voor losse meerkeuze) — geen kick tijdens het spel
     const nameInner = canPick
       ? `<button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span>${esc(p.name)}</span></button>`
       : `<span>${esc(p.name)}</span>`;
     const picker = (canPick && app.openPicker===p.id)
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
-    return `<div class="prow2"><span class="pnm">${nameInner}${kickHTML(p)}</span>${st}${betCell}<span class="pscore">${score}</span></div>${picker}`;
+    return `<div class="prow2"><span class="pnm">${nameInner}</span>${st}${betting?betCell:''}<span class="pscore">${score}</span></div>${picker}`;
   }).join('');
-  return `<div class="ptable"><div class="phead"><span>Speler</span><span>Status</span><span>Inzet</span><span>Punten</span></div>${rows}</div>`;
+  const head = betting
+    ? `<div class="phead"><span>Speler</span><span>Status</span><span>Inzet</span><span>Punten</span></div>`
+    : `<div class="phead"><span>Speler</span><span>Status</span><span>Punten</span></div>`;
+  return `<div class="ptable${betting?'':' noinzet'}">${head}${rows}</div>`;
 }
 function wirePlayerControls(){
+  const sk=$('#b-skip'); if(sk) sk.onclick=()=>{ app.confirmSkip=true; renderHost(); };
+  const sy=$('#b-skipyes'); if(sy) sy.onclick=hostSkip;
+  const sn=$('#b-skipno'); if(sn) sn.onclick=()=>{ app.confirmSkip=false; renderHost(); };
   el.querySelectorAll('[data-kick]').forEach(b=> b.onclick=()=>{ app.confirmKick=b.dataset.kick; renderHost(); });
   el.querySelectorAll('[data-kickyes]').forEach(b=> b.onclick=()=> hostKick(b.dataset.kickyes));
   el.querySelectorAll('[data-kickno]').forEach(b=> b.onclick=()=>{ app.confirmKick=null; renderHost(); });
@@ -1150,9 +1275,8 @@ function betOverviewHTML(entries, mults){
 /* host-statuszijbalk */
 function hostAside(){
   const r = app.quiz[app.round];
-  const hint = (r && r.optionsMode==='list') ? '<span class="muted" style="font-size:12px">Tik naam om in te vullen</span>' : '';
   return `<aside class="hostaside"><div class="card stack" style="gap:10px">
-    <div class="statusbar"><b>Status</b>${hint}</div>
+    <div class="statusbar"><b>Spelers</b><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span></div>
     <div class="plist">${playerRowsHTML('question')}</div></div></aside>`;
 }
 /* pas-knop + bevestigingspopup (speler) */
@@ -1173,6 +1297,7 @@ function renderHost(){
   const wrap = document.querySelector('.wrap');
   if(wrap) wrap.classList.toggle('wide', app.phase==='question');
   if(app.phase==='lobby') return hostLobby();
+  if(app.phase==='roundintro') return hostRoundIntro();
   if(app.phase==='question') return hostQuestion();
   if(app.phase==='reveal') return hostRevealView();
   if(app.phase==='final') return hostFinal();
@@ -1233,6 +1358,29 @@ function hostLobby(){
   $('#b-end').onclick = hostEnd;
   wirePlayerControls();
 }
+function hostRoundIntro(){
+  const rc = roundCtx(app.round);
+  const readyN = app.players.filter(p=> p.ready && p.ready[rc.ri]).length;
+  el.innerHTML = `
+    <div class="topbar"><span class="tb-round">Ronde ${rc.ri+1}<small> / ${rc.roundCount}</small></span><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span></div>
+    <div class="center stack" style="gap:14px;flex:1;justify-content:center">
+      <div class="qmeta">Nieuwe ronde</div>
+      <h1 style="font-size:clamp(34px,8vw,58px)">${esc(rc.name||('Ronde '+(rc.ri+1)))}</h1>
+      ${rc.intro?`<p class="introtext">${esc(rc.intro)}</p>`:''}
+      <p class="muted">${rc.qCount} ${rc.qCount===1?'vraag':'vragen'} in deze ronde</p>
+      <span class="pill" style="align-self:center">${readyN}/${app.players.length} klaar</span>
+    </div>
+    <button class="btn big" id="b-beginround">Begin ronde</button>`;
+  $('#b-beginround').onclick = hostBeginRound;
+}
+/* bovenbalk host: rondenaam + vraag X/Y links, status (+ evt. skip) rechts */
+function hostHead(right, skip){
+  const rc = roundCtx(app.round);
+  const skipBtn = !skip ? '' : (app.confirmSkip
+    ? `<span class="tb-skipconfirm">Overslaan? <button class="mini danger" id="b-skipyes">Ja</button> <button class="mini" id="b-skipno">Nee</button></span>`
+    : `<button class="tb-skip" id="b-skip" title="Niemand krijgt punten">Vraag overslaan</button>`);
+  return `<div class="topbar"><span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span><span class="tb-actions">${right||''}${skipBtn}</span></div>`;
+}
 function hostQuestion(){
   const r = app.quiz[app.round];
   const staged = Array.isArray(r.stages);
@@ -1245,7 +1393,7 @@ function hostQuestion(){
     el.innerHTML = `
       <div class="hostgrid">
         <div class="hostmain">
-          <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill">inzetten</span></div>
+          ${hostHead('<span class="pill">inzetten</span>', true)}
           <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
           ${metaHTML(r)}
           <div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>
@@ -1265,7 +1413,7 @@ function hostQuestion(){
     el.innerHTML = `
       <div class="hostgrid">
         <div class="hostmain">
-          <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill ok">inzetten</span></div>
+          ${hostHead('<span class="pill ok">inzetten</span>', true)}
           <div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div><div class="qtext" style="font-size:24px">De inzetten</div></div>
           ${betOverviewHTML(entries, r.betMultipliers)}
           <button class="btn big" id="b-startplay">Start de vraag</button>
@@ -1304,7 +1452,7 @@ function hostQuestion(){
   el.innerHTML = `
     <div class="hostgrid">
       <div class="hostmain">
-        <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span>${app.checked?'<span class="pill ok">gecontroleerd</span>':''}</div>
+        ${hostHead(app.checked?'<span class="pill ok">gecontroleerd</span>':'', true)}
         ${spot}
         ${metaHTML(r)}
         ${opts}
@@ -1345,7 +1493,7 @@ function hostRevealView(){
   const noAns = app.players.filter(p=> (!res[p.id] || res[p.id].answer==null) && !(res[p.id] && res[p.id].passed)).map(p=>p.name);
   const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${app.round+1}/${app.quiz.length}</span><span class="pill ok">Antwoord</span></div>
+    ${hostHead('<span class="pill ok">Antwoord</span>')}
     <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div></div>
     ${grouping}
     <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
@@ -1354,7 +1502,7 @@ function hostRevealView(){
     ${noAns.length?`<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>`:''}
     ${passedNames.length?`<p class="footnote">Gepast: ${passedNames.map(esc).join(', ')}</p>`:''}
     ${leaderboardHTML(true)}
-    <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende ronde'}</button>`;
+    <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende vraag'}</button>`;
   el.querySelectorAll('[data-judge]').forEach(b=> b.onclick=()=> hostToggleCorrect(b.dataset.judge));
   $('#b-next').onclick = hostNext;
 }
@@ -1389,6 +1537,7 @@ function renderPlayer(){
   if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
   if(g.phase==='lobby')   return playerLobby();
+  if(g.phase==='roundintro') return playerRoundIntro();
   if(g.phase==='question')return playerQuestion();
   if(g.phase==='reveal')  return playerReveal();
   if(g.phase==='final')   return playerFinal();
@@ -1490,6 +1639,31 @@ function wireAnswerArea(r){
   }
   refreshSearchOut();
 }
+function pRoundLbl(){
+  const g=app.game; if(!g) return '';
+  const rc=g.rc;
+  return rc ? `${esc(rc.name||('Ronde '+(rc.ri+1)))} · vraag ${rc.qIn+1}/${rc.qCount}` : `${pRoundLbl()}`;
+}
+function playerRoundIntro(){
+  const g=app.game; const rc=g.rc||{}; const ri=rc.ri??0;
+  const did = app.readyRounds && app.readyRounds[ri];
+  el.innerHTML = `
+    <div class="center stack" style="gap:14px;flex:1;justify-content:center">
+      <div class="qmeta">Nieuwe ronde ${ri+1}${rc.roundCount?' / '+rc.roundCount:''}</div>
+      <h1 style="font-size:clamp(30px,8vw,48px)">${esc(rc.name||('Ronde '+(ri+1)))}</h1>
+      ${rc.intro?`<p class="introtext">${esc(rc.intro)}</p>`:''}
+      ${did
+        ? `<p class="muted">Je bent er klaar voor ✓ — wachten op de host <span class="waiting-dots"></span></p>`
+        : `<button class="btn big" id="b-ready">Ik snap het 👍</button>`}
+    </div>`;
+  const rb=$('#b-ready'); if(rb) rb.onclick=playerReady;
+}
+function playerReady(){
+  const g=app.game; const ri=(g.rc&&g.rc.ri)||0;
+  app.readyRounds[ri]=true;
+  set(readyRef(app.code, app.pid, ri), true);
+  renderPlayer();
+}
 function playerQuestion(){
   const g = app.game;
   const r = g.current;
@@ -1511,7 +1685,7 @@ function playerQuestion(){
       const spot = `<div class="spotlight"><div class="qmeta">${base} punten × je inzet</div><div class="qtext">${esc(r.question||'')}</div></div>`;
       const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
       el.innerHTML = `
-        <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">inzet</span></div>
+        <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">inzet</span></div>
         ${spot}
         ${metaHTML(r)}
         <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
@@ -1536,7 +1710,7 @@ function playerQuestion(){
   if(r.betting && g.betStep==='reveal'){
     const entries = Object.keys(g.names||{}).map(pid=>({ name:g.names[pid], bet:(g.bets&&g.bets[pid]!=null)?g.bets[pid]:null }));
     el.innerHTML = `
-      <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill ok">inzetten</span></div>
+      <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill ok">inzetten</span></div>
       <div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div><div class="qtext" style="font-size:22px">De inzetten</div></div>
       ${betOverviewHTML(entries, r.betMultipliers)}
       <p class="footnote">Wachten tot de host de vraag start <span class="waiting-dots"></span></p>`;
@@ -1589,7 +1763,7 @@ function playerQuestion(){
   const lockReady = r.optionsMode==='list' ? app.sel!=null : r.optionsMode==='text' ? !!(app.textAns&&app.textAns.trim()) : app.searchPick!=null;
   const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
   el.innerHTML = `
-    <div class="statusbar"><span class="pill">Ronde ${g.round+1}/${g.totalRounds}</span><span class="pill">${pill}</span></div>
+    <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">${pill}</span></div>
     ${spot}
     ${metaHTML(r)}
     ${funBanner}
@@ -1606,12 +1780,12 @@ function winNote(r,g){
 }
 function playerPassed(){
   const g=app.game;
-  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+  el.innerHTML = `<div class="center stack"><div class="qmeta">${pRoundLbl()}</div>
     <h1>Je hebt gepast ⤴</h1><p class="muted">Wachten op de volgende ronde <span class="waiting-dots"></span></p></div>`;
 }
 function playerWaiting(){
   const g=app.game;
-  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+  el.innerHTML = `<div class="center stack"><div class="qmeta">${pRoundLbl()}</div>
     <h1>Antwoord binnen ✓</h1><p class="muted">Wachten op de rest <span class="waiting-dots"></span></p>
     <span class="pill" style="align-self:center">${g.answeredCount}/${g.totalPlayers} geantwoord</span></div>`;
 }
@@ -1624,8 +1798,21 @@ function playerHold(kind, note){
   else if(kind==='betwait'){ head='Je inzet staat ✓'; sub=note||'Wachten tot iedereen heeft gewed'; }
   else { head='Antwoord binnen ✓'; sub='Wachten op de controle'; }
   const hStyle = color?` style="color:${color}"`:'';
-  el.innerHTML = `<div class="center stack"><div class="qmeta">Ronde ${g.round+1}/${g.totalRounds}</div>
+  el.innerHTML = `<div class="center stack"><div class="qmeta">${pRoundLbl()}</div>
     <h1${hStyle}>${head}</h1><p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
+}
+function allGuessesHTML(){
+  const g=app.game; const res=g.results||{}; const names=g.names||{};
+  const ids=Object.keys(res).filter(pid=> res[pid] && res[pid].answer!=null && !res[pid].passed);
+  if(!ids.length) return '';
+  ids.sort((a,b)=> (res[b].correct?1:0)-(res[a].correct?1:0));
+  const rows=ids.map(pid=>{
+    const rr=res[pid]; const me=pid===app.pid?' me':'';
+    return `<div class="reviewrow${me}"><span class="rnm">${esc(names[pid]||'?')}</span>
+      <span class="rguess">${esc(rr.label||'—')}</span>
+      <span class="stbadge ${rr.correct?'good':'bad'}">${rr.correct?'goed ✓':'fout ✗'}</span></div>`;
+  }).join('');
+  return `<div class="card stack" style="gap:8px"><b>Alle gokken</b>${rows}</div>`;
 }
 function playerReveal(){
   const g=app.game, c=g.current, res = g.results && g.results[app.pid];
@@ -1637,12 +1824,12 @@ function playerReveal(){
     body = `<div class="answers">${(c.options||[]).map((o,i)=>{ let cls='dim'; if(i===c.answer)cls='correct'; else if(i===myAns)cls='wrong';
       return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('')}</div>`;
   } else {
-    body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>`;
+    body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>${allGuessesHTML()}`;
   }
   const banner = res ? (correct ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>` : `<h1 style="color:var(--rood)">Helaas, fout</h1>`)
     : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
   el.innerHTML = `<div class="center stack">${banner}</div>${body}${playerLeaderboardHTML()}
-    <p class="footnote">Wachten op de host voor de volgende ronde <span class="waiting-dots"></span></p>`;
+    <p class="footnote">Wachten op de host voor de volgende vraag <span class="waiting-dots"></span></p>`;
 }
 function playerFinal(){
   const g=app.game;
