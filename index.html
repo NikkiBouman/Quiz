@@ -937,11 +937,13 @@ function resolveMediaKey(p){
   for(const k in mediaMap){ if(k===p || k.endsWith('/'+p) || p.endsWith('/'+k)) return k; }
   const base = p.split('/').pop().toLowerCase();
   for(const k in mediaMap){ if(k.split('/').pop().toLowerCase()===base) return k; }
-  // losse match: zelfde (sub)map + zelfde begin-token (bv "1", "5", "full")
-  const lastDir = s => { const a=s.toLowerCase().split('/'); return a.length>1?a[a.length-2]:''; };
+  // losse match: zelfde (sub)map + zelfde begin-token (bv "1", "5", "full").
+  // Mapnaam wordt vergeleken zónder (metadata-haakjes) en leestekens, zodat bv
+  // "(1974_143M_par-2)" of een ander cijfer/teken in de mapnaam de match niet breekt.
+  const folderKey = s => { const a=s.split('/'); const d=(a.length>1?a[a.length-2]:''); return d.replace(/\([^)]*\)/g,'').toLowerCase().replace(/[^a-z0-9]+/g,''); };
   const tok = s => s.split('/').pop().toLowerCase().replace(/\.[^.]+$/,'').split(/[-_. ]/)[0];
-  const pdir=lastDir(p), ptok=tok(p);
-  if(pdir && ptok){ for(const k in mediaMap){ if(lastDir(k)===pdir && tok(k)===ptok) return k; } }
+  const pdir=folderKey(p), ptok=tok(p);
+  if(pdir && ptok){ for(const k in mediaMap){ if(folderKey(k)===pdir && tok(k)===ptok) return k; } }
   return null;
 }
 function resolveMedia(p){
@@ -996,17 +998,19 @@ async function loadFolder(files){
   const named = jsons.filter(f=> /^questions\.json$/i.test(f.name||''));
   const jf = (named.sort(byDepth)[0]) || jsons.sort(byDepth)[0];
   // media: alles behalve het json en duidelijke niet-media (ook bestanden zónder nette extensie, bv puzzeldelen)
-  let big=0, loaded=0;
+  let bigNames=[];
   for(const f of arr){
     if(f===jf) continue;
     const name = f.name||'';
     if(SKIP_RE.test(name)) continue;
-    if(f.size > 8*1024*1024){ big++; continue; }
+    const isAudio = /^audio\//.test(f.type||'') || /\.(m4a|mp3|wav|ogg|oga|aac|flac|m4b)$/i.test(name);
+    const cap = (isAudio ? 40 : 12) * 1024*1024;     // audio blijft host-only, dus mag groter
+    if(f.size > cap){ bigNames.push(name); continue; }
     const key = f.webkitRelativePath || f.name;
-    try{ mediaMap[key] = await fileToDataURL(f); loaded++; }catch(e){}
+    try{ mediaMap[key] = await fileToDataURL(f); }catch(e){}
   }
   app.mediaCount = Object.keys(mediaMap).length;
-  app.mediaWarn = big ? `${big} bestand(en) overgeslagen (> 8 MB).` : '';
+  app.mediaWarn = bigNames.length ? `${bigNames.length} te groot, overgeslagen: ${bigNames.slice(0,5).join(', ')}${bigNames.length>5?` (+${bigNames.length-5})`:''}` : '';
   // JSON toepassen
   if(!jf){ app.quizErr='Geen .json gevonden in de map.'; renderHost(); return; }
   let text; try{ text = await jf.text(); }catch(e){ app.quizErr='JSON kon niet gelezen worden.'; renderHost(); return; }
