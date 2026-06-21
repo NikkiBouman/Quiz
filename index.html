@@ -522,6 +522,7 @@ function hostCreate(){
 /* nieuwe vragenset toepassen (uit geladen JSON) */
 function setQuiz(data, name){
   app.quiz = normalizeQuiz(data); app.quizName = name; app.quizErr='';
+  applyAudioLabels();                    // instrumentnamen uit bestandsnamen overnemen (audio-stages)
   if(app.code) set(quizRef(app.code), app.quiz);
   renderHost();
 }
@@ -929,21 +930,45 @@ function wirePlayerControls(){
    state-node (als data-URI) naar de spelers. Niet gevonden? Dan valt resolveMedia
    terug op het oorspronkelijke pad, dus een GitHub-URL blijft ook werken. */
 let mediaMap = {};
-function resolveMedia(p){
-  if(!p) return p;
-  if(mediaMap[p]) return mediaMap[p];
-  for(const k in mediaMap){ if(k===p || k.endsWith('/'+p) || p.endsWith('/'+k)) return mediaMap[k]; }
+/* zoek de échte mediaMap-sleutel (bestandspad) die bij p hoort, of null */
+function resolveMediaKey(p){
+  if(!p) return null;
+  if(mediaMap[p]) return p;
+  for(const k in mediaMap){ if(k===p || k.endsWith('/'+p) || p.endsWith('/'+k)) return k; }
   const base = p.split('/').pop().toLowerCase();
-  for(const k in mediaMap){ if(k.split('/').pop().toLowerCase()===base) return mediaMap[k]; }
-  // losse match: zelfde (sub)map + zelfde begin-token (bv "1", "5", "full") — negeert rest van naam/extensie.
-  // Hiermee werken bv puzzle-delen ("1-eye", "3.nose", "full.jpg") en bandle-lagen ("1-drums.m4a") via paden als ".../1" of ".../full".
+  for(const k in mediaMap){ if(k.split('/').pop().toLowerCase()===base) return k; }
+  // losse match: zelfde (sub)map + zelfde begin-token (bv "1", "5", "full")
   const lastDir = s => { const a=s.toLowerCase().split('/'); return a.length>1?a[a.length-2]:''; };
   const tok = s => s.split('/').pop().toLowerCase().replace(/\.[^.]+$/,'').split(/[-_. ]/)[0];
   const pdir=lastDir(p), ptok=tok(p);
-  if(pdir && ptok){
-    for(const k in mediaMap){ if(lastDir(k)===pdir && tok(k)===ptok) return mediaMap[k]; }
-  }
-  return p;
+  if(pdir && ptok){ for(const k in mediaMap){ if(lastDir(k)===pdir && tok(k)===ptok) return k; } }
+  return null;
+}
+function resolveMedia(p){
+  if(!p) return p;
+  const k = resolveMediaKey(p);
+  return k ? mediaMap[k] : p;
+}
+/* instrument/laag-naam uit een bestandsnaam halen, bv "2-electric_guitar.m4a" → "Electric Guitar" */
+function labelFromFile(path){
+  let b = path.split('/').pop().replace(/\.[^.]+$/,'');   // bestandsnaam zonder extensie
+  b = b.replace(/^\s*\d+\s*[-_.]\s*/,'');                  // leidend nummer + scheidingsteken weg
+  b = b.replace(/[-_]+/g,' ').trim();
+  if(!b || /^\d+$/.test(b)) return '';
+  return b.split(/\s+/).map(w=> w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+}
+/* voor audio-stages: label uit de bestandsnaam (instrument) overnemen, zodra de media geladen is */
+function applyAudioLabels(){
+  if(!Array.isArray(app.quiz)) return;
+  app.quiz.forEach(q=>{
+    if(!Array.isArray(q.stages)) return;
+    q.stages.forEach(s=>{
+      if(s && s.audio){
+        const k = resolveMediaKey(s.audio);
+        if(k){ const lbl = labelFromFile(k); if(lbl) s.label = lbl; }
+      }
+    });
+  });
 }
 function fileToDataURL(file){
   return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsDataURL(file); });
@@ -957,24 +982,28 @@ async function loadMediaFiles(files){
   }
   app.mediaCount = Object.keys(mediaMap).length;
   app.mediaWarn = big ? `${big} bestand(en) overgeslagen (> 8 MB).` : '';
+  applyAudioLabels();                                  // instrumentnamen uit bestandsnamen
+  if(app.code && Array.isArray(app.quiz)) set(quizRef(app.code), app.quiz);
   renderHost();
 }
 /* één map inladen: pak de JSON uit de root, laad alle media */
-const MEDIA_RE = /\.(m4a|mp3|wav|ogg|oga|aac|flac|m4b|png|jpe?g|webp|gif|avif|svg|bmp)$/i;
+const SKIP_RE = /^\.|\.(json|txt|md|markdown|html?|csv|js|css|py|rb|zip|gz|tgz|rar|7z|pdf|docx?|xlsx?|pptx?|ini|yml|yaml|lock)$/i;
 async function loadFolder(files){
   const arr = Array.from(files);
-  // root-JSON = het .json-bestand met de minste mappen in z'n pad
+  const byDepth = (a,b)=> (a.webkitRelativePath||a.name).split('/').length - (b.webkitRelativePath||b.name).split('/').length;
+  // root-JSON: liefst een bestand dat 'questions.json' heet, anders de ondiepste .json
   const jsons = arr.filter(f=> /\.json$/i.test(f.name||''));
-  jsons.sort((a,b)=> (a.webkitRelativePath||a.name).split('/').length - (b.webkitRelativePath||b.name).split('/').length);
-  const jf = jsons[0];
-  // media: alles behalve het gekozen json
-  let big=0;
+  const named = jsons.filter(f=> /^questions\.json$/i.test(f.name||''));
+  const jf = (named.sort(byDepth)[0]) || jsons.sort(byDepth)[0];
+  // media: alles behalve het json en duidelijke niet-media (ook bestanden zónder nette extensie, bv puzzeldelen)
+  let big=0, loaded=0;
   for(const f of arr){
     if(f===jf) continue;
-    if(!/^(image|audio)\//.test(f.type||'') && !MEDIA_RE.test(f.name||'')) continue;
+    const name = f.name||'';
+    if(SKIP_RE.test(name)) continue;
     if(f.size > 8*1024*1024){ big++; continue; }
     const key = f.webkitRelativePath || f.name;
-    try{ mediaMap[key] = await fileToDataURL(f); }catch(e){}
+    try{ mediaMap[key] = await fileToDataURL(f); loaded++; }catch(e){}
   }
   app.mediaCount = Object.keys(mediaMap).length;
   app.mediaWarn = big ? `${big} bestand(en) overgeslagen (> 8 MB).` : '';
@@ -985,6 +1014,20 @@ async function loadFolder(files){
   const err = validateQuiz(data);
   if(err){ app.quizErr=err; renderHost(); return; }
   setQuiz(data, jf.name);   // roept renderHost (toont meteen ook de media-teller)
+  const rep = quizMediaReport();
+  app.loadInfo = { file: jf.webkitRelativePath||jf.name, count: app.quiz.length, mediaTotal: rep.total, missing: rep.missing };
+  renderHost();
+}
+/* controleer welke door de vragenset genoemde media gekoppeld kon worden */
+function quizMediaReport(){
+  const miss=[]; let total=0;
+  (app.quiz||[]).forEach(q=>{
+    const ps=[];
+    if(q.image) ps.push(q.image);
+    if(Array.isArray(q.stages)) q.stages.forEach(s=>{ if(s.image)ps.push(s.image); if(s.audio)ps.push(s.audio); });
+    ps.forEach(p=>{ total++; if(!resolveMediaKey(p)) miss.push(p); });
+  });
+  return { total, missing: miss };
 }
 
 const imgHTML = src => src ? `<img class="qimg" src="${esc(src)}" alt="">` : '';
@@ -1077,6 +1120,7 @@ function hostLobby(){
     </div>
     <div class="card stack" style="gap:10px">
       <div class="statusbar"><b>Vragen &amp; media</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen${app.mediaCount?` · ${app.mediaCount} media`:''} · ${esc(app.quizName||'eigen set')}</span></div>
+      ${app.loadInfo?`<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(app.loadInfo.file)}</b> — ${app.loadInfo.count} vragen · ${app.loadInfo.mediaTotal-app.loadInfo.missing.length}/${app.loadInfo.mediaTotal} media gekoppeld${app.loadInfo.missing.length?` · <span class="err">niet gevonden: ${esc(app.loadInfo.missing.slice(0,5).join(', '))}${app.loadInfo.missing.length>5?` (+${app.loadInfo.missing.length-5})`:''}</span>`:''}</p>`:''}
       <p class="muted" style="margin:0;font-size:12px">Laad in één keer je map met daarin <code>questions.json</code> (in de root) plus alle audio en afbeeldingen.</p>
       <button class="btn ghost" id="b-loadfolder">Map laden (JSON + media)</button>
       <input type="file" id="ffolder" webkitdirectory directory multiple style="display:none">
