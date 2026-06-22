@@ -1,0 +1,76 @@
+{
+  "_doc": "Puzzel-ronde. Per figuur worden genummerde stukjes één voor één onthuld (image-stages). Antwoordmodus ':text' = vrije tekst, handmatig te beoordelen door host/jury; 'accept' bevat extra goede spellingen/varianten zodat veel antwoorden automatisch goedgekeurd worden. 'parts' = de hint-plaatjes in onthul-volgorde; 'full' = het complete plaatje dat bij het antwoord wordt getoond. Inzetronde: eerder durven raden = hogere vermenigvuldiger.",
+  "name": "Wie of wat is dit?",
+  "intro": "Raad de figuur. Bij elke hint zie je een stukje meer. Hoe eerder je inzet, hoe meer punten.",
+  "mode": ":text",
+  "betting": true,
+  "heading": "Wie of wat is dit?",
+  "items": {
+    "Baby_Yoda": {
+      "answer": "Baby Yoda",
+      "accept": ["Grogu", "The Child"],
+      "parts": ["1-mouth.jpg", "2-eye.jpg", "3-nose.jpg", "4-ear.jpg"],
+      "full": "full.jpg"
+    },
+    "Bob_de_Bouwer": {
+      "answer": "Bob de Bouwer",
+      "accept": ["Bob the Builder", "Bob"],
+      "parts": ["1-eye.jpg", "2-mouth.jpg", "3-nose.jpg", "4-ear.jpg", "5-hand.jpg"],
+      "full": "full.jpg"
+    },
+    "David_de_Kabouter": {
+      "answer": "David de Kabouter",
+      "accept": ["David the Gnome", "David", "Kabouter David"],
+      "parts": ["1-mouth.png", "2-eye.png", "3-nose.png", "4-ear.png"],
+      "full": "full.png"
+    },
+    "Genie_Aladdin": {
+      "answer": "Genie",
+      "accept": ["De Geest", "Geest", "Genie uit Aladdin", "Djinn"],
+      "parts": ["1-eye.png", "2-hair.png", "3-ear.png", "4-mouth.png"],
+      "full": "full.png"
+    },
+    "Moomin": {
+      "answer": "Moomin",
+      "accept": ["Moemin", "Moomintroll", "Moemins"],
+      "parts": ["1-eye.jpg", "2-mouth.jpg", "3-ear.jpg", "4-hand.jpg"],
+      "full": "full.jpg"
+    },
+    "Nemo": {
+      "answer": "Nemo",
+      "accept": ["Finding Nemo"],
+      "parts": ["1-mouth.png", "2-eye.png", "3-arm.png"],
+      "full": "full.png"
+    },
+    "Simba": {
+      "answer": "Simba",
+      "accept": [],
+      "parts": ["1-eye.png", "2-hair.png", "3-mouth.png", "4-ear.png"],
+      "full": "full.png"
+    },
+    "Winnie_the_Pooh": {
+      "answer": "Winnie the Pooh",
+      "accept": ["Winnie de Poeh", "Poeh", "Pooh", "Winnie"],
+      "parts": ["1-eye.jpg", "2-ear.jpg", "3-mouth.jpg", "4-hand.jpg", "5-nose.jpg"],
+      "full": "full.jpg"
+    },
+    "Jack_Sparrow": {
+      "answer": "Jack Sparrow",
+      "accept": ["Captain Jack Sparrow", "Kapitein Jack Sparrow", "Jack"],
+      "parts": ["1-eye.jpg", "2-nose.jpg", "3-mouth.jpg", "4-hair.jpg"],
+      "full": "full.jpg"
+    },
+    "Shrek": {
+      "answer": "Shrek",
+      "accept": [],
+      "parts": ["1-eye.png", "2-nose.png", "3-mouth.png", "4-ear.png"],
+      "full": "full.png"
+    },
+    "Frank": {
+      "answer": "Frank",
+      "accept": [],
+      "parts": ["1-eye.jpg", "2-nose.jpg", "3-tail.jpg", "4-ear.jpg"],
+      "full": "full.jpg"
+    }
+  }
+}

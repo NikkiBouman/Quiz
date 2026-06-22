@@ -1,0 +1,60 @@
+{
+  "_doc": "Bandle-ronde. Per liedje krijg je de instrumenten één voor één te horen (audio-stages, host-only — spelers horen niets, alleen de host speelt af). Antwoordmodus ':deezer' = de speler zoekt het nummer live in Deezer en stuurt een Deezer-track-id in; goed = id == deezerId. 'tracks' somt de audiobestanden in afspeelvolgorde op (1 = kaalst, laatste = met zang). Jaar/views/par worden automatisch uit de mapnaam gehaald. Inzetronde: eerder durven raden = hogere vermenigvuldiger.",
+  "name": "Bandle",
+  "intro": "Raad het liedje. Bij elke hint komt er een instrument bij. Hoe eerder je inzet, hoe meer punten.",
+  "mode": ":deezer",
+  "betting": true,
+  "heading": "Welk lied is dit?",
+  "items": {
+    "Black_Eyed_Peas-Pump_it_(2005_970M_par-2)": {
+      "deezerId": 7375556,
+      "label": "Black Eyed Peas – Pump It",
+      "tracks": ["1-drums+bass.m4a", "2-electric-guitar+saxophone.m4a", "3-electric-guitar-2.m4a", "4-brass-ensemble.m4a", "5-voice.m4a"]
+    },
+    "Coldplay-Fix_You_(2005_725M_par-3)": {
+      "deezerId": 3106505,
+      "label": "Coldplay – Fix You",
+      "tracks": ["1-drums+bass.m4a", "2-guitar.m4a", "3-piano+organ.m4a", "4-electric-guitar+backing-vocals.m4a", "5-voice cover.m4a"]
+    },
+    "Imagine_Dragons-Whatever_it_takes_(2017_1.1B_par-3)": {
+      "deezerId": 528330431,
+      "label": "Imagine Dragons – Whatever It Takes",
+      "tracks": ["1-drums.m4a", "2-bass+synth.m4a", "3-strings+choir.m4a", "4-electric-guitar+backing-vocals.m4a", "5-voice.m4a"]
+    },
+    "Lady_Gaga-Born_this_Way_(2011_326M_par-2)": {
+      "deezerId": 11747931,
+      "label": "Lady Gaga – Born This Way",
+      "tracks": ["1-drums+bass.m4a", "2-synth.m4a", "3-electric-guitar.m4a", "4-backing-vocals.m4a", "5-voice.m4a"]
+    },
+    "Lynyrd_Skynyrd-Sweet_Home_Alabama_(1974_143M_par-2)": {
+      "deezerId": 24949681,
+      "label": "Lynyrd Skynyrd – Sweet Home Alabama",
+      "tracks": ["1-drums.m4a", "2-bass.m4a", "3-piano.m4a", "4-electric-guitar.m4a", "5-voice.m4a"]
+    },
+    "Michael_Jackson-Man_in_the_Mirror_(1987_185M_par-4)": {
+      "deezerId": 4603411,
+      "label": "Michael Jackson – Man in the Mirror",
+      "tracks": ["1-drums.m4a", "2-bass+strings.m4a", "3-synth.m4a", "4-backing-vocals.m4a", "5-voice.m4a"]
+    },
+    "Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)": {
+      "deezerId": 4233792,
+      "label": "Miley Cyrus – Party in the U.S.A.",
+      "tracks": ["1-drums.m4a", "2-electric_guitar.m4a", "3-bass.m4a", "4-electric_guitar_2.m4a", "5-voice_cover.m4a"]
+    },
+    "Nickelback-Rockstar_(2005_373M_par-5)": {
+      "deezerId": 71828725,
+      "label": "Nickelback – Rockstar",
+      "tracks": ["1-drums.m4a", "2-bass.m4a", "3-electric-guitar+guitar.m4a", "4-electric-guitar-2+organ.m4a", "5-voice.m4a"]
+    },
+    "The_Fray-How_to_Save_a_Life_(2005_349M_par-4)": {
+      "deezerId": 7674865,
+      "label": "The Fray – How to Save a Life",
+      "tracks": ["1-drums+bass.m4a", "2-guitar+strings.m4a", "3-electric-guitar.m4a", "4-piano.m4a", "5-voice cover.m4a"]
+    },
+    "The_Lumineers-Ho_Hey_(2012_385M_par-2)": {
+      "deezerId": 757244922,
+      "label": "The Lumineers – Ho Hey",
+      "tracks": ["1-drums+bass.m4a", "2-banjo.m4a", "3-guitar.m4a", "4-choir.m4a", "5-voice-cover.m4a"]
+    }
+  }
+}

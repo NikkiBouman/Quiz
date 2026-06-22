@@ -1,0 +1,40 @@
+{
+  "_doc": "Acteurs-ronde. Per film zie je de acteurs één voor één (image-stages). Er worden GEEN foto's in de repo bewaard: de host-app zoekt elke acteur live op via de TMDB-proxy (person-search) en laadt de profielfoto rechtstreeks van het publieke TMDB image-CDN (image.tmdb.org). Antwoordmodus ':tmdb' = de speler zoekt de film live op en stuurt een TMDB-film-id in; goed = id == tmdbId. 'actors' staat in onthul-volgorde: van minst bekend (lastig) naar meest bekend (makkelijk). Wil je een bepaalde persoon vastpinnen (naam-dubbelganger), zet dan {\"name\":\"...\",\"id\":<tmdb person id>} i.p.v. alleen de naam. VEREIST: de TMDB-Worker moet person-search ondersteunen (zie tmdb-proxy/worker.js) en opnieuw gedeployd zijn.",
+  "name": "Raad de film aan de acteurs",
+  "intro": "Je krijgt de acteurs één voor één te zien. In welke film spelen ze samen? Hoe eerder je inzet, hoe meer punten.",
+  "mode": ":tmdb",
+  "betting": true,
+  "heading": "In welke film spelen deze acteurs?",
+  "items": {
+    "Toy_Story": {
+      "tmdbId": 862,
+      "label": "Toy Story",
+      "actors": ["John Morris", "Tim Allen", "Tom Hanks"]
+    },
+    "The_Lion_King": {
+      "tmdbId": 8587,
+      "label": "The Lion King",
+      "actors": ["Jonathan Taylor Thomas", "Rowan Atkinson", "Jeremy Irons", "James Earl Jones"]
+    },
+    "Narnia": {
+      "tmdbId": 411,
+      "label": "The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",
+      "actors": ["Skandar Keynes", "Georgie Henley", "William Moseley", "Anna Popplewell", "James McAvoy", "Tilda Swinton"]
+    },
+    "Avatar": {
+      "tmdbId": 19995,
+      "label": "Avatar",
+      "actors": ["Stephen Lang", "Sam Worthington", "Zoe Saldana", "Sigourney Weaver"]
+    },
+    "Interstellar": {
+      "tmdbId": 157336,
+      "label": "Interstellar",
+      "actors": ["Jessica Chastain", "Timothée Chalamet", "Anne Hathaway", "Matthew McConaughey"]
+    },
+    "The_Greatest_Showman": {
+      "tmdbId": 316029,
+      "label": "The Greatest Showman",
+      "actors": ["Rebecca Ferguson", "Zac Efron", "Zendaya", "Hugh Jackman"]
+    }
+  }
+}
