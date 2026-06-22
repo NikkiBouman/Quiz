@@ -49,9 +49,9 @@
   {
     "question": "Welke film uit 1995?",
     "stages": [
-      { "image": "actors/John_Morris.webp", "betMultiplier": 3 },
-      { "image": "actors/Tim_Allen.webp", "betMultiplier": 2 },
-      { "image": "actors/Tom_Hanks.webp", "betMultiplier": 1 }
+      { "image": "img/John_Morris.webp", "betMultiplier": 3 },
+      { "image": "img/Tim_Allen.webp", "betMultiplier": 2 },
+      { "image": "img/Tom_Hanks.webp", "betMultiplier": 1 }
     ],
     "options": ":tmdb",
     "answer": 862,
@@ -61,11 +61,11 @@
   {
     "question": "Welk nummer? — 2009 · 1.1B views · par 2",
     "stages": [
-      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/1-drums.m4a", "betMultiplier": 3 },
-      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/2-electric_guitar.m4a", "betMultiplier": 2 },
-      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/3-bass.m4a", "betMultiplier": 1.5 },
-      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/4-electric_guitar_2.m4a", "betMultiplier": 1.25 },
-      { "audio": "bandle/Miley-Cyrus_Party-in-the-USA/5-voice_cover.m4a", "betMultiplier": 1 }
+      { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/1-drums.m4a", "betMultiplier": 3 },
+      { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/2-electric_guitar.m4a", "betMultiplier": 2 },
+      { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/3-bass.m4a", "betMultiplier": 1.5 },
+      { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/4-electric_guitar_2.m4a", "betMultiplier": 1.25 },
+      { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/5-voice_cover.m4a", "betMultiplier": 1 }
     ],
     "options": ":deezer",
     "answer": 4233792,
