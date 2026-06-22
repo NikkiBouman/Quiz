@@ -44,7 +44,7 @@ sync with `index.html` when behaviour changes.
 | Frontend       | Vanilla JS, native ES modules (each page has one `<script type="module">`; shared code in `lib/quiz-core.js`) |
 | State sync     | Firebase RTDB (`firebase-app` + `firebase-database` v12.14.0 from gstatic CDN) — game only |
 | Hosting        | GitHub Pages (static) |
-| Movie search / cast | TMDB via the Worker proxy (`/search`, `?type=person`, `?type=credits`); see §16 |
+| Movie search / cast | TMDB via the Worker proxy (`/search`, `?type=credits`); see §16 |
 | Song search    | Deezer API via JSONP (`/search`, `output=jsonp`) |
 | Fonts          | Google Fonts (preconnected) |
 
@@ -242,13 +242,13 @@ For a stage with `audio`, `normalizeQuiz` reads the parent folder name and match
 `(YYYY_<views>_par-N)`, e.g. `Coldplay-Fix_You_(2005_725M_par-3)/1` → `year=2005`,
 `views="725M"`, `par=3`. Shown via `metaHTML()`.
 
-### Current `questions.json` content (16 questions, 4 rounds)
+### Current `questions.json` content (legacy demo set)
 
-1. **Hondenrassen** (5) — `listsearch`, shared 21-breed Dutch list, dog images.
-2. **Raad de film aan de acteurs** (5) — `:tmdb`, betting, actor-image stages.
-3. **Bandle** (2) — `:deezer`, betting, instrument-audio stages (host-only audio).
-4. **Wie of wat is dit?** (4) — `:text`, betting, progressively revealed drawing parts;
-   `accept[]` for spelling variants.
+A small flat trivia/hint set used only as a loadable example: two plain MC questions, a
+`pointsByStage` hint question, a betting hint question, and one `:deezer` bandle question.
+There are **no `:tmdb` film questions** here anymore — film/actor questions are created only via
+the film builder (§22), which pulls cast live from TMDB. (The built-in `SAMPLE` in `index.html`
+is likewise film-`:tmdb`-free.)
 
 ---
 
@@ -460,18 +460,18 @@ Because all shared state is in Firebase, a host can move to another device.
 
 ## 16. External APIs
 
-- **TMDB** (`tmdbSearch` / `personSearch`): proxied via the Worker (token stays server-side).
+- **TMDB** (`tmdbSearch` / `movieCast`): proxied via the Worker (token stays server-side).
   - Movie answer search: `GET {TMDB_PROXY}/search?query=…` → `/3/search/movie`. `answer` for
     `:tmdb` questions is the TMDB movie id (or an array of ids for "any of").
-  - Person lookup (prepared actors round, §22): `GET {TMDB_PROXY}/search?type=person&query=Name` →
-    `/3/search/person`. The client (`actorImage`) takes `results[0].profile_path` and builds an
-    `https://image.tmdb.org/t/p/w500{path}` URL.
   - Movie cast (film builder, §22): `GET {TMDB_PROXY}/search?type=credits&id=862` →
     `/3/movie/{id}/credits`. The builder shows the top-billed cast (with photos) to tick + reorder.
-  - In both cases **the photo itself never passes through the Worker** — it loads straight from
-    TMDB's public image CDN. **The Worker must be redeployed** after adding `type=person` /
-    `type=credits` support (`tmdb-proxy/worker.js`); until then movie search still works but actor
-    photos / cast lookups return empty (graceful: names shown as text, builder finds no cast).
+    This is the **only** way film/actor questions are created — there are no prepared/example film
+    rounds, and **no actor photos are committed** (the old `img/` folder and `actors/round.json`
+    were removed). Photos come live from TMDB.
+  - **The photo itself never passes through the Worker** — it loads straight from TMDB's public
+    image CDN (`https://image.tmdb.org/t/p/w500{path}`). **The Worker must support `type=credits`**
+    (`tmdb-proxy/worker.js`); until redeployed, movie search still works but the cast lookup returns
+    empty (graceful: the builder finds no cast). The old `type=person` lookup is no longer used.
 - **Deezer** (`deezerSearch`): JSONP (`GET /search?q=…&output=jsonp&callback=…`) to avoid
   CORS. `answer` for `:deezer` questions is the Deezer track id.
 - `searchOptions(mode, q)` dispatches to the right provider; the answer UI debounces input
@@ -643,10 +643,10 @@ a set of repo folders, each with a `round.json` manifest holding the answers the
   | puzzle | `:text` | `answer`, `accept[]`, `parts[]`, `full` | part images; `full` → `answerImage` (reveal) |
   | dog-breeds | `listsearch` | `breed` (+ shared `breeds[]` options list) | single image, no stages |
 
-  `library.json` lists these folders (currently `bandle`, `puzzle`, `dog-breeds`). The prepared
-  `:tmdb` **actors** round was dropped from the index; movie-by-actors is now built per-quiz with
-  the **film builder** (§below) which pulls cast live from TMDB. `actors/round.json` still exists
-  but is unused. Betting rounds set `betting:true`; `betMultipliers` derive from stage count
+  `library.json` lists these folders (currently `bandle`, `puzzle`, `dog-breeds`). There is **no
+  prepared `:tmdb` actors round** — `actors/round.json` and the committed `img/` actor photos were
+  removed. Movie-by-actors is built per-quiz with the **film builder** (§below), which pulls cast
+  live from TMDB. Betting rounds set `betting:true`; `betMultipliers` derive from stage count
   (`defaultBetMults`). The per-question prompt comes from the round's `heading`.
 
 ### The editor lives on its own pages (`quizzes.html` / `questions.html`)
@@ -700,12 +700,13 @@ links).
 ### `lib/quiz-core.js` exports
 
 Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `normStage`,
-`applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `defaultBetMults`,
-`itemLabel`. Catalog/TMDB: `TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `actorImage`,
-`tmdbSearch`, `movieCast`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`, `loadSavedQuizzes`/
-`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/`addToBank`/`deleteBankItem`,
-`setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`. The loose actor JPEGs in `img/`
-are unused (dogs moved to `dog-breeds/`) and can be deleted.
+`applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `answerText`,
+`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`. Catalog/TMDB: `TMDB_PROXY`,
+`loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`. Store: `SAVED_KEY`/`BANK_KEY`/
+`ACTIVE_KEY`, `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
+`addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
+(The old `actorImage` helper and the committed actor JPEGs in `img/` were removed — film/actor
+questions come from the film builder via `movieCast`. Drag-to-reorder lives in `lib/drag.js`.)
 
 ---
 

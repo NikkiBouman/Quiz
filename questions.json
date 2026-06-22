@@ -35,30 +35,6 @@
     "points": 100
   },
   {
-    "question": "Welke film? (zoek zelf + inzet)",
-    "stages": [
-      { "text": "Psychologische film uit 1999 van David Fincher.", "betMultiplier": 3 },
-      { "text": "Met Brad Pitt en Edward Norton.", "betMultiplier": 2 },
-      { "text": "Bekend om zijn twist-einde en een ondergrondse club.", "betMultiplier": 1 }
-    ],
-    "options": ":tmdb",
-    "answer": 550,
-    "answerLabel": "Fight Club",
-    "points": 100
-  },
-  {
-    "question": "Welke film uit 1995?",
-    "stages": [
-      { "image": "img/John_Morris.webp", "betMultiplier": 3 },
-      { "image": "img/Tim_Allen.webp", "betMultiplier": 2 },
-      { "image": "img/Tom_Hanks.webp", "betMultiplier": 1 }
-    ],
-    "options": ":tmdb",
-    "answer": 862,
-    "answerLabel": "Toy Story",
-    "points": 100
-  },
-  {
     "question": "Welk nummer? — 2009 · 1.1B views · par 2",
     "stages": [
       { "audio": "bandle/Miley_Cyrus-Party_in_the_U.S.A._(2009_1.1B_par-2)/1-drums.m4a", "betMultiplier": 3 },
