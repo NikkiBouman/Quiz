@@ -187,6 +187,7 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `answerLabel` | Human-readable correct answer (auto-derived for list/listsearch/text). |
 | `accept`      | For `:text`: array of additional acceptable strings (spelling variants). |
 | `image`       | Single-shot image path (non-staged questions). |
+| `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `points`      | Base points (default 100). |
 | `pointsByStage` | Non-betting staged questions: points per stage (decreasing reward for later reveals). |
@@ -439,9 +440,18 @@ Because all shared state is in Firebase, a host can move to another device.
 
 ## 16. External APIs
 
-- **TMDB** (`tmdbSearch`): `GET /3/search/movie?query=…&language=nl-NL`, `Authorization:
-  Bearer <TMDB_TOKEN>`. The token is a **read-only** access token and is safe in the client.
-  `answer` for `:tmdb` questions is the TMDB movie id (or an array of ids for "any of").
+- **TMDB** (`tmdbSearch` / `personSearch`): proxied via the Worker (token stays server-side).
+  - Movie answer search: `GET {TMDB_PROXY}/search?query=…` → `/3/search/movie`. `answer` for
+    `:tmdb` questions is the TMDB movie id (or an array of ids for "any of").
+  - Person lookup (prepared actors round, §22): `GET {TMDB_PROXY}/search?type=person&query=Name` →
+    `/3/search/person`. The client (`actorImage`) takes `results[0].profile_path` and builds an
+    `https://image.tmdb.org/t/p/w500{path}` URL.
+  - Movie cast (film builder, §22): `GET {TMDB_PROXY}/search?type=credits&id=862` →
+    `/3/movie/{id}/credits`. The builder shows the top-billed cast (with photos) to tick + reorder.
+  - In both cases **the photo itself never passes through the Worker** — it loads straight from
+    TMDB's public image CDN. **The Worker must be redeployed** after adding `type=person` /
+    `type=credits` support (`tmdb-proxy/worker.js`); until then movie search still works but actor
+    photos / cast lookups return empty (graceful: names shown as text, builder finds no cast).
 - **Deezer** (`deezerSearch`): JSONP (`GET /search?q=…&output=jsonp&callback=…`) to avoid
   CORS. `answer` for `:deezer` questions is the Deezer track id.
 - `searchOptions(mode, q)` dispatches to the right provider; the answer UI debounces input
@@ -565,6 +575,86 @@ changes: push `index.html` to the repo; on the host, load the folder via **Map l
 - **Lock down the DB:** add Firebase Auth + RTDB rules; gate writes to `players/{pid}` by
   uid and `state`/`quiz`/`rounds` to the host. Client changes are localized to the ref
   helpers and join flows.
+
+---
+
+## 22. Quiz samenstellen uit de bibliotheek (catalog)
+
+Instead of hand-writing `questions.json`, the host can **tick existing questions** from a
+self-describing media library and the app builds the quiz. This is the primary authoring path
+in the lobby; the old "Map laden / JSON laden" flow is still there (collapsed under a
+`<details>`).
+
+### Library layout
+
+- **`library.json`** (repo root) — tiny index: `{ "rounds": ["bandle","actors","puzzle","dog-breeds"] }`.
+  There is no directory listing on GitHub Pages, so the app reads this short, known list rather
+  than discovering folders. Adding a round = new folder + `round.json` + add the name here.
+- **`<folder>/round.json`** — one manifest per round, holding the **answers + metadata** that
+  the committed media lacks. Each carries a `_doc` string explaining how that round works and
+  which API it needs. Schema by mode:
+
+  | Round | `mode` | Per-item fields | Stages built from |
+  |-------|--------|-----------------|-------------------|
+  | bandle | `:deezer` | `deezerId`, `label`, `tracks[]` | audio tracks (host-only), folder name → year/views/par |
+  | puzzle | `:text` | `answer`, `accept[]`, `parts[]`, `full` | part images; `full` → `answerImage` (reveal) |
+  | actors | `:tmdb` | `tmdbId`, `label`, `actors[]` (obscure→famous) | **TMDB person photos**, no images committed (see below) |
+  | dog-breeds | `listsearch` | `breed` (+ shared `breeds[]` options list) | single image, no stages |
+
+  Betting rounds set `betting:true`; `betMultipliers` are derived by stage count
+  (`defaultBetMults`). The per-question prompt comes from the round's `heading`.
+
+### The editor (client)
+
+`openCompose` → `loadCatalog` fetches `library.json` + each `round.json` → opens a **modal
+editor** (`composePanelHTML`, view-routed via `app.composeView`: `main`/`mc`/`open`/`film`):
+
+- **Kant-en-klare rondes** — the library checklist (tick items, per-round select-all). Default
+  selection is *none*; the host picks.
+- **Eigen vragen** — custom questions the host authors, kept in `app.composeCustom`:
+  - **Meerkeuze** (`addMcQuestion`) — type the question (+ optional media link), the correct
+    answer, and ≥1 distractor. Stored as `{options:[correct,…], answer:0, shuffle:true}`.
+  - **Open vraag** (`addOpenQuestion`) — `:text`, manually judged, optional `accept[]`.
+  - **Film (acteurs)** (`filmSearch`→`filmPickMovie`→`addFilmQuestion`) — search a movie (TMDB),
+    load its top-10 cast (`type=credits`), tick + reorder (▲▼ buttons) the actors, build a
+    betting `:tmdb` question whose stages are the chosen actors' TMDB photos in that order.
+- **Form drafts** survive re-renders via `app.mcDraft`/`app.openDraft` (read DOM → state before a
+  structural re-render; forms use fixed inputs, no dynamic add/remove, to avoid focus loss).
+
+`buildComposedQuiz` assembles a standard `{name, rounds:[{name,intro,questions}]}` object
+(library rounds + a "Films (eigen)" round + an "Eigen vragen" round) and hands it to the
+**existing** `setQuiz` pipeline. No new question schema — the editor sits *in front of* the
+normal pipeline. Library `:tmdb` actor photos and the bandle/puzzle media resolve repo-served;
+custom content is link-based. The old `loadFolder` ("Map laden") path was **removed** — all
+media is now URL/link-based (committed library media counts as repo-relative links).
+
+### Shuffle, save, export
+
+- **Shuffle** (`applyShuffles`, run inside `setQuiz`) — questions with `shuffle:true` (custom MC)
+  have their `options` randomized and `answer` re-pointed each hosting session. Resume-safe:
+  `hostResume` reads the already-shuffled set back from Firebase, it never re-shuffles.
+- **localStorage** (`SAVED_KEY`, `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`) — saved
+  quizzes are full questions.json objects keyed by name; listed in the editor and on host start
+  (`useSavedQuiz`). **Export** (`exportQuizJSON`) downloads the same JSON to move to another
+  device; import is the normal "JSON laden" path.
+
+### Video & audio
+
+`video` is a first-class media field on questions and stages (`videoHTML`, `qMediaHTML`, handled
+in `publicCurrent`/`stageRowHTML`/`normStage`/`validateQuestions`). Like images, video is sent to
+players; **audio stays host-only** everywhere (host plays on the big screen).
+
+### Functions
+
+`loadCatalog`, `openCompose`/`closeCompose`, `composePanelHTML` + `composeMainHTML`/`mcFormHTML`/
+`openFormHTML`/`filmFormHTML`/`composeLibraryHTML`/`mediaRowHTML`, `wireCompose`,
+`toggleComposeItem`/`toggleComposeRound`/`removeCustom`, `addMcQuestion`/`addOpenQuestion`/
+`addFilmQuestion`, `filmSearch`/`filmPickMovie`/`filmToggleActor`/`filmMoveActor`,
+`buildComposedQuiz`/`buildQuestion`/`actorImage`/`defaultBetMults`/`itemLabel`,
+`applyComposed`/`saveComposed`/`exportComposed`/`useSavedQuiz`, `applyShuffles`,
+`loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`/`exportQuizJSON`. State: `app.compose*`,
+`app.mcDraft`/`app.openDraft`, `app.film*`. The loose actor JPEGs in `img/` are now unused (dogs
+moved to `dog-breeds/`) and can be deleted.
 
 ---
 
