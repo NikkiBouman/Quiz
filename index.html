@@ -340,8 +340,8 @@ const SHAPES = ['▲','◆','●','■'];
 /* normaliseer een vraag naar het interne model (accepteert ook {type,display}-stages en correctIndex) */
 function normStage(s){
   const o={};
-  if(s.type && s.display!=null){ if(s.type==='image')o.image=s.display; else if(s.type==='audio')o.audio=s.display; else o.text=s.display; }
-  if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio;
+  if(s.type && s.display!=null){ if(s.type==='image')o.image=s.display; else if(s.type==='audio')o.audio=s.display; else if(s.type==='video')o.video=s.display; else o.text=s.display; }
+  if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio; if(s.video!=null)o.video=s.video;
   if(s.label!=null)o.label=s.label;
   if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
   return o;
@@ -456,12 +456,12 @@ function validateQuestions(data){
       if(!Array.isArray(q.stages)||!q.stages.length) return `Vraag ${n}: 'stages' moet een niet-lege lijst zijn.`;
       for(let j=0;j<q.stages.length;j++){
         const s=q.stages[j];
-        const has = s && (s.text!=null||s.image!=null||s.audio!=null||(s.type&&s.display!=null));
-        if(!has) return `Vraag ${n}, stage ${j+1}: heeft tekst, image of audio nodig.`;
+        const has = s && (s.text!=null||s.image!=null||s.audio!=null||s.video!=null||(s.type&&s.display!=null));
+        if(!has) return `Vraag ${n}, stage ${j+1}: heeft tekst, image, audio of video nodig.`;
       }
       if(Array.isArray(q.pointsByStage) && q.pointsByStage.length!==q.stages.length) return `Vraag ${n}: 'pointsByStage' moet even lang zijn als 'stages'.`;
-    } else if(!q.question && !q.image){
-      return `Vraag ${n}: 'question' of 'image' nodig.`;
+    } else if(!q.question && !q.image && !q.video && !q.audio){
+      return `Vraag ${n}: 'question' of media (image/video/audio) nodig.`;
     }
   }
   return null;
@@ -481,6 +481,10 @@ const app = {
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
   openPicker:null, confirmKick:null, confirmSkip:false,
+  composeOpen:false, composeBusy:false, composeCatalog:null, composeSel:{}, composeErr:'',
+  composeView:'main', composeName:'', composeEigenName:'Eigen vragen', composeCustom:[], composeMsg:'',
+  mcDraft:null, openDraft:null,
+  filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -493,6 +497,30 @@ const genToken = () => Math.random().toString(36).slice(2,10)+Math.random().toSt
 const remember = c => { try{ localStorage.setItem('quizHost', c); }catch(e){} };
 const forget   = () => { try{ localStorage.removeItem('quizHost'); }catch(e){} };
 const recall   = () => { try{ return localStorage.getItem('quizHost'); }catch(e){ return null; } };
+
+/* opgeslagen, zelfgemaakte quizzen in dit apparaat (localStorage). Vorm: { naam: quizObject }.
+   quizObject is het gewone questions.json-formaat ({rounds:[...]} of platte lijst). */
+const SAVED_KEY = 'quiz:saved:v1';
+function loadSavedQuizzes(){ try{ return JSON.parse(localStorage.getItem(SAVED_KEY)||'{}'); }catch(e){ return {}; } }
+function saveQuizToDevice(name, quiz){
+  const all = loadSavedQuizzes(); all[name] = quiz;
+  try{ localStorage.setItem(SAVED_KEY, JSON.stringify(all)); return true; }catch(e){ return false; }
+}
+function deleteSavedQuiz(name){
+  const all = loadSavedQuizzes(); delete all[name];
+  try{ localStorage.setItem(SAVED_KEY, JSON.stringify(all)); }catch(e){}
+}
+/* quiz als .json downloaden (export naar ander apparaat) */
+function exportQuizJSON(name, quiz){
+  try{
+    const blob = new Blob([JSON.stringify(quiz, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = (name||'quiz').replace(/[^a-z0-9._-]+/gi,'_') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 1000);
+  }catch(e){ alert('Exporteren mislukt: '+e.message); }
+}
 
 /* ============================================================
    HOST → state schrijven
@@ -508,15 +536,18 @@ function publicCurrent(){
   if(r.par!=null) base.par=r.par;
   if(!staged){
     base.image = resolveMedia(r.image) || null;
+    if(r.video) base.video = resolveMedia(r.video) || null;
+    // audio-prompt gaat NIET naar spelers: alleen de host speelt af
   } else {
     const reveal = app.phase==='reveal';
     base.stages = r.stages.map((s,idx)=>{
       const revealed = reveal || idx<=app.stage;
-      const kind = s.audio?'audio':s.image?'image':'text';
+      const kind = s.audio?'audio':s.video?'video':s.image?'image':'text';
       const o = { kind, label:s.label||'', revealed };
       if(revealed){
         if(kind==='text') o.text = s.text||'';
         if(kind==='image') o.image = resolveMedia(s.image) || '';
+        if(kind==='video') o.video = resolveMedia(s.video) || '';
         // audio-paden gaan NIET naar spelers: alleen de host speelt af
       }
       return o;
@@ -529,6 +560,7 @@ function publicCurrent(){
   if(app.phase==='reveal'){
     base.answer = r.answer;
     base.answerLabel = r.answerLabel || (base.optionsMode==='list' && base.options ? base.options[r.answer] : '') || '';
+    if(r.answerImage) base.answerImage = resolveMedia(r.answerImage) || null;
   }
   return base;
 }
@@ -619,10 +651,24 @@ function hostCreate(){
   set(ref(db, `games/${app.code}/judgeToken`), app.judgeToken);   // geheime sleutel voor de jurylid-link
   pushState(); startHost(); renderHost();
 }
+/* meerkeuzevragen met shuffle-vlag husselen: eerste optie is het juiste antwoord; bij elke
+   hostsessie wordt de volgorde willekeurig en wijst 'answer' weer naar de juiste optie.
+   Resume-veilig: dit draait alleen bij een verse set (setQuiz), niet bij hostResume. */
+function applyShuffles(quiz){
+  quiz.forEach(q=>{
+    if(q.shuffle && Array.isArray(q.options) && q.options.length>1){
+      const correct = q.options[q.answer!=null?q.answer:0];
+      for(let i=q.options.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [q.options[i],q.options[j]]=[q.options[j],q.options[i]]; }
+      q.answer = q.options.indexOf(correct);
+      q.answerLabel = correct;
+    }
+  });
+  return quiz;
+}
 /* nieuwe vragenset toepassen (uit geladen JSON, plat of met rondes) */
 function setQuiz(data, name){
   const f = flattenQuiz(data);
-  app.quiz = normalizeQuiz(f.questions); app.rounds = f.rounds; app.quizName = name; app.quizErr='';
+  app.quiz = applyShuffles(normalizeQuiz(f.questions)); app.rounds = f.rounds; app.quizName = name; app.quizErr='';
   applyAudioLabels();                    // instrumentnamen uit bestandsnamen overnemen (audio-stages)
   if(app.code){ set(quizRef(app.code), app.quiz); set(roundsRef(app.code), app.rounds); }
   renderHost();
@@ -639,6 +685,276 @@ function handleQuizFile(ev){
   };
   reader.onerror = ()=>{ app.quizErr='Bestand kon niet gelezen worden.'; renderHost(); };
   reader.readAsText(file);
+}
+
+/* ============================================================
+   QUIZ SAMENSTELLEN UIT DE BIBLIOTHEEK
+   De host kan een quiz bouwen door bestaande vragen aan te vinken,
+   zonder zelf JSON te schrijven. Bron: library.json + per ronde een
+   round.json (zie die bestanden voor het schema). Hieruit bouwen we
+   een gewoon {rounds:[...]}-object en draaien het door setQuiz().
+   ============================================================ */
+const personImgCache = {};   // acteurnaam/-id -> profielfoto-URL (of null), zodat we niet dubbel zoeken
+
+/* standaard inzet-vermenigvuldigers bij n hints: eerder = riskanter = meer */
+function defaultBetMults(n){
+  const t = {1:[1], 2:[2,1], 3:[3,2,1], 4:[3,2,1.5,1], 5:[3,2,1.5,1.25,1], 6:[3,2.5,2,1.5,1.25,1]};
+  if(t[n]) return t[n];
+  return Array.from({length:n}, (_,i)=> n<=1 ? 1 : Math.round((3 - 2*i/(n-1))*100)/100);
+}
+/* leesbaar label van één bibliotheek-item (voor de aanvinklijst) */
+function itemLabel(rd, it){
+  if(rd.mode===':deezer') return it.label || '';
+  if(rd.mode===':tmdb')   return it.label || '';
+  if(rd.mode===':text')   return it.answer || '';
+  if(rd.mode==='listsearch') return it.breed || '';
+  return '';
+}
+/* library.json + alle round.json ophalen → genormaliseerde catalogus */
+async function loadCatalog(){
+  const lib = await (await fetch('library.json', {cache:'no-cache'})).json();
+  const folders = Array.isArray(lib.rounds) ? lib.rounds : [];
+  const cat = [];
+  for(const folder of folders){
+    try{
+      const rd = await (await fetch(`${folder}/round.json`, {cache:'no-cache'})).json();
+      if(!rd || !rd.items) continue;
+      cat.push({
+        folder,
+        name: rd.name || folder,
+        intro: rd.intro || '',
+        mode: rd.mode || '',
+        betting: !!rd.betting,
+        heading: rd.heading || rd.name || '',
+        breeds: Array.isArray(rd.breeds) ? rd.breeds : null,
+        items: rd.items,
+      });
+    }catch(e){ /* ontbrekende/foute ronde overslaan */ }
+  }
+  return cat;
+}
+/* acteurnaam → profielfoto-URL via de TMDB-proxy (person-search). a mag een string
+   zijn of {name,id?,img?}. Resultaat wordt gecachet; null als er niets gevonden is. */
+async function actorImage(a){
+  const name = typeof a==='string' ? a : (a.name||'');
+  const id   = (typeof a==='object' && a.id!=null) ? a.id : null;
+  if(typeof a==='object' && a.img) return a.img;            // vastgepinde URL
+  const cacheKey = id!=null ? ('id:'+id) : ('nm:'+name);
+  if(personImgCache[cacheKey]!==undefined) return personImgCache[cacheKey];
+  let url = null;
+  try{
+    const res = await fetch(`${TMDB_PROXY}/search?type=person&query=${encodeURIComponent(name)}`, {headers:{accept:'application/json'}});
+    const data = await res.json();
+    const list = data.results || [];
+    const person = (id!=null ? list.find(p=>p.id===id) : null) || list[0];
+    if(person && person.profile_path) url = `https://image.tmdb.org/t/p/w500${person.profile_path}`;
+  }catch(e){}
+  personImgCache[cacheKey] = url;
+  return url;
+}
+/* één bibliotheek-item → één vraag-object (zelfde schema als questions.json) */
+async function buildQuestion(rd, key, it){
+  if(rd.mode===':deezer'){
+    const tracks = it.tracks || [];
+    const mults = defaultBetMults(tracks.length);
+    return { question: rd.heading, options: ':deezer', answer: it.deezerId, answerLabel: it.label,
+      stages: tracks.map((t,i)=>({ audio:`${rd.folder}/${key}/${t}`, betMultiplier: mults[i] })) };
+  }
+  if(rd.mode===':text'){
+    const parts = it.parts || [];
+    const mults = defaultBetMults(parts.length);
+    const q = { question: rd.heading, options: ':text', answer: it.answer, accept: it.accept || [],
+      stages: parts.map((p,i)=>({ image:`${rd.folder}/${key}/${p}`, betMultiplier: mults[i] })) };
+    if(it.full) q.answerImage = `${rd.folder}/${key}/${it.full}`;
+    return q;
+  }
+  if(rd.mode===':tmdb'){
+    const actors = it.actors || [];
+    const mults = defaultBetMults(actors.length);
+    const stages = [];
+    for(let i=0;i<actors.length;i++){
+      const img = await actorImage(actors[i]);
+      const name = typeof actors[i]==='string' ? actors[i] : (actors[i].name||'');
+      stages.push(img ? { image: img, betMultiplier: mults[i] } : { text: name, betMultiplier: mults[i] });
+    }
+    return { question: rd.heading, options: ':tmdb', answer: it.tmdbId, answerLabel: it.label, stages };
+  }
+  if(rd.mode==='listsearch'){
+    const breeds = rd.breeds || [];
+    return { question: rd.heading, options: breeds, search: true, image:`${rd.folder}/${key}`,
+      answer: breeds.indexOf(it.breed) };
+  }
+  return { question: rd.heading || 'Vraag', options: [], answer: 0 };
+}
+/* hele selectie → {rounds:[...]} (alleen rondes met ≥1 aangevinkt item) */
+/* hele selectie (bibliotheek + eigen vragen) → {name, rounds:[...]} in questions.json-vorm */
+async function buildComposedQuiz(){
+  const cat = app.composeCatalog || [];
+  const sel = app.composeSel || {};
+  const rounds = [];
+  for(const rd of cat){
+    const picked = Object.keys(rd.items).filter(k=> sel[rd.folder] && sel[rd.folder][k]);
+    if(!picked.length) continue;
+    const questions = [];
+    for(const k of picked) questions.push(await buildQuestion(rd, k, rd.items[k]));
+    rounds.push({ name: rd.name, intro: rd.intro || '', questions });
+  }
+  const films = app.composeCustom.filter(c=>c.bucket==='films').map(c=>c.q);
+  const eigen = app.composeCustom.filter(c=>c.bucket==='eigen').map(c=>c.q);
+  if(films.length) rounds.push({ name:'Films (eigen)', intro:'Raad de film aan de acteurs.', questions: films });
+  if(eigen.length) rounds.push({ name: app.composeEigenName||'Eigen vragen', intro:'', questions: eigen });
+  return { name: app.composeName || 'Eigen samenstelling', rounds };
+}
+function composeSelCount(){
+  const sel = app.composeSel || {};
+  return Object.keys(sel).reduce((n,f)=> n + Object.keys(sel[f]||{}).filter(k=>sel[f][k]).length, 0);
+}
+function composeTotalCount(){ return composeSelCount() + (app.composeCustom?app.composeCustom.length:0); }
+
+/* editor openen: catalogus laden (eenmalig). Lopend werk blijft behouden. */
+async function openCompose(){
+  app.composeErr=''; app.composeMsg=''; app.composeView='main'; app.composeOpen=true; app.composeBusy=true; renderHost();
+  try{
+    if(!app.composeCatalog) app.composeCatalog = await loadCatalog();
+    if(!app.composeCatalog.length) app.composeErr='Geen bibliotheek gevonden (library.json/round.json).';
+    if(!app.composeSel || !Object.keys(app.composeSel).length){
+      const sel = {}; app.composeCatalog.forEach(rd=> sel[rd.folder]={}); app.composeSel = sel;   // standaard niets aangevinkt
+    }
+  }catch(e){ app.composeErr='Bibliotheek laden mislukt: '+e.message; }
+  app.composeBusy=false; renderHost();
+}
+function closeCompose(){ app.composeOpen=false; app.composeView='main'; app.composeErr=''; app.composeMsg=''; renderHost(); }
+function toggleComposeItem(folder, key){
+  if(!app.composeSel[folder]) app.composeSel[folder]={};
+  app.composeSel[folder][key] = !app.composeSel[folder][key];
+  renderHost();
+}
+function toggleComposeRound(folder){
+  const rd = (app.composeCatalog||[]).find(r=>r.folder===folder); if(!rd) return;
+  const keys = Object.keys(rd.items);
+  const sel = app.composeSel[folder] || (app.composeSel[folder]={});
+  const allOn = keys.every(k=> sel[k]);
+  keys.forEach(k=> sel[k] = !allOn);
+  renderHost();
+}
+function removeCustom(idx){ app.composeCustom.splice(idx,1); renderHost(); }
+
+/* --- eigen vraag: meerkeuze --- */
+function readMcDraft(){
+  const d = app.mcDraft || (app.mcDraft={});
+  const g=id=>{ const e=$('#'+id); return e?e.value:undefined; };
+  if($('#mc-q')!=null){
+    d.question=g('mc-q'); d.media=g('mc-media'); d.mediaType=g('mc-mtype');
+    d.correct=g('mc-correct');
+    d.distractors=[0,1,2,3,4].map(i=>g('mc-d'+i)).map(x=>x==null?'':x);
+  }
+  return d;
+}
+function addMcQuestion(){
+  const d = readMcDraft();
+  const correct=(d.correct||'').trim();
+  const dist=(d.distractors||[]).map(x=>(x||'').trim()).filter(Boolean);
+  if(!correct){ app.composeErr='Vul het juiste antwoord in.'; renderHost(); return; }
+  if(!dist.length){ app.composeErr='Vul minstens één foute optie in (of gebruik "Open vraag").'; renderHost(); return; }
+  const q = { question:(d.question||'').trim(), options:[correct, ...dist], answer:0, shuffle:true };
+  applyMediaToQ(q, d.media, d.mediaType);
+  if(!q.question && !q.image && !q.video && !q.audio){ app.composeErr='Geef een vraag of een medialink op.'; renderHost(); return; }
+  app.composeCustom.push({ bucket:'eigen', label:(q.question||correct), q });
+  app.mcDraft=null; app.composeErr=''; app.composeView='main'; renderHost();
+}
+/* --- eigen vraag: open antwoord --- */
+function readOpenDraft(){
+  const d = app.openDraft || (app.openDraft={});
+  const g=id=>{ const e=$('#'+id); return e?e.value:undefined; };
+  if($('#op-q')!=null){ d.question=g('op-q'); d.media=g('op-media'); d.mediaType=g('op-mtype'); d.answer=g('op-ans'); d.accept=g('op-accept'); }
+  return d;
+}
+function addOpenQuestion(){
+  const d = readOpenDraft();
+  const ans=(d.answer||'').trim();
+  if(!ans){ app.composeErr='Vul het juiste antwoord in.'; renderHost(); return; }
+  const accept=(d.accept||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const q = { question:(d.question||'').trim(), options:':text', answer:ans, accept };
+  applyMediaToQ(q, d.media, d.mediaType);
+  if(!q.question && !q.image && !q.video && !q.audio){ app.composeErr='Geef een vraag of een medialink op.'; renderHost(); return; }
+  app.composeCustom.push({ bucket:'eigen', label:(q.question||ans), q });
+  app.openDraft=null; app.composeErr=''; app.composeView='main'; renderHost();
+}
+function applyMediaToQ(q, url, type){
+  url=(url||'').trim(); if(!url) return;
+  if(type==='video') q.video=url; else if(type==='audio') q.audio=url; else q.image=url;
+}
+/* --- eigen vraag: film (acteurs) --- */
+async function filmSearch(){
+  const e=$('#film-q'); const q=e?e.value.trim():''; app.filmQuery=q;
+  if(!q){ app.filmResults=[]; renderHost(); return; }
+  app.filmBusy=true; renderHost();
+  try{ app.filmResults = await tmdbSearch(q); }catch(err){ app.filmResults=[]; app.composeErr='Zoeken mislukt: '+err.message; }
+  app.filmBusy=false; renderHost();
+}
+async function filmPickMovie(id, label){
+  app.filmBusy=true; app.filmResults=[]; app.filmQuery=''; renderHost();
+  let cast=[];
+  try{
+    const res = await fetch(`${TMDB_PROXY}/search?type=credits&id=${encodeURIComponent(id)}`, {headers:{accept:'application/json'}});
+    const data = await res.json();
+    cast = (data.cast||[]).filter(c=>c.profile_path).slice(0,10).map(c=>({
+      id:c.id, name:c.name, img:`https://image.tmdb.org/t/p/w500${c.profile_path}`, checked:true,
+    }));
+  }catch(err){ app.composeErr='Acteurs laden mislukt: '+err.message; }
+  app.filmPick = { tmdbId:id, label, cast };
+  app.filmBusy=false; renderHost();
+}
+function filmToggleActor(i){ const p=app.filmPick; if(!p)return; p.cast[i].checked=!p.cast[i].checked; renderHost(); }
+function filmMoveActor(i, dir){
+  const p=app.filmPick; if(!p)return; const j=i+dir;
+  if(j<0||j>=p.cast.length) return;
+  [p.cast[i],p.cast[j]]=[p.cast[j],p.cast[i]]; renderHost();
+}
+function addFilmQuestion(){
+  const p=app.filmPick; if(!p){ app.composeErr='Kies eerst een film.'; renderHost(); return; }
+  const sel=p.cast.filter(c=>c.checked);
+  if(sel.length<2){ app.composeErr='Kies minstens 2 acteurs.'; renderHost(); return; }
+  const mults = defaultBetMults(sel.length);   // inzetronde, net als de kant-en-klare films
+  const q = { question:'In welke film spelen deze acteurs?', options:':tmdb', answer:Number(p.tmdbId)||p.tmdbId, answerLabel:p.label,
+    points:100, stages: sel.map((c,i)=>({ image:c.img, betMultiplier: mults[i] })) };
+  app.composeCustom.push({ bucket:'films', label:p.label, q });
+  app.filmPick=null; app.composeErr=''; app.composeView='main'; renderHost();
+}
+/* --- opslaan / exporteren / nu gebruiken / laden --- */
+async function composeBuildOrErr(){
+  if(!composeTotalCount()){ app.composeErr='Kies of maak minstens één vraag.'; renderHost(); return null; }
+  app.composeBusy=true; app.composeErr=''; app.composeMsg=''; renderHost();
+  try{ const data = await buildComposedQuiz(); app.composeBusy=false; return data; }
+  catch(e){ app.composeBusy=false; app.composeErr='Samenstellen mislukt: '+e.message; renderHost(); return null; }
+}
+async function applyComposed(){
+  const data = await composeBuildOrErr(); if(!data) return;
+  app.composeOpen=false;
+  setQuiz(data, data.name);     // flatten → normalize → shuffle → push → render
+}
+async function saveComposed(){
+  const nm=($('#compose-name')?$('#compose-name').value:app.composeName||'').trim();
+  if(!nm){ app.composeErr='Geef de quiz eerst een naam (bovenaan).'; renderHost(); return; }
+  app.composeName=nm;
+  const data = await composeBuildOrErr(); if(!data) return;
+  data.name=nm;
+  app.composeMsg = saveQuizToDevice(nm, data) ? `Opgeslagen als "${nm}" op dit apparaat.` : 'Opslaan mislukt (opslag vol?).';
+  renderHost();
+}
+async function exportComposed(){
+  const nm=($('#compose-name')?$('#compose-name').value:app.composeName||'').trim() || 'quiz';
+  app.composeName=nm;
+  const data = await composeBuildOrErr(); if(!data) return;
+  data.name=nm; exportQuizJSON(nm, data);
+  app.composeMsg='JSON geëxporteerd (download).'; renderHost();
+}
+/* een eerder opgeslagen quiz meteen als host gebruiken */
+function useSavedQuiz(name){
+  const all = loadSavedQuizzes(); const quiz = all[name];
+  if(!quiz){ app.quizErr='Opgeslagen quiz niet gevonden.'; renderHost(); return; }
+  app.composeOpen=false;
+  setQuiz(quiz, name);
 }
 /* host hervat een lopend spel: status + vragenset terughalen uit Firebase */
 async function hostResume(code){
@@ -1224,6 +1540,11 @@ function quizMediaReport(){
 
 const imgHTML = src => src ? `<img class="qimg" src="${esc(src)}" alt="">` : '';
 const audioHTML = src => src ? `<audio class="qaudio" controls preload="none" src="${esc(src)}"></audio>` : '';
+const videoHTML = src => src ? `<video class="qimg" controls preload="metadata" playsinline src="${esc(src)}"></video>` : '';
+/* media van een niet-gestage vraag (host krijgt audio, speler niet) */
+function qMediaHTML(r, isHost){
+  return `${imgHTML(resolveMedia(r.image))}${videoHTML(resolveMedia(r.video))}${isHost?audioHTML(resolveMedia(r.audio)):''}`;
+}
 function clueListHTML(stages){
   return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
     <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
@@ -1237,6 +1558,8 @@ function stageRowHTML(kind, label, idx, cur, revealed, media, isHost){
     if(isHost && revealed) body += audioHTML(media);
   } else if(kind==='image'){
     body = revealed ? imgHTML(media) : `<span class="slocked">nog niet getoond</span>`;
+  } else if(kind==='video'){
+    body = revealed ? videoHTML(media) : `<span class="slocked">nog niet getoond</span>`;
   } else {
     body = revealed ? `<div class="qtext sm">${esc(media||'')}</div>` : `<span class="slocked">nog niet getoond</span>`;
   }
@@ -1246,9 +1569,9 @@ function stageRowHTML(kind, label, idx, cur, revealed, media, isHost){
 /* host: echte stages (incl. audio om af te spelen) */
 function hostStagesHTML(r, cur){
   return `<div class="stagelist">${r.stages.map((s,idx)=>{
-    const kind = s.audio?'audio':s.image?'image':'text';
+    const kind = s.audio?'audio':s.video?'video':s.image?'image':'text';
     const revealed = idx<=cur;
-    const media = kind==='audio'?resolveMedia(s.audio):kind==='image'?resolveMedia(s.image):s.text;
+    const media = kind==='audio'?resolveMedia(s.audio):kind==='video'?resolveMedia(s.video):kind==='image'?resolveMedia(s.image):s.text;
     return stageRowHTML(kind, s.label, idx, cur, revealed, media, true);
   }).join('')}</div>`;
 }
@@ -1261,7 +1584,7 @@ function hintLabelsHTML(r){
 function playerStagesHTML(c){
   const cur = c.stage||0;
   return `<div class="stagelist">${(c.stages||[]).map((s,idx)=>{
-    const media = s.kind==='image'?s.image:s.kind==='text'?s.text:null;
+    const media = s.kind==='image'?s.image:s.kind==='video'?s.video:s.kind==='text'?s.text:null;
     return stageRowHTML(s.kind, s.label, idx, cur, !!s.revealed, media, false);
   }).join('')}</div>`;
 }
@@ -1303,6 +1626,167 @@ function renderHost(){
   if(app.phase==='reveal') return hostRevealView();
   if(app.phase==='final') return hostFinal();
 }
+/* modale aanvinklijst om een quiz samen te stellen uit de bibliotheek */
+function syncComposeName(){ const e=$('#compose-name'); if(e) app.composeName=e.value; }
+function mediaRowHTML(pfx, d){
+  d=d||{};
+  return `<input id="${pfx}-media" class="sinput" placeholder="Medialink (optioneel): https://…" value="${esc(d.media||'')}">
+    <select id="${pfx}-mtype" class="sinput">
+      ${['image','video','audio'].map(t=>`<option value="${t}" ${d.mediaType===t?'selected':''}>${t==='image'?'afbeelding':t==='video'?'video':'audio'}</option>`).join('')}
+    </select>`;
+}
+function composeLibraryHTML(){
+  const cat=app.composeCatalog||[], sel=app.composeSel||{};
+  if(app.composeBusy && !cat.length) return `<p class="muted center" style="margin:0">Bibliotheek laden…</p>`;
+  if(!cat.length) return `<p class="muted" style="margin:0;font-size:12px">Geen bibliotheek gevonden.</p>`;
+  return cat.map(rd=>{
+    const keys=Object.keys(rd.items);
+    const on=keys.filter(k=> sel[rd.folder]&&sel[rd.folder][k]).length;
+    const allOn=keys.length>0 && on===keys.length;
+    const modeLbl=rd.mode===':deezer'?'Deezer':rd.mode===':tmdb'?'TMDB':rd.mode===':text'?'tekst':rd.mode==='listsearch'?'lijst':rd.mode;
+    const rows=keys.map(k=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 2px">
+        <input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(sel[rd.folder]&&sel[rd.folder][k])?'checked':''}>
+        <span>${esc(itemLabel(rd, rd.items[k])||k)}</span></label>`).join('');
+    return `<div class="card stack" style="gap:4px">
+      <div class="statusbar"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" data-round="${esc(rd.folder)}" ${allOn?'checked':''}><b>${esc(rd.name)}</b></label>
+        <span class="muted" style="font-size:12px">${on}/${keys.length}${rd.betting?' · inzet':''} · ${esc(modeLbl)}</span></div>
+      ${rows}</div>`;
+  }).join('');
+}
+function composeMainHTML(){
+  const custom = app.composeCustom.length
+    ? app.composeCustom.map((c,i)=>`<div class="row" style="gap:8px;align-items:center"><span style="flex:1;font-size:14px">${esc(c.label||'(vraag)')} <span class="muted" style="font-size:11px">· ${c.bucket==='films'?'film':'eigen'}</span></span><button class="mini danger" data-rmcustom="${i}">✕</button></div>`).join('')
+    : `<p class="muted" style="font-size:12px;margin:0">Nog geen eigen vragen.</p>`;
+  const saved=loadSavedQuizzes(); const sk=Object.keys(saved);
+  const savedHTML = sk.length ? `<div class="card stack" style="gap:6px"><div class="statusbar"><b>Opgeslagen op dit apparaat</b></div>${sk.map(n=>`<div class="row" style="gap:6px;align-items:center"><span style="flex:1;font-size:14px">${esc(n)}</span><button class="mini" data-loadsaved="${esc(n)}">Laad</button><button class="mini danger" data-delsaved="${esc(n)}">✕</button></div>`).join('')}</div>` : '';
+  return `
+    <input id="compose-name" class="sinput" placeholder="Naam van je quiz" value="${esc(app.composeName||'')}">
+    <div class="stack" style="gap:10px;overflow:auto;max-height:52vh;padding-right:4px">
+      <div class="statusbar"><b>Kant-en-klare rondes</b><span class="muted" style="font-size:12px">vink aan</span></div>
+      ${composeLibraryHTML()}
+      <div class="statusbar" style="margin-top:4px"><b>Eigen vragen</b></div>
+      <div class="card stack" style="gap:8px">${custom}
+        <div class="row" style="gap:6px;flex-wrap:wrap">
+          <button class="btn ghost" id="b-add-mc" style="font-size:13px">+ Meerkeuze</button>
+          <button class="btn ghost" id="b-add-open" style="font-size:13px">+ Open vraag</button>
+          <button class="btn ghost" id="b-add-film" style="font-size:13px">+ Film (acteurs)</button>
+        </div>
+      </div>
+      ${savedHTML}
+    </div>`;
+}
+function mcFormHTML(){
+  const d=app.mcDraft||{};
+  return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
+    <b>Meerkeuzevraag</b>
+    <input id="mc-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
+    ${mediaRowHTML('mc', d)}
+    <label class="muted" style="font-size:12px">Juiste antwoord</label>
+    <input id="mc-correct" class="sinput" placeholder="Het juiste antwoord" value="${esc(d.correct||'')}">
+    <label class="muted" style="font-size:12px">Foute opties (minstens 1)</label>
+    ${[0,1,2,3,4].map(i=>`<input id="mc-d${i}" class="sinput" placeholder="Foute optie ${i+1}" value="${esc((d.distractors&&d.distractors[i])||'')}">`).join('')}
+    <p class="muted" style="font-size:12px;margin:0">De volgorde wordt willekeurig in de quiz.</p>
+    <div class="row"><button class="btn grow" id="b-mc-add">Toevoegen</button><button class="btn ghost" id="b-form-back">Terug</button></div>
+  </div>`;
+}
+function openFormHTML(){
+  const d=app.openDraft||{};
+  return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
+    <b>Open vraag (zelf typen)</b>
+    <input id="op-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
+    ${mediaRowHTML('op', d)}
+    <label class="muted" style="font-size:12px">Juiste antwoord</label>
+    <input id="op-ans" class="sinput" placeholder="Het juiste antwoord" value="${esc(d.answer||'')}">
+    <label class="muted" style="font-size:12px">Ook goed (komma-gescheiden, optioneel)</label>
+    <input id="op-accept" class="sinput" placeholder="bv. variant 1, variant 2" value="${esc(d.accept||'')}">
+    <p class="muted" style="font-size:12px;margin:0">Open antwoorden beoordeel je als host handmatig.</p>
+    <div class="row"><button class="btn grow" id="b-op-add">Toevoegen</button><button class="btn ghost" id="b-form-back">Terug</button></div>
+  </div>`;
+}
+function filmFormHTML(){
+  if(app.filmPick){
+    const p=app.filmPick;
+    const cast=p.cast.map((c,i)=>`<div class="row" style="gap:8px;align-items:center;padding:3px 0">
+      <input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}>
+      <img src="${esc(c.img)}" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover">
+      <span style="flex:1;font-size:14px">${esc(c.name)}</span>
+      <button class="mini" data-amove="${i}|-1" title="omhoog">▲</button>
+      <button class="mini" data-amove="${i}|1" title="omlaag">▼</button>
+    </div>`).join('');
+    return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
+      <b>Film: ${esc(p.label)}</b>
+      <p class="muted" style="font-size:12px;margin:0">Vink acteurs aan en zet ze in onthul-volgorde (bovenaan = eerst getoond).</p>
+      ${cast || '<p class="muted" style="margin:0">Geen acteurfoto’s gevonden voor deze film.</p>'}
+      <div class="row"><button class="btn grow" id="b-film-add">Toevoegen aan quiz</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>
+    </div>`;
+  }
+  const res=app.filmResults||[];
+  return `<div class="stack" style="gap:8px">
+    <b>Film (acteurs raden)</b>
+    <div class="row" style="gap:6px"><input id="film-q" class="sinput" placeholder="Zoek een film…" value="${esc(app.filmQuery||'')}" style="flex:1"><button class="btn" id="b-film-search">Zoek</button></div>
+    ${app.filmBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
+    ${res.length?`<div class="stack" style="gap:4px;overflow:auto;max-height:48vh">${res.map(m=>`<button class="btn ghost" data-film="${esc(m.id)}|${esc(m.label)}" style="justify-content:flex-start;font-size:14px">${m.thumb?`<img src="${esc(m.thumb)}" style="width:28px;height:40px;object-fit:cover;border-radius:4px;margin-right:8px">`:''}${esc(m.label)}</button>`).join('')}</div>`:''}
+    <div class="row"><button class="btn ghost" id="b-form-back">Terug</button></div>
+  </div>`;
+}
+function composePanelHTML(){
+  const view=app.composeView||'main';
+  const inner = view==='mc'?mcFormHTML() : view==='open'?openFormHTML() : view==='film'?filmFormHTML() : composeMainHTML();
+  const total=composeTotalCount();
+  const footer = view==='main' ? `<div class="row" style="flex-wrap:wrap;gap:8px">
+      <button class="btn grow" id="b-compose-apply" ${total&&!app.composeBusy?'':'disabled'}>Gebruik nu${total?` (${total})`:''}</button>
+      <button class="btn ghost" id="b-compose-save">Opslaan</button>
+      <button class="btn ghost" id="b-compose-export">Exporteer</button>
+      <button class="btn ghost" id="b-compose-close">Sluiten</button>
+    </div>` : '';
+  return `<div class="modal"><div class="modalcard stack" style="gap:10px;max-width:600px;width:94vw;max-height:90vh">
+    <div class="statusbar"><b>Stel je quiz samen</b><span class="muted" style="font-size:13px">${total} ${total===1?'vraag':'vragen'}</span></div>
+    ${inner}
+    ${app.composeErr?`<p class="err" style="margin:0;font-size:13px">${esc(app.composeErr)}</p>`:''}
+    ${app.composeMsg?`<p class="muted" style="margin:0;font-size:13px;color:var(--groen)">${esc(app.composeMsg)}</p>`:''}
+    ${app.composeBusy?`<p class="muted center" style="margin:0">Bezig…</p>`:''}
+    ${footer}
+  </div></div>`;
+}
+function wireCompose(){
+  const view=app.composeView||'main';
+  if(view==='mc'){
+    const a=$('#b-mc-add'); if(a)a.onclick=addMcQuestion;
+    const b=$('#b-form-back'); if(b)b.onclick=()=>{ readMcDraft(); app.composeView='main'; app.composeErr=''; renderHost(); };
+    return;
+  }
+  if(view==='open'){
+    const a=$('#b-op-add'); if(a)a.onclick=addOpenQuestion;
+    const b=$('#b-form-back'); if(b)b.onclick=()=>{ readOpenDraft(); app.composeView='main'; app.composeErr=''; renderHost(); };
+    return;
+  }
+  if(view==='film'){
+    const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
+    const fq=$('#film-q'); if(fq) fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
+    el.querySelectorAll('[data-film]').forEach(b=> b.onclick=()=>{ const v=b.dataset.film; const i=v.indexOf('|'); filmPickMovie(v.slice(0,i), v.slice(i+1)); });
+    el.querySelectorAll('[data-actor]').forEach(cb=> cb.onchange=()=> filmToggleActor(+cb.dataset.actor));
+    el.querySelectorAll('[data-amove]').forEach(b=> b.onclick=()=>{ const a=b.dataset.amove.split('|'); filmMoveActor(+a[0], +a[1]); });
+    const add=$('#b-film-add'); if(add)add.onclick=addFilmQuestion;
+    const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ app.filmPick=null; app.composeErr=''; renderHost(); };
+    const b=$('#b-form-back'); if(b)b.onclick=()=>{ app.composeView='main'; app.composeErr=''; renderHost(); };
+    return;
+  }
+  // main view
+  el.querySelectorAll('[data-key]').forEach(cb=> cb.onchange = ()=>{ syncComposeName(); toggleComposeItem(cb.dataset.folder, cb.dataset.key); });
+  el.querySelectorAll('[data-round]').forEach(cb=> cb.onchange = ()=>{ syncComposeName(); toggleComposeRound(cb.dataset.round); });
+  el.querySelectorAll('[data-rmcustom]').forEach(b=> b.onclick=()=>{ syncComposeName(); removeCustom(+b.dataset.rmcustom); });
+  el.querySelectorAll('[data-loadsaved]').forEach(b=> b.onclick=()=> useSavedQuiz(b.dataset.loadsaved));
+  el.querySelectorAll('[data-delsaved]').forEach(b=> b.onclick=()=>{ deleteSavedQuiz(b.dataset.delsaved); renderHost(); });
+  const goto=v=>()=>{ syncComposeName(); app.composeView=v; app.composeErr=''; app.composeMsg=''; renderHost(); };
+  const m=$('#b-add-mc'); if(m)m.onclick=goto('mc');
+  const o=$('#b-add-open'); if(o)o.onclick=goto('open');
+  const f=$('#b-add-film'); if(f)f.onclick=goto('film');
+  const apply=$('#b-compose-apply'); if(apply)apply.onclick=()=>{ syncComposeName(); applyComposed(); };
+  const save=$('#b-compose-save'); if(save)save.onclick=saveComposed;
+  const exp=$('#b-compose-export'); if(exp)exp.onclick=exportComposed;
+  const cl=$('#b-compose-close'); if(cl)cl.onclick=closeCompose;
+}
 function hostLobby(){
   const count = app.players.length;
   el.innerHTML = `
@@ -1325,14 +1809,13 @@ function hostLobby(){
         }
         return `<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(li.file)}</b> — ${li.count} vragen · ${okN}/${li.mediaTotal} media gekoppeld${miss.length?` · ${extra}`:''}</p>`;
       })():''}
-      <p class="muted" style="margin:0;font-size:12px">Laad in één keer je map met daarin <code>questions.json</code> (in de root) plus alle audio en afbeeldingen.</p>
-      <button class="btn ghost" id="b-loadfolder">Map laden (JSON + media)</button>
-      <input type="file" id="ffolder" webkitdirectory directory multiple style="display:none">
-      <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">Alleen een JSON-bestand laden</button>
+      <p class="muted" style="margin:0;font-size:12px">Stel een quiz samen uit bestaande vragen (en eigen vragen), of laad een JSON-bestand met links.</p>
+      <button class="btn" id="b-compose">📚 Stel quiz samen / opgeslagen quiz</button>
+      <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">JSON-bestand laden</button>
       <input type="file" id="qfile" accept=".json,application/json" style="display:none">
       ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}
-      ${app.mediaWarn?`<p class="err" style="margin:0;font-size:12px">${esc(app.mediaWarn)}</p>`:''}
     </div>
+    ${app.composeOpen?composePanelHTML():''}
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
     <div class="card stack" style="gap:8px">
@@ -1344,10 +1827,10 @@ function hostLobby(){
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
     </div>`;
-  $('#b-loadfolder').onclick = ()=> $('#ffolder').click();
-  $('#ffolder').onchange = e=>{ if(e.target.files&&e.target.files.length) loadFolder(e.target.files); };
+  $('#b-compose').onclick = openCompose;
   $('#b-loadq').onclick = ()=> $('#qfile').click();
   $('#qfile').onchange = handleQuizFile;
+  if(app.composeOpen) wireCompose();
   const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
     const inp=$('#ctrl-link'); if(!inp) return;
     const txt=inp.value;
@@ -1447,7 +1930,7 @@ function hostQuestion(){
                   <button class="btn big" id="b-reveal">Toon het antwoord</button>`;
     }
   } else {
-    spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${imgHTML(resolveMedia(r.image))}<div class="qtext">${esc(r.question)}</div></div>`;
+    spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${qMediaHTML(r, true)}<div class="qtext">${esc(r.question)}</div></div>`;
     controls = `<button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   }
   el.innerHTML = `
@@ -1495,7 +1978,7 @@ function hostRevealView(){
   const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
   el.innerHTML = `
     ${hostHead('<span class="pill ok">Antwoord</span>')}
-    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div></div>
+    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div>${r.answerImage?imgHTML(resolveMedia(r.answerImage)):''}</div>
     ${grouping}
     <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
       <p class="muted" style="margin:0;font-size:12px">Tik op goed/fout om handmatig te overrulen.</p>
@@ -1754,7 +2237,7 @@ function playerQuestion(){
       pill = `${r.points} punten`;
     }
   } else {
-    spot = `<div class="spotlight">${imgHTML(r.image)}<div class="qtext">${esc(r.question)}</div></div>`;
+    spot = `<div class="spotlight">${imgHTML(r.image)}${videoHTML(r.video)}<div class="qtext">${esc(r.question)}</div></div>`;
     pill = `${r.points} punten`;
   }
   const wrongs = (app.wrongGuesses&&app.wrongGuesses[g.round])||[];
@@ -1825,7 +2308,7 @@ function playerReveal(){
     body = `<div class="answers">${(c.options||[]).map((o,i)=>{ let cls='dim'; if(i===c.answer)cls='correct'; else if(i===myAns)cls='wrong';
       return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('')}</div>`;
   } else {
-    body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>${allGuessesHTML()}`;
+    body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${c.answerImage?imgHTML(c.answerImage):''}${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>${allGuessesHTML()}`;
   }
   const banner = res ? (correct ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>` : `<h1 style="color:var(--rood)">Helaas, fout</h1>`)
     : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
