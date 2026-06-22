@@ -97,6 +97,15 @@
   .mini{font-size:13px;padding:6px 10px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink)}
   .mini.danger{background:var(--rood);color:#fff;border-color:transparent}
   .mini[disabled]{opacity:.3;cursor:not-allowed}
+  .hmenu{position:fixed;top:16px;right:16px;z-index:40}
+  .hmenu>summary{list-style:none;cursor:pointer;width:46px;height:46px;border-radius:13px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+  .hmenu>summary::-webkit-details-marker{display:none}
+  .hmenu>summary svg{display:block;stroke:var(--ink)}
+  .hmenu[open]>summary{background:var(--surface-2)}
+  .hmenu .hmenu-list{position:absolute;right:0;margin-top:8px;min-width:210px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 16px 44px rgba(0,0,0,.2);overflow:hidden;display:flex;flex-direction:column;animation:fade .15s ease both}
+  .hmenu .hmenu-list a{padding:14px 16px;color:var(--ink);text-decoration:none;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px}
+  .hmenu .hmenu-list a:hover{background:var(--surface-2)}
+  .hmenu .hmenu-list a+a{border-top:1px solid var(--line)}
   /* host vult antwoord in */
   .picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 4px 4px}
   @media (max-width:520px){.picker{grid-template-columns:1fr}}

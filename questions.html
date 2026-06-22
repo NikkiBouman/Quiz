@@ -20,14 +20,43 @@
 
 <script type="module">
 import * as core from './lib/quiz-core.js';
-const { esc, qLabel, qTypeLabel, loadBank, addToBank, deleteBankItem, tmdbSearch, movieCast, defaultBetMults } = core;
+const { esc, qLabel, qTypeLabel, answerText, ICON_TRASH, loadBank, addToBank, saveBank, deleteBankItem, tmdbSearch, movieCast, defaultBetMults } = core;
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
-const S = { view:'list', err:'', msg:'', scroll:0, mcDraft:null, openDraft:null, filmQuery:'', filmResults:[], filmBusy:false, filmPick:null };
+const S = { view:'list', err:'', msg:'', scroll:0, editIndex:null, mcDraft:null, openDraft:null, filmQuery:'', filmResults:[], filmBusy:false, filmPick:null };
+/* lijst-regel: antwoord eerst, dan type + vraagtekst */
+function rowText(q){
+  const ans=answerText(q), title=ans||qLabel(q), extra=(ans&&q.question)?' · '+q.question:'';
+  return `${esc(title)} <span class="muted" style="font-size:11px">· ${esc(qTypeLabel(q))}${esc(extra)}</span>`;
+}
 
 function applyMediaToQ(q,url,type){ url=(url||'').trim(); if(!url)return; if(type==='video')q.video=url; else if(type==='audio')q.audio=url; else q.image=url; }
-function bankAdd(bucket,label,q){ addToBank({ bucket, label, q: JSON.parse(JSON.stringify(q)) }); S.view='list'; S.msg='Vraag opgeslagen in je bank.'; render(); }
+/* opslaan: nieuw toevoegen, of (bij wijzigen) de bestaande vraag vervangen */
+function bankAdd(bucket,label,q){
+  const item={ bucket, label, q: JSON.parse(JSON.stringify(q)) };
+  if(S.editIndex!=null){ const b=loadBank(); if(b[S.editIndex]){ b[S.editIndex]=item; saveBank(b); } S.editIndex=null; S.msg='Vraag bijgewerkt.'; }
+  else { addToBank(item); S.msg='Vraag opgeslagen in je bank.'; }
+  S.view='list'; render();
+}
+/* een bestaande bankvraag in het juiste formulier laden om te wijzigen */
+function editItem(i){
+  const it=loadBank()[i]; if(!it) return; const q=it.q;
+  S.editIndex=i; S.err=''; S.msg='';
+  const mt = q.video?'video':q.audio?'audio':'image', media=(q.image||q.video||q.audio||'');
+  if(it.bucket==='films'){
+    S.filmPick={ tmdbId:q.answer, label:q.answerLabel||'', cast:(q.stages||[]).map(s=>({img:s.image, name:'', checked:true})) };
+    S.view='film';
+  } else if(q.options===':text'){
+    S.openDraft={ question:q.question||'', media, mediaType:mt, answer:q.answer||'', accept:(q.accept||[]).join(', ') };
+    S.view='open';
+  } else {
+    const ai=q.answer!=null?q.answer:0;
+    S.mcDraft={ question:q.question||'', media, mediaType:mt, correct:(q.options||[])[ai]||'', distractors:(q.options||[]).filter((_,idx)=>idx!==ai) };
+    S.view='mc';
+  }
+  render();
+}
 
 /* meerkeuze */
 function readMc(){ const d=S.mcDraft||(S.mcDraft={}); const g=id=>{const e=$('#'+id);return e?e.value:undefined;}; if($('#mc-q')!=null){ d.question=g('mc-q'); d.media=g('mc-media'); d.mediaType=g('mc-mtype'); d.correct=g('mc-correct'); d.distractors=[0,1,2,3,4].map(i=>g('mc-d'+i)).map(x=>x==null?'':x);} return d; }
@@ -53,7 +82,7 @@ function addOpen(){
 }
 /* film */
 async function filmSearch(){ const e=$('#film-q'); const q=e?e.value.trim():''; S.filmQuery=q; if(!q){ S.filmResults=[]; render(); return; } S.filmBusy=true; render(); try{ S.filmResults=await tmdbSearch(q); }catch(err){ S.filmResults=[]; S.err='Zoeken mislukt: '+err.message; } S.filmBusy=false; render(); }
-async function filmPick(id,label){ S.filmBusy=true; S.filmResults=[]; S.filmQuery=''; render(); const cast=await movieCast(id,5); S.filmPick={ tmdbId:id, label, cast: cast.map(c=>({...c, checked:true})) }; S.filmBusy=false; render(); }
+async function filmPick(id,label){ S.filmBusy=true; S.filmResults=[]; S.filmQuery=''; render(); const cast=await movieCast(id,5); S.filmPick={ tmdbId:id, label, cast: cast.slice().reverse().map(c=>({...c, checked:true})) }; S.filmBusy=false; render(); }   // minst bekende bovenaan (eerst getoond)
 function filmToggle(i){ const p=S.filmPick; if(!p)return; p.cast[i].checked=!p.cast[i].checked; render(); }
 function filmMove(i,dir){ const p=S.filmPick; if(!p)return; const j=i+dir; if(j<0||j>=p.cast.length)return; [p.cast[i],p.cast[j]]=[p.cast[j],p.cast[i]]; render(); }
 function addFilm(){
@@ -70,16 +99,17 @@ function mediaRowHTML(pfx,d){ d=d||{}; return `<input id="${pfx}-media" class="s
   <select id="${pfx}-mtype" class="sinput">${['image','video','audio'].map(t=>`<option value="${t}" ${d.mediaType===t?'selected':''}>${t==='image'?'afbeelding':t==='video'?'video':'audio'}</option>`).join('')}</select>`; }
 function listHTML(){
   const bank=loadBank();
-  const rows = bank.length ? bank.map((it,i)=>`<div class="row" style="gap:8px;align-items:center;background:var(--surface-2);border-radius:10px;padding:9px 11px">
-      <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.label||qLabel(it.q))} <span class="muted" style="font-size:11px">· ${it.bucket==='films'?'film':qTypeLabel(it.q)}</span></span>
-      <button class="mini danger" data-del="${i}">🗑</button></div>`).join('')
+  const rows = bank.length ? bank.map((it,i)=>`<div class="row" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:9px 11px">
+      <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rowText(it.q)}</span>
+      <button class="mini" data-edit="${i}">Wijzig</button>
+      <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')
     : `<p class="muted" style="margin:0">Nog geen losse vragen. Maak er een — je kunt ze daarna in elke quiz hergebruiken.</p>`;
   return `<div class="center stack" style="gap:2px;margin-bottom:6px"><h1 style="font-size:clamp(28px,7vw,44px)">Mijn vragen</h1><p class="muted" style="margin:0">Je persoonlijke vragenbank op dit apparaat.</p></div>
     <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn grow" id="b-mc">+ Meerkeuze</button><button class="btn grow" id="b-open">+ Open vraag</button><button class="btn grow" id="b-film">+ Film (acteurs)</button></div>
     <div class="stack" id="ed-scroll" style="gap:6px">${rows}</div>
     <p class="muted center" style="font-size:12px">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="quizzes.html">je quizzen</a>.</p>`;
 }
-function mcFormHTML(){ const d=S.mcDraft||{}; return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Meerkeuzevraag</h1></div>
+function mcFormHTML(){ const d=S.mcDraft||{}; return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Meerkeuze wijzigen':'Meerkeuzevraag'}</h1></div>
   <div class="stack" id="ed-scroll" style="gap:8px">
     <input id="mc-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
     ${mediaRowHTML('mc',d)}
@@ -88,22 +118,22 @@ function mcFormHTML(){ const d=S.mcDraft||{}; return `<div class="statusbar"><h1
     ${[0,1,2,3,4].map(i=>`<input id="mc-d${i}" class="sinput" placeholder="Foute optie ${i+1}" value="${esc((d.distractors&&d.distractors[i])||'')}">`).join('')}
     <p class="muted" style="font-size:12px;margin:0">De volgorde wordt willekeurig in de quiz.</p>
   </div>
-  <div class="row"><button class="btn grow" id="b-mc-add">Opslaan</button><button class="btn ghost" id="b-back">Terug</button></div>`; }
-function openFormHTML(){ const d=S.openDraft||{}; return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Open vraag</h1></div>
+  <div class="row"><button class="btn grow" id="b-mc-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-back">Terug</button></div>`; }
+function openFormHTML(){ const d=S.openDraft||{}; return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Open vraag wijzigen':'Open vraag'}</h1></div>
   <div class="stack" id="ed-scroll" style="gap:8px">
     <input id="op-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
     ${mediaRowHTML('op',d)}
     <label class="lbl">Juiste antwoord</label><input id="op-ans" class="sinput" placeholder="Het juiste antwoord" value="${esc(d.answer||'')}">
     <label class="lbl">Ook goed (komma-gescheiden, optioneel)</label><input id="op-accept" class="sinput" placeholder="bv. variant 1, variant 2" value="${esc(d.accept||'')}">
   </div>
-  <div class="row"><button class="btn grow" id="b-op-add">Opslaan</button><button class="btn ghost" id="b-back">Terug</button></div>`; }
+  <div class="row"><button class="btn grow" id="b-op-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-back">Terug</button></div>`; }
 function filmFormHTML(){
   if(S.filmPick){ const p=S.filmPick;
-    const cast=p.cast.map((c,i)=>`<div class="row" style="gap:8px;align-items:center;padding:3px 0"><input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}><img src="${esc(c.img)}" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><span style="flex:1;font-size:14px">${esc(c.name)}</span><button class="mini" data-amove="${i}|-1">▲</button><button class="mini" data-amove="${i}|1">▼</button></div>`).join('');
-    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Film: ${esc(p.label)}</h1></div>
-      <p class="muted" style="font-size:13px;margin:0">Vink acteurs aan en zet ze in onthul-volgorde.</p>
+    const cast=p.cast.map((c,i)=>`<div class="row" style="gap:8px;align-items:center;padding:3px 0"><span class="cnum" style="flex:none">${i+1}</span><input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}><img src="${esc(c.img)}" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><span style="flex:1;font-size:14px">${esc(c.name)}</span><button class="mini" data-amove="${i}|-1" ${i===0?'disabled':''}>▲</button><button class="mini" data-amove="${i}|1" ${i===p.cast.length-1?'disabled':''}>▼</button></div>`).join('');
+    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Film wijzigen':'Film'}: ${esc(p.label)}</h1></div>
+      <p class="muted" style="font-size:13px;margin:0">Volgorde: <b>1 bovenaan = eerst getoond</b> (lastigst), de ster onderaan. Vink aan en sleep met ▲▼.</p>
       <div class="stack" id="ed-scroll" style="gap:2px">${cast || '<p class="muted">Geen acteurfoto’s gevonden (Worker gedeployd?).</p>'}</div>
-      <div class="row"><button class="btn grow" id="b-film-add">Opslaan</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>`;
+      <div class="row"><button class="btn grow" id="b-film-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>`;
   }
   const res=S.filmResults||[];
   return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Film (acteurs raden)</h1></div>
@@ -124,15 +154,18 @@ function wire(){
   const sc=$('#ed-scroll'); if(sc){ sc.style.overflow='auto'; sc.style.maxHeight='56vh'; sc.scrollTop=S.scroll||0; sc.onscroll=()=>{ S.scroll=sc.scrollTop; }; }
   const v=S.view;
   if(v==='list'){
-    const go=v2=>()=>{ S.view=v2; S.err=''; S.msg=''; render(); };
+    // verse vraag maken: drafts + editIndex wissen
+    const go=v2=>()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.editIndex=null; S.view=v2; S.err=''; S.msg=''; render(); };
     const m=$('#b-mc'); if(m)m.onclick=go('mc');
     const o=$('#b-open'); if(o)o.onclick=go('open');
     const f=$('#b-film'); if(f)f.onclick=go('film');
+    el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editItem(+b.dataset.edit));
     el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
     return;
   }
-  if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-back'); if(b)b.onclick=()=>{ readMc(); S.view='list'; S.err=''; render(); }; return; }
-  if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-back'); if(b)b.onclick=()=>{ readOpen(); S.view='list'; S.err=''; render(); }; return; }
+  const cancel=()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.editIndex=null; S.view='list'; S.err=''; render(); };
+  if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
+  if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
   if(v==='film'){
     const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
     const fq=$('#film-q'); if(fq)fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
@@ -141,7 +174,7 @@ function wire(){
     el.querySelectorAll('[data-amove]').forEach(b=>b.onclick=()=>{ const a=b.dataset.amove.split('|'); filmMove(+a[0],+a[1]); });
     const add=$('#b-film-add'); if(add)add.onclick=addFilm;
     const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ S.filmPick=null; S.err=''; render(); };
-    const b=$('#b-back'); if(b)b.onclick=()=>{ S.filmPick=null; S.view='list'; S.err=''; render(); };
+    const b=$('#b-back'); if(b)b.onclick=cancel;
     return;
   }
 }

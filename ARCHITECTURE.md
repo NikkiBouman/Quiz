@@ -663,11 +663,15 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     **+ Vraag toevoegen**. Only **Opslaan / Annuleer** (no "use now" inside editing).
   - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
     or make a new **Meerkeuze / Open / Film** question.
-  - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`) → tick +
+  - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`), shown
+    **reversed and numbered** (1 = top = revealed first = least famous; the lead sits last) → tick +
     ▲▼ reorder → a betting `:tmdb` question with the actors' TMDB photos as stages.
-- **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create
-  reusable Meerkeuze/Open/Film questions and delete them; they show up under "Vraag toevoegen" in
-  `quizzes.html`.
+- **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
+  **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film questions; they
+  show up under "Vraag toevoegen" in `quizzes.html`.
+
+Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
+the generic prompt. The home screen (`index.html`) has a hamburger menu linking to both pages.
 
 Custom MC is stored `{options:[correct,…], answer:0, shuffle:true}`; films land in a round named
 **"Films"**, other customs in **"Eigen vragen"**. A saved/edited quiz is a plain questions.json
