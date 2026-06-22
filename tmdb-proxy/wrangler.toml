@@ -1,0 +1,6 @@
+name = "quiz-tmdb-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# The TMDB token is NOT stored here. It's a secret, set with:
+#   npx wrangler secret put TMDB_TOKEN

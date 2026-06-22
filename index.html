@@ -272,13 +272,14 @@ const readyRef   = (c,p,ri) => ref(db, `games/${c}/players/${p}/ready/${ri}`);
 
 /* ============================================================
    OPEN ZOEKEN — TMDB (films) + Deezer (liedjes)
-   TMDB Read Access Token: read-only, mag in de client.
+   TMDB-zoekopdrachten lopen via een Cloudflare Worker-proxy, zodat de
+   TMDB-token server-side blijft en niet in deze (publieke) pagina staat.
+   Worker-bron: zie tmdb-proxy/ in deze repo.
    ============================================================ */
-const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiZGY5YjE0ZDE0OTJiNmMyNzg2ZjBjYmFiMmRlMjE4YyIsIm5iZiI6MTc4MTQ0MDAyNS44MjksInN1YiI6IjZhMmU5ZTE5ZDQ1M2U2OWM1MzMxYTA0NyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.FE-6g4citeiccBI9HQy5zNLIaYR6U_Rz1V_UZx-68ZY";
+const TMDB_PROXY = "https://quiz-tmdb-proxy.nikkibouman.workers.dev";
 
 async function tmdbSearch(q){
-  const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(q)}&include_adult=false&language=nl-NL&page=1`;
-  const res = await fetch(url, { headers:{ Authorization:'Bearer '+TMDB_TOKEN, accept:'application/json' } });
+  const res = await fetch(`${TMDB_PROXY}/search?query=${encodeURIComponent(q)}`, { headers:{ accept:'application/json' } });
   const data = await res.json();
   return (data.results||[]).slice(0,8).map(m=>({
     id:m.id,

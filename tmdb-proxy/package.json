@@ -1,0 +1,15 @@
+{
+  "name": "quiz-tmdb-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker proxy for TMDB search (keeps the token server-side)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "login": "wrangler login",
+    "secret": "wrangler secret put TMDB_TOKEN"
+  },
+  "devDependencies": {
+    "wrangler": "^4.103.0"
+  }
+}
