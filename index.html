@@ -7,227 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#eaf1fb; --bg2:#ffffff; --surface:#ffffff; --surface-2:#eef4fc;
-    --ink:#142944; --muted:#5d6b82; --line:#d6e3f2; --gold:#2b7fff;
-    --rood:#e5484d; --blauw:#2b7fff; --geel:#e29400; --groen:#16a173;
-    --radius:18px; --shadow:0 16px 34px -20px rgba(31,68,128,.30);
-    --display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-    --body:"Inter", ui-sans-serif, system-ui, sans-serif;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{font-family:var(--body);color:var(--ink);
-    background:radial-gradient(1200px 600px at 50% -10%, rgba(43,127,255,.12), transparent 60%),linear-gradient(180deg, var(--bg) 0%, #dce8f8 100%);
-    background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
-  .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
-  .wrap.wide{max-width:1180px}
-  .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-  .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
-  .brand b{font-family:var(--display);letter-spacing:.5px;font-size:15px;text-transform:uppercase}
-  .brand span{color:var(--muted);font-size:13px;margin-left:auto}
-  h1{font-family:var(--display);font-weight:700;line-height:1.05;margin:.2em 0;letter-spacing:-.5px}
-  .screen{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;animation:fade .35s ease both}
-  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  @media (prefers-reduced-motion:reduce){.screen{animation:none}}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
-  .muted{color:var(--muted)} .center{text-align:center}
-  .stack{display:flex;flex-direction:column;gap:12px}
-  .row{display:flex;gap:12px;flex-wrap:wrap} .grow{flex:1}
-  button{font-family:var(--body);cursor:pointer;border:none;border-radius:14px;font-size:16px;font-weight:600;transition:transform .08s ease, filter .15s ease, background .15s}
-  button:active{transform:translateY(1px) scale(.99)}
-  button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-  .btn{padding:15px 18px;background:var(--gold);color:#fff}
-  .btn:hover{filter:brightness(1.05)}
-  .btn[disabled]{opacity:.4;cursor:not-allowed;filter:none}
-  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
-  .btn.ghost:hover{background:var(--surface-2)}
-  .btn.big{font-size:18px;padding:18px;width:100%}
-  .linkbtn{align-self:center;background:transparent;border:none;color:var(--muted);text-decoration:underline;font-size:14px;padding:8px}
-  .linkbtn:hover{color:var(--ink)}
-  input{font-family:var(--body);font-size:18px;padding:15px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--ink);width:100%}
-  input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
-  input::placeholder{color:#94a3b8}
-  label.lbl{font-size:13px;color:var(--muted);font-weight:600}
-  .code{font-family:var(--display);font-weight:700;letter-spacing:.18em;font-size:clamp(44px,11vw,76px);color:var(--gold);text-shadow:0 0 30px rgba(43,127,255,.35)}
-  .pill{display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px;font-weight:600}
-  .pill.ok{color:var(--groen)} .chips{display:flex;flex-wrap:wrap;gap:8px}
-  .spotlight{position:relative;border-radius:var(--radius);padding:30px 22px;text-align:center;
-    background:radial-gradient(420px 240px at 50% 0%, rgba(43,127,255,.18), transparent 70%), var(--surface);border:1px solid var(--line)}
-  .qmeta{color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
-  .qtext{font-family:var(--display);font-weight:700;font-size:clamp(22px,5vw,34px);line-height:1.15}
-  .answers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media (max-width:520px){.answers{grid-template-columns:1fr}}
-  .ans{display:flex;align-items:center;gap:14px;padding:18px;border-radius:16px;border:2px solid transparent;background:var(--surface-2);color:var(--ink);text-align:left;font-size:17px;font-weight:600;width:100%}
-  .ans .shape{font-size:20px;width:30px;text-align:center;flex:none}
-  .ans[data-c="0"]{box-shadow:inset 4px 0 0 var(--rood)} .ans[data-c="1"]{box-shadow:inset 4px 0 0 var(--blauw)}
-  .ans[data-c="2"]{box-shadow:inset 4px 0 0 var(--geel)} .ans[data-c="3"]{box-shadow:inset 4px 0 0 var(--groen)}
-  .ans[data-c="0"] .shape{color:var(--rood)} .ans[data-c="1"] .shape{color:var(--blauw)}
-  .ans[data-c="2"] .shape{color:var(--geel)} .ans[data-c="3"] .shape{color:var(--groen)}
-  .ans.sel{border-color:var(--gold);background:#dce9fb}
-  .ans.correct{border-color:var(--groen);background:rgba(67,214,160,.16)}
-  .ans.wrong{border-color:var(--rood);background:rgba(255,93,108,.14);opacity:.85}
-  .ans.dim{opacity:.45} .ans[disabled]{cursor:default}
-  .lb{display:flex;flex-direction:column;gap:8px}
-  .lbrow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-2);border-radius:12px}
-  .lbrow .rank{font-family:var(--display);font-weight:700;color:var(--muted);width:26px}
-  .lbrow .nm{flex:1;font-weight:600} .lbrow .sc{font-family:var(--display);font-weight:700}
-  .lbrow .gain{color:var(--groen);font-size:13px;font-weight:600;margin-left:6px}
-  .lbrow.me{outline:2px solid var(--gold)}
-  .podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end;margin:10px 0}
-  .pcol{background:var(--surface-2);border-radius:14px 14px 0 0;padding:14px 8px;text-align:center;border:1px solid var(--line);border-bottom:none}
-  .pcol .nm{font-weight:700;font-size:15px;margin-top:6px;word-break:break-word}
-  .pcol .sc{font-family:var(--display);color:var(--gold);font-weight:700;font-size:20px}
-  .pcol.first{height:150px}.pcol.second{height:120px}.pcol.third{height:100px}
-  .medal{font-size:26px}
-  .statusbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .progress{height:8px;background:var(--surface-2);border-radius:999px;overflow:hidden}
-  .progress>i{display:block;height:100%;background:var(--gold);transition:width .3s ease}
-  .footnote{color:var(--muted);font-size:12px;text-align:center;margin-top:14px}
-  .err{color:var(--rood)}
-  .waiting-dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
-  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
-
-  /* spelerlijst (host) */
-  .plist{display:flex;flex-direction:column;gap:8px}
-  .prow{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:6px 10px 6px 14px}
-  .prow.answered{border-color:rgba(67,214,160,.5);background:rgba(67,214,160,.08)}
-  .prow .nm{font-weight:600}
-  .nm-btn{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;background:transparent;color:var(--ink);padding:8px 6px;border-radius:10px;text-align:left}
-  .nm-btn:hover{background:rgba(20,40,80,.05)}
-  .st{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}
-  .st.ok{color:var(--groen)}
-  .kick{background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:9px 11px;border-radius:10px;flex:none}
-  .kick:hover{background:rgba(255,93,108,.16);color:var(--rood)}
-  .kickconfirm{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-  .mini{font-size:13px;padding:6px 10px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink)}
-  .mini.danger{background:var(--rood);color:#fff;border-color:transparent}
-  /* host vult antwoord in */
-  .picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 4px 4px}
-  @media (max-width:520px){.picker{grid-template-columns:1fr}}
-  .popt{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px;text-align:left}
-  .popt:hover{background:var(--surface-2)}
-  .popt .shape{font-size:17px;width:24px;text-align:center;flex:none}
-  .popt[data-c="0"] .shape{color:var(--rood)} .popt[data-c="1"] .shape{color:var(--blauw)}
-  .popt[data-c="2"] .shape{color:var(--geel)} .popt[data-c="3"] .shape{color:var(--groen)}
-  /* reveal: wie koos wat */
-  .ansline{border-radius:14px;border:2px solid transparent;background:var(--surface-2);padding:12px 14px}
-  .ansline.correct{border-color:var(--groen);background:rgba(67,214,160,.14)}
-  .ansline.dim{opacity:.6}
-  .ans-head{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
-  .ansline[data-c="0"] .shape{color:var(--rood)} .ansline[data-c="1"] .shape{color:var(--blauw)}
-  .ansline[data-c="2"] .shape{color:var(--geel)} .ansline[data-c="3"] .shape{color:var(--groen)}
-  .ans-head .shape{font-size:18px;width:24px;text-align:center;flex:none}
-  .ans-head .otxt{flex:1}
-  .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:var(--groen);padding:3px 8px;border-radius:999px}
-  .whos{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .who{font-size:13px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
-  .who.empty{color:var(--muted);font-weight:500;border-style:dashed}
-  /* afbeeldingen in vragen */
-  .qimg{display:block;max-width:100%;max-height:300px;margin:0 auto 14px;border-radius:12px;border:1px solid var(--line)}
-  .qtext.sm{font-size:clamp(17px,3.5vw,21px)}
-  /* progressive hints */
-  .clues{display:flex;flex-direction:column;gap:12px;text-align:left}
-  .clue{display:flex;gap:12px;align-items:flex-start}
-  .cnum{flex:none;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-top:2px}
-  .cbody{flex:1}
-  .cbody .qimg{margin-bottom:6px;max-height:220px}
-  /* inzet-knoppen */
-  .bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  @media (max-width:520px){.bets{grid-template-columns:1fr}}
-  .betopt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px}
-  .betopt:hover{background:#dce9fb;border-color:var(--gold)}
-  .betopt .mult{font-family:var(--display);font-weight:700;color:var(--gold);font-size:18px}
-  /* open zoeken */
-  .searchwrap{display:flex;flex-direction:column;gap:0}
-  .sinput{margin-bottom:8px}
-  .sresults{display:flex;flex-direction:column;gap:6px}
-  .sresult{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px;text-align:left;width:100%}
-  .sresult:hover{background:#dce9fb} .sresult.sel{border-color:var(--gold);background:#dce9fb}
-  .sresult img{width:34px;height:50px;object-fit:cover;border-radius:5px;flex:none;background:var(--bg2)}
-  .picked{margin-top:10px;padding:10px 12px;border-radius:11px;background:rgba(43,127,255,.12);border:1px solid var(--gold);font-size:14px}
-  /* audio in stages */
-  .qaudio{width:100%;margin:4px 0 8px;height:38px}
-  /* gok bij reveal (host) */
-  .guess{font-size:14px;font-weight:600}
-  .guess.gok-ok{color:var(--groen)} .guess.gok-bad{color:var(--rood)}
-  /* beoordeel-paneel host */
-  .reviewrow{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface-2);border-radius:10px}
-  .reviewrow .rnm{font-weight:600;flex:none;min-width:64px}
-  .reviewrow .rguess{flex:1;font-size:14px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .reviewrow .pts{color:var(--groen);font-weight:700}
-  .judge{flex:none;padding:7px 12px;border-radius:9px;font-size:13px;font-weight:700;border:1px solid var(--line)}
-  .judge.jok{background:rgba(67,214,160,.18);color:var(--groen);border-color:rgba(67,214,160,.5)}
-  .judge.jbad{background:rgba(255,93,108,.16);color:var(--rood);border-color:rgba(255,93,108,.45)}
-  /* stage-lijst met omschrijvingen + indicator */
-  .stagelist{display:flex;flex-direction:column;gap:8px;text-align:left}
-  .stagerow{display:flex;gap:12px;align-items:flex-start;padding:9px 11px;border-radius:12px;border:1px solid transparent}
-  .stagerow.dim{opacity:.45}
-  .stagerow.cur{background:rgba(43,127,255,.10);border-color:rgba(43,127,255,.45)}
-  .stagerow .cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-  .slabel{font-weight:600;font-size:15px}
-  .nowtag{margin-left:8px;font-size:12px;font-weight:700;color:var(--gold)}
-  .slocked{font-size:13px;color:var(--muted);font-style:italic}
-  .hintlist{display:flex;flex-wrap:wrap;gap:6px}
-  .hintlabel{display:flex;align-items:center;gap:7px;background:var(--surface-2);border-radius:9px;padding:5px 10px;font-size:14px;font-weight:600}
-  .metarow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:-2px}
-  .pointsbig{text-align:center;background:linear-gradient(180deg,rgba(43,127,255,.10),rgba(43,127,255,.04));border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:16px;color:var(--ink)}
-  .pointsbig b{font-family:var(--display);font-size:30px;color:var(--blauw);vertical-align:-2px;margin:0 2px}
-  .pointsbig span{color:var(--muted);font-size:14px}
-  /* spelerslijst-tabel */
-  .ptable{display:flex;flex-direction:column;gap:6px}
-  .ptable .phead,.ptable .prow2{display:grid;grid-template-columns:1.4fr 1.3fr 1.2fr auto;gap:8px;align-items:center}
-  .ptable.noinzet .phead,.ptable.noinzet .prow2{grid-template-columns:1.4fr 1.3fr auto}
-  .ptable .phead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;padding:0 12px}
-  .ptable .prow2{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
-  .ptable .prow2 .pnm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
-  .ptable .pscore{font-family:var(--display);font-weight:700;text-align:right}
-  .stbadge{font-size:12.5px;font-weight:700;white-space:nowrap}
-  .stbadge.wait{color:var(--muted)} .stbadge.done{color:var(--blauw)}
-  .stbadge.good{color:var(--groen)} .stbadge.bad{color:var(--rood)} .stbadge.pass{color:var(--muted)}
-  .betcell{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
-  .betcell.over{color:var(--rood)}
-  .wronglist{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 2px}
-  .wronglist .wl-h{font-size:13px;font-weight:700;color:var(--rood)}
-  .wronglist .wl-chip{font-size:13px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;text-decoration:line-through}
-  /* bovenbalk */
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .tb-round{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow)}
-  .tb-round small{font-weight:600;color:var(--muted);font-family:var(--body)}
-  .tb-conn{font-size:13px;color:var(--muted);font-weight:600}
-  .introtext{font-size:17px;line-height:1.5;max-width:46ch;margin:0 auto;color:var(--ink)}
-  .qnote{font-size:14px;color:var(--muted);text-align:center;margin:6px 0 0;max-width:50ch;margin-left:auto;margin-right:auto}
-  .roundtag{font-family:var(--display);font-weight:700;font-size:14px;color:var(--blauw)}
-  .betminirow{display:flex;gap:5px;flex:none}
-  .betmini{width:34px;height:34px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-weight:700;font-size:14px}
-  .betmini.sel{background:var(--blauw);color:#fff;border-color:var(--blauw)}
-  .reviewrow.me{background:var(--surface-2);border-radius:10px;padding-left:8px;padding-right:8px}
-  .tb-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .tb-skip{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer}
-  .tb-skip:hover{color:var(--rood);border-color:var(--rood)}
-  .tb-skipconfirm{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
-  /* host: twee koloms met statuszijbalk */
-  .hostgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:start}
-  .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
-  .hostaside{display:flex;flex-direction:column;gap:12px;min-width:0}
-  @media(min-width:900px){
-    .hostgrid{grid-template-columns:minmax(0,1fr) 320px}
-    .hostaside{position:sticky;top:16px}
-  }
-  .psc{margin-left:auto;font-family:var(--display);font-weight:700;color:var(--gold);font-size:15px;padding:0 4px}
-  .st.good{color:var(--groen)} .st.wait{color:var(--muted)} .st.bad{color:var(--rood)}
-  .pwin{font-family:var(--display);font-weight:700;color:var(--groen);font-size:14px;white-space:nowrap}
-  .pbust{font-family:var(--display);font-weight:700;color:var(--rood);font-size:14px}
-  .betval{margin-left:auto;font-size:13px;font-weight:600;color:var(--gold)}
-  /* pas-knop + popup */
-  .pasbtn{margin-top:10px}
-  .modal{position:fixed;inset:0;background:rgba(10,6,24,.72);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50}
-  .modalcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-  .funbanner{border-color:rgba(43,127,255,.5)!important;background:rgba(43,127,255,.10)}
-  .checkrow{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--muted);cursor:pointer}
-  .checkrow input{margin-top:2px;flex:none}
-</style>
+<link rel="stylesheet" href="lib/style.css">
 </head>
 <body>
 <div class="wrap">
@@ -244,6 +24,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getDatabase, ref, get, set, remove, onValue }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+/* gedeelde kern: hier alleen de overdracht van een op quizzes.html gekozen quiz */
+import { takeActiveQuiz } from "./lib/quiz-core.js";
 
 /* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
    Firebase console → tandwiel (Project settings) → tab "General"
@@ -481,10 +263,6 @@ const app = {
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
   openPicker:null, confirmKick:null, confirmSkip:false,
-  composeOpen:false, composeBusy:false, composeCatalog:null, composeSel:{}, composeErr:'',
-  composeView:'main', composeName:'', composeEigenName:'Eigen vragen', composeCustom:[], composeMsg:'',
-  mcDraft:null, openDraft:null,
-  filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -498,28 +276,11 @@ const remember = c => { try{ localStorage.setItem('quizHost', c); }catch(e){} };
 const forget   = () => { try{ localStorage.removeItem('quizHost'); }catch(e){} };
 const recall   = () => { try{ return localStorage.getItem('quizHost'); }catch(e){ return null; } };
 
-/* opgeslagen, zelfgemaakte quizzen in dit apparaat (localStorage). Vorm: { naam: quizObject }.
-   quizObject is het gewone questions.json-formaat ({rounds:[...]} of platte lijst). */
-const SAVED_KEY = 'quiz:saved:v1';
-function loadSavedQuizzes(){ try{ return JSON.parse(localStorage.getItem(SAVED_KEY)||'{}'); }catch(e){ return {}; } }
-function saveQuizToDevice(name, quiz){
-  const all = loadSavedQuizzes(); all[name] = quiz;
-  try{ localStorage.setItem(SAVED_KEY, JSON.stringify(all)); return true; }catch(e){ return false; }
-}
-function deleteSavedQuiz(name){
-  const all = loadSavedQuizzes(); delete all[name];
-  try{ localStorage.setItem(SAVED_KEY, JSON.stringify(all)); }catch(e){}
-}
-/* quiz als .json downloaden (export naar ander apparaat) */
-function exportQuizJSON(name, quiz){
-  try{
-    const blob = new Blob([JSON.stringify(quiz, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = (name||'quiz').replace(/[^a-z0-9._-]+/gi,'_') + '.json';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 1000);
-  }catch(e){ alert('Exporteren mislukt: '+e.message); }
+/* tekst naar klembord (met fallback), zonder de tekst zichtbaar te tonen */
+function copyText(txt, cb){
+  const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); if(cb)cb(); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(()=>{ if(cb)cb(); }).catch(fallback); }
+  else fallback();
 }
 
 /* ============================================================
@@ -643,8 +404,12 @@ function hostCreate(){
   app.scores={}; app.names={}; app.players=[]; app.results=null;
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
   app.judgeToken = genToken(); app.loadInfo=null;
-  const f = flattenQuiz(SAMPLE);
-  app.quiz = normalizeQuiz(f.questions); app.rounds = f.rounds; app.quizName = 'Voorbeeldset';
+  // op quizzes.html gekozen quiz oppakken, anders de voorbeeldset
+  const active = takeActiveQuiz();
+  const src = (active && active.quiz) ? active.quiz : SAMPLE;
+  const f = flattenQuiz(src);
+  app.quiz = applyShuffles(normalizeQuiz(f.questions)); app.rounds = f.rounds;
+  app.quizName = (active && active.name) ? active.name : 'Voorbeeldset';
   remember(app.code);
   set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
   set(roundsRef(app.code), app.rounds);
@@ -687,275 +452,6 @@ function handleQuizFile(ev){
   reader.readAsText(file);
 }
 
-/* ============================================================
-   QUIZ SAMENSTELLEN UIT DE BIBLIOTHEEK
-   De host kan een quiz bouwen door bestaande vragen aan te vinken,
-   zonder zelf JSON te schrijven. Bron: library.json + per ronde een
-   round.json (zie die bestanden voor het schema). Hieruit bouwen we
-   een gewoon {rounds:[...]}-object en draaien het door setQuiz().
-   ============================================================ */
-const personImgCache = {};   // acteurnaam/-id -> profielfoto-URL (of null), zodat we niet dubbel zoeken
-
-/* standaard inzet-vermenigvuldigers bij n hints: eerder = riskanter = meer */
-function defaultBetMults(n){
-  const t = {1:[1], 2:[2,1], 3:[3,2,1], 4:[3,2,1.5,1], 5:[3,2,1.5,1.25,1], 6:[3,2.5,2,1.5,1.25,1]};
-  if(t[n]) return t[n];
-  return Array.from({length:n}, (_,i)=> n<=1 ? 1 : Math.round((3 - 2*i/(n-1))*100)/100);
-}
-/* leesbaar label van één bibliotheek-item (voor de aanvinklijst) */
-function itemLabel(rd, it){
-  if(rd.mode===':deezer') return it.label || '';
-  if(rd.mode===':tmdb')   return it.label || '';
-  if(rd.mode===':text')   return it.answer || '';
-  if(rd.mode==='listsearch') return it.breed || '';
-  return '';
-}
-/* library.json + alle round.json ophalen → genormaliseerde catalogus */
-async function loadCatalog(){
-  const lib = await (await fetch('library.json', {cache:'no-cache'})).json();
-  const folders = Array.isArray(lib.rounds) ? lib.rounds : [];
-  const cat = [];
-  for(const folder of folders){
-    try{
-      const rd = await (await fetch(`${folder}/round.json`, {cache:'no-cache'})).json();
-      if(!rd || !rd.items) continue;
-      cat.push({
-        folder,
-        name: rd.name || folder,
-        intro: rd.intro || '',
-        mode: rd.mode || '',
-        betting: !!rd.betting,
-        heading: rd.heading || rd.name || '',
-        breeds: Array.isArray(rd.breeds) ? rd.breeds : null,
-        items: rd.items,
-      });
-    }catch(e){ /* ontbrekende/foute ronde overslaan */ }
-  }
-  return cat;
-}
-/* acteurnaam → profielfoto-URL via de TMDB-proxy (person-search). a mag een string
-   zijn of {name,id?,img?}. Resultaat wordt gecachet; null als er niets gevonden is. */
-async function actorImage(a){
-  const name = typeof a==='string' ? a : (a.name||'');
-  const id   = (typeof a==='object' && a.id!=null) ? a.id : null;
-  if(typeof a==='object' && a.img) return a.img;            // vastgepinde URL
-  const cacheKey = id!=null ? ('id:'+id) : ('nm:'+name);
-  if(personImgCache[cacheKey]!==undefined) return personImgCache[cacheKey];
-  let url = null;
-  try{
-    const res = await fetch(`${TMDB_PROXY}/search?type=person&query=${encodeURIComponent(name)}`, {headers:{accept:'application/json'}});
-    const data = await res.json();
-    const list = data.results || [];
-    const person = (id!=null ? list.find(p=>p.id===id) : null) || list[0];
-    if(person && person.profile_path) url = `https://image.tmdb.org/t/p/w500${person.profile_path}`;
-  }catch(e){}
-  personImgCache[cacheKey] = url;
-  return url;
-}
-/* één bibliotheek-item → één vraag-object (zelfde schema als questions.json) */
-async function buildQuestion(rd, key, it){
-  if(rd.mode===':deezer'){
-    const tracks = it.tracks || [];
-    const mults = defaultBetMults(tracks.length);
-    return { question: rd.heading, options: ':deezer', answer: it.deezerId, answerLabel: it.label,
-      stages: tracks.map((t,i)=>({ audio:`${rd.folder}/${key}/${t}`, betMultiplier: mults[i] })) };
-  }
-  if(rd.mode===':text'){
-    const parts = it.parts || [];
-    const mults = defaultBetMults(parts.length);
-    const q = { question: rd.heading, options: ':text', answer: it.answer, accept: it.accept || [],
-      stages: parts.map((p,i)=>({ image:`${rd.folder}/${key}/${p}`, betMultiplier: mults[i] })) };
-    if(it.full) q.answerImage = `${rd.folder}/${key}/${it.full}`;
-    return q;
-  }
-  if(rd.mode===':tmdb'){
-    const actors = it.actors || [];
-    const mults = defaultBetMults(actors.length);
-    const stages = [];
-    for(let i=0;i<actors.length;i++){
-      const img = await actorImage(actors[i]);
-      const name = typeof actors[i]==='string' ? actors[i] : (actors[i].name||'');
-      stages.push(img ? { image: img, betMultiplier: mults[i] } : { text: name, betMultiplier: mults[i] });
-    }
-    return { question: rd.heading, options: ':tmdb', answer: it.tmdbId, answerLabel: it.label, stages };
-  }
-  if(rd.mode==='listsearch'){
-    const breeds = rd.breeds || [];
-    return { question: rd.heading, options: breeds, search: true, image:`${rd.folder}/${key}`,
-      answer: breeds.indexOf(it.breed) };
-  }
-  return { question: rd.heading || 'Vraag', options: [], answer: 0 };
-}
-/* hele selectie → {rounds:[...]} (alleen rondes met ≥1 aangevinkt item) */
-/* hele selectie (bibliotheek + eigen vragen) → {name, rounds:[...]} in questions.json-vorm */
-async function buildComposedQuiz(){
-  const cat = app.composeCatalog || [];
-  const sel = app.composeSel || {};
-  const rounds = [];
-  for(const rd of cat){
-    const picked = Object.keys(rd.items).filter(k=> sel[rd.folder] && sel[rd.folder][k]);
-    if(!picked.length) continue;
-    const questions = [];
-    for(const k of picked) questions.push(await buildQuestion(rd, k, rd.items[k]));
-    rounds.push({ name: rd.name, intro: rd.intro || '', questions });
-  }
-  const films = app.composeCustom.filter(c=>c.bucket==='films').map(c=>c.q);
-  const eigen = app.composeCustom.filter(c=>c.bucket==='eigen').map(c=>c.q);
-  if(films.length) rounds.push({ name:'Films (eigen)', intro:'Raad de film aan de acteurs.', questions: films });
-  if(eigen.length) rounds.push({ name: app.composeEigenName||'Eigen vragen', intro:'', questions: eigen });
-  return { name: app.composeName || 'Eigen samenstelling', rounds };
-}
-function composeSelCount(){
-  const sel = app.composeSel || {};
-  return Object.keys(sel).reduce((n,f)=> n + Object.keys(sel[f]||{}).filter(k=>sel[f][k]).length, 0);
-}
-function composeTotalCount(){ return composeSelCount() + (app.composeCustom?app.composeCustom.length:0); }
-
-/* editor openen: catalogus laden (eenmalig). Lopend werk blijft behouden. */
-async function openCompose(){
-  app.composeErr=''; app.composeMsg=''; app.composeView='main'; app.composeOpen=true; app.composeBusy=true; renderHost();
-  try{
-    if(!app.composeCatalog) app.composeCatalog = await loadCatalog();
-    if(!app.composeCatalog.length) app.composeErr='Geen bibliotheek gevonden (library.json/round.json).';
-    if(!app.composeSel || !Object.keys(app.composeSel).length){
-      const sel = {}; app.composeCatalog.forEach(rd=> sel[rd.folder]={}); app.composeSel = sel;   // standaard niets aangevinkt
-    }
-  }catch(e){ app.composeErr='Bibliotheek laden mislukt: '+e.message; }
-  app.composeBusy=false; renderHost();
-}
-function closeCompose(){ app.composeOpen=false; app.composeView='main'; app.composeErr=''; app.composeMsg=''; renderHost(); }
-function toggleComposeItem(folder, key){
-  if(!app.composeSel[folder]) app.composeSel[folder]={};
-  app.composeSel[folder][key] = !app.composeSel[folder][key];
-  renderHost();
-}
-function toggleComposeRound(folder){
-  const rd = (app.composeCatalog||[]).find(r=>r.folder===folder); if(!rd) return;
-  const keys = Object.keys(rd.items);
-  const sel = app.composeSel[folder] || (app.composeSel[folder]={});
-  const allOn = keys.every(k=> sel[k]);
-  keys.forEach(k=> sel[k] = !allOn);
-  renderHost();
-}
-function removeCustom(idx){ app.composeCustom.splice(idx,1); renderHost(); }
-
-/* --- eigen vraag: meerkeuze --- */
-function readMcDraft(){
-  const d = app.mcDraft || (app.mcDraft={});
-  const g=id=>{ const e=$('#'+id); return e?e.value:undefined; };
-  if($('#mc-q')!=null){
-    d.question=g('mc-q'); d.media=g('mc-media'); d.mediaType=g('mc-mtype');
-    d.correct=g('mc-correct');
-    d.distractors=[0,1,2,3,4].map(i=>g('mc-d'+i)).map(x=>x==null?'':x);
-  }
-  return d;
-}
-function addMcQuestion(){
-  const d = readMcDraft();
-  const correct=(d.correct||'').trim();
-  const dist=(d.distractors||[]).map(x=>(x||'').trim()).filter(Boolean);
-  if(!correct){ app.composeErr='Vul het juiste antwoord in.'; renderHost(); return; }
-  if(!dist.length){ app.composeErr='Vul minstens één foute optie in (of gebruik "Open vraag").'; renderHost(); return; }
-  const q = { question:(d.question||'').trim(), options:[correct, ...dist], answer:0, shuffle:true };
-  applyMediaToQ(q, d.media, d.mediaType);
-  if(!q.question && !q.image && !q.video && !q.audio){ app.composeErr='Geef een vraag of een medialink op.'; renderHost(); return; }
-  app.composeCustom.push({ bucket:'eigen', label:(q.question||correct), q });
-  app.mcDraft=null; app.composeErr=''; app.composeView='main'; renderHost();
-}
-/* --- eigen vraag: open antwoord --- */
-function readOpenDraft(){
-  const d = app.openDraft || (app.openDraft={});
-  const g=id=>{ const e=$('#'+id); return e?e.value:undefined; };
-  if($('#op-q')!=null){ d.question=g('op-q'); d.media=g('op-media'); d.mediaType=g('op-mtype'); d.answer=g('op-ans'); d.accept=g('op-accept'); }
-  return d;
-}
-function addOpenQuestion(){
-  const d = readOpenDraft();
-  const ans=(d.answer||'').trim();
-  if(!ans){ app.composeErr='Vul het juiste antwoord in.'; renderHost(); return; }
-  const accept=(d.accept||'').split(',').map(x=>x.trim()).filter(Boolean);
-  const q = { question:(d.question||'').trim(), options:':text', answer:ans, accept };
-  applyMediaToQ(q, d.media, d.mediaType);
-  if(!q.question && !q.image && !q.video && !q.audio){ app.composeErr='Geef een vraag of een medialink op.'; renderHost(); return; }
-  app.composeCustom.push({ bucket:'eigen', label:(q.question||ans), q });
-  app.openDraft=null; app.composeErr=''; app.composeView='main'; renderHost();
-}
-function applyMediaToQ(q, url, type){
-  url=(url||'').trim(); if(!url) return;
-  if(type==='video') q.video=url; else if(type==='audio') q.audio=url; else q.image=url;
-}
-/* --- eigen vraag: film (acteurs) --- */
-async function filmSearch(){
-  const e=$('#film-q'); const q=e?e.value.trim():''; app.filmQuery=q;
-  if(!q){ app.filmResults=[]; renderHost(); return; }
-  app.filmBusy=true; renderHost();
-  try{ app.filmResults = await tmdbSearch(q); }catch(err){ app.filmResults=[]; app.composeErr='Zoeken mislukt: '+err.message; }
-  app.filmBusy=false; renderHost();
-}
-async function filmPickMovie(id, label){
-  app.filmBusy=true; app.filmResults=[]; app.filmQuery=''; renderHost();
-  let cast=[];
-  try{
-    const res = await fetch(`${TMDB_PROXY}/search?type=credits&id=${encodeURIComponent(id)}`, {headers:{accept:'application/json'}});
-    const data = await res.json();
-    cast = (data.cast||[]).filter(c=>c.profile_path).slice(0,10).map(c=>({
-      id:c.id, name:c.name, img:`https://image.tmdb.org/t/p/w500${c.profile_path}`, checked:true,
-    }));
-  }catch(err){ app.composeErr='Acteurs laden mislukt: '+err.message; }
-  app.filmPick = { tmdbId:id, label, cast };
-  app.filmBusy=false; renderHost();
-}
-function filmToggleActor(i){ const p=app.filmPick; if(!p)return; p.cast[i].checked=!p.cast[i].checked; renderHost(); }
-function filmMoveActor(i, dir){
-  const p=app.filmPick; if(!p)return; const j=i+dir;
-  if(j<0||j>=p.cast.length) return;
-  [p.cast[i],p.cast[j]]=[p.cast[j],p.cast[i]]; renderHost();
-}
-function addFilmQuestion(){
-  const p=app.filmPick; if(!p){ app.composeErr='Kies eerst een film.'; renderHost(); return; }
-  const sel=p.cast.filter(c=>c.checked);
-  if(sel.length<2){ app.composeErr='Kies minstens 2 acteurs.'; renderHost(); return; }
-  const mults = defaultBetMults(sel.length);   // inzetronde, net als de kant-en-klare films
-  const q = { question:'In welke film spelen deze acteurs?', options:':tmdb', answer:Number(p.tmdbId)||p.tmdbId, answerLabel:p.label,
-    points:100, stages: sel.map((c,i)=>({ image:c.img, betMultiplier: mults[i] })) };
-  app.composeCustom.push({ bucket:'films', label:p.label, q });
-  app.filmPick=null; app.composeErr=''; app.composeView='main'; renderHost();
-}
-/* --- opslaan / exporteren / nu gebruiken / laden --- */
-async function composeBuildOrErr(){
-  if(!composeTotalCount()){ app.composeErr='Kies of maak minstens één vraag.'; renderHost(); return null; }
-  app.composeBusy=true; app.composeErr=''; app.composeMsg=''; renderHost();
-  try{ const data = await buildComposedQuiz(); app.composeBusy=false; return data; }
-  catch(e){ app.composeBusy=false; app.composeErr='Samenstellen mislukt: '+e.message; renderHost(); return null; }
-}
-async function applyComposed(){
-  const data = await composeBuildOrErr(); if(!data) return;
-  app.composeOpen=false;
-  setQuiz(data, data.name);     // flatten → normalize → shuffle → push → render
-}
-async function saveComposed(){
-  const nm=($('#compose-name')?$('#compose-name').value:app.composeName||'').trim();
-  if(!nm){ app.composeErr='Geef de quiz eerst een naam (bovenaan).'; renderHost(); return; }
-  app.composeName=nm;
-  const data = await composeBuildOrErr(); if(!data) return;
-  data.name=nm;
-  app.composeMsg = saveQuizToDevice(nm, data) ? `Opgeslagen als "${nm}" op dit apparaat.` : 'Opslaan mislukt (opslag vol?).';
-  renderHost();
-}
-async function exportComposed(){
-  const nm=($('#compose-name')?$('#compose-name').value:app.composeName||'').trim() || 'quiz';
-  app.composeName=nm;
-  const data = await composeBuildOrErr(); if(!data) return;
-  data.name=nm; exportQuizJSON(nm, data);
-  app.composeMsg='JSON geëxporteerd (download).'; renderHost();
-}
-/* een eerder opgeslagen quiz meteen als host gebruiken */
-function useSavedQuiz(name){
-  const all = loadSavedQuizzes(); const quiz = all[name];
-  if(!quiz){ app.quizErr='Opgeslagen quiz niet gevonden.'; renderHost(); return; }
-  app.composeOpen=false;
-  setQuiz(quiz, name);
-}
 /* host hervat een lopend spel: status + vragenset terughalen uit Firebase */
 async function hostResume(code){
   code = code.toUpperCase();
@@ -1452,7 +948,7 @@ function resolveMedia(p){
 function labelFromFile(path){
   let b = path.split('/').pop().replace(/\.[^.]+$/,'');   // bestandsnaam zonder extensie
   b = b.replace(/^\s*\d+\s*[-_.]\s*/,'');                  // leidend nummer + scheidingsteken weg
-  b = b.replace(/[-_]+/g,' ').trim();
+  b = b.replace(/[-_]+/g,' ').replace(/\s*\+\s*/g,' + ').trim();
   if(!b || /^\d+$/.test(b)) return '';
   return b.split(/\s+/).map(w=> w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
 }
@@ -1626,176 +1122,20 @@ function renderHost(){
   if(app.phase==='reveal') return hostRevealView();
   if(app.phase==='final') return hostFinal();
 }
-/* modale aanvinklijst om een quiz samen te stellen uit de bibliotheek */
-function syncComposeName(){ const e=$('#compose-name'); if(e) app.composeName=e.value; }
-function mediaRowHTML(pfx, d){
-  d=d||{};
-  return `<input id="${pfx}-media" class="sinput" placeholder="Medialink (optioneel): https://…" value="${esc(d.media||'')}">
-    <select id="${pfx}-mtype" class="sinput">
-      ${['image','video','audio'].map(t=>`<option value="${t}" ${d.mediaType===t?'selected':''}>${t==='image'?'afbeelding':t==='video'?'video':'audio'}</option>`).join('')}
-    </select>`;
-}
-function composeLibraryHTML(){
-  const cat=app.composeCatalog||[], sel=app.composeSel||{};
-  if(app.composeBusy && !cat.length) return `<p class="muted center" style="margin:0">Bibliotheek laden…</p>`;
-  if(!cat.length) return `<p class="muted" style="margin:0;font-size:12px">Geen bibliotheek gevonden.</p>`;
-  return cat.map(rd=>{
-    const keys=Object.keys(rd.items);
-    const on=keys.filter(k=> sel[rd.folder]&&sel[rd.folder][k]).length;
-    const allOn=keys.length>0 && on===keys.length;
-    const modeLbl=rd.mode===':deezer'?'Deezer':rd.mode===':tmdb'?'TMDB':rd.mode===':text'?'tekst':rd.mode==='listsearch'?'lijst':rd.mode;
-    const rows=keys.map(k=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 2px">
-        <input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(sel[rd.folder]&&sel[rd.folder][k])?'checked':''}>
-        <span>${esc(itemLabel(rd, rd.items[k])||k)}</span></label>`).join('');
-    return `<div class="card stack" style="gap:4px">
-      <div class="statusbar"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" data-round="${esc(rd.folder)}" ${allOn?'checked':''}><b>${esc(rd.name)}</b></label>
-        <span class="muted" style="font-size:12px">${on}/${keys.length}${rd.betting?' · inzet':''} · ${esc(modeLbl)}</span></div>
-      ${rows}</div>`;
-  }).join('');
-}
-function composeMainHTML(){
-  const custom = app.composeCustom.length
-    ? app.composeCustom.map((c,i)=>`<div class="row" style="gap:8px;align-items:center"><span style="flex:1;font-size:14px">${esc(c.label||'(vraag)')} <span class="muted" style="font-size:11px">· ${c.bucket==='films'?'film':'eigen'}</span></span><button class="mini danger" data-rmcustom="${i}">✕</button></div>`).join('')
-    : `<p class="muted" style="font-size:12px;margin:0">Nog geen eigen vragen.</p>`;
-  const saved=loadSavedQuizzes(); const sk=Object.keys(saved);
-  const savedHTML = sk.length ? `<div class="card stack" style="gap:6px"><div class="statusbar"><b>Opgeslagen op dit apparaat</b></div>${sk.map(n=>`<div class="row" style="gap:6px;align-items:center"><span style="flex:1;font-size:14px">${esc(n)}</span><button class="mini" data-loadsaved="${esc(n)}">Laad</button><button class="mini danger" data-delsaved="${esc(n)}">✕</button></div>`).join('')}</div>` : '';
-  return `
-    <input id="compose-name" class="sinput" placeholder="Naam van je quiz" value="${esc(app.composeName||'')}">
-    <div class="stack" style="gap:10px;overflow:auto;max-height:52vh;padding-right:4px">
-      <div class="statusbar"><b>Kant-en-klare rondes</b><span class="muted" style="font-size:12px">vink aan</span></div>
-      ${composeLibraryHTML()}
-      <div class="statusbar" style="margin-top:4px"><b>Eigen vragen</b></div>
-      <div class="card stack" style="gap:8px">${custom}
-        <div class="row" style="gap:6px;flex-wrap:wrap">
-          <button class="btn ghost" id="b-add-mc" style="font-size:13px">+ Meerkeuze</button>
-          <button class="btn ghost" id="b-add-open" style="font-size:13px">+ Open vraag</button>
-          <button class="btn ghost" id="b-add-film" style="font-size:13px">+ Film (acteurs)</button>
-        </div>
-      </div>
-      ${savedHTML}
-    </div>`;
-}
-function mcFormHTML(){
-  const d=app.mcDraft||{};
-  return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
-    <b>Meerkeuzevraag</b>
-    <input id="mc-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
-    ${mediaRowHTML('mc', d)}
-    <label class="muted" style="font-size:12px">Juiste antwoord</label>
-    <input id="mc-correct" class="sinput" placeholder="Het juiste antwoord" value="${esc(d.correct||'')}">
-    <label class="muted" style="font-size:12px">Foute opties (minstens 1)</label>
-    ${[0,1,2,3,4].map(i=>`<input id="mc-d${i}" class="sinput" placeholder="Foute optie ${i+1}" value="${esc((d.distractors&&d.distractors[i])||'')}">`).join('')}
-    <p class="muted" style="font-size:12px;margin:0">De volgorde wordt willekeurig in de quiz.</p>
-    <div class="row"><button class="btn grow" id="b-mc-add">Toevoegen</button><button class="btn ghost" id="b-form-back">Terug</button></div>
-  </div>`;
-}
-function openFormHTML(){
-  const d=app.openDraft||{};
-  return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
-    <b>Open vraag (zelf typen)</b>
-    <input id="op-q" class="sinput" placeholder="De vraag (mag leeg bij alleen een medialink)" value="${esc(d.question||'')}">
-    ${mediaRowHTML('op', d)}
-    <label class="muted" style="font-size:12px">Juiste antwoord</label>
-    <input id="op-ans" class="sinput" placeholder="Het juiste antwoord" value="${esc(d.answer||'')}">
-    <label class="muted" style="font-size:12px">Ook goed (komma-gescheiden, optioneel)</label>
-    <input id="op-accept" class="sinput" placeholder="bv. variant 1, variant 2" value="${esc(d.accept||'')}">
-    <p class="muted" style="font-size:12px;margin:0">Open antwoorden beoordeel je als host handmatig.</p>
-    <div class="row"><button class="btn grow" id="b-op-add">Toevoegen</button><button class="btn ghost" id="b-form-back">Terug</button></div>
-  </div>`;
-}
-function filmFormHTML(){
-  if(app.filmPick){
-    const p=app.filmPick;
-    const cast=p.cast.map((c,i)=>`<div class="row" style="gap:8px;align-items:center;padding:3px 0">
-      <input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}>
-      <img src="${esc(c.img)}" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover">
-      <span style="flex:1;font-size:14px">${esc(c.name)}</span>
-      <button class="mini" data-amove="${i}|-1" title="omhoog">▲</button>
-      <button class="mini" data-amove="${i}|1" title="omlaag">▼</button>
-    </div>`).join('');
-    return `<div class="stack" style="gap:8px;overflow:auto;max-height:64vh;padding-right:4px">
-      <b>Film: ${esc(p.label)}</b>
-      <p class="muted" style="font-size:12px;margin:0">Vink acteurs aan en zet ze in onthul-volgorde (bovenaan = eerst getoond).</p>
-      ${cast || '<p class="muted" style="margin:0">Geen acteurfoto’s gevonden voor deze film.</p>'}
-      <div class="row"><button class="btn grow" id="b-film-add">Toevoegen aan quiz</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>
-    </div>`;
-  }
-  const res=app.filmResults||[];
-  return `<div class="stack" style="gap:8px">
-    <b>Film (acteurs raden)</b>
-    <div class="row" style="gap:6px"><input id="film-q" class="sinput" placeholder="Zoek een film…" value="${esc(app.filmQuery||'')}" style="flex:1"><button class="btn" id="b-film-search">Zoek</button></div>
-    ${app.filmBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
-    ${res.length?`<div class="stack" style="gap:4px;overflow:auto;max-height:48vh">${res.map(m=>`<button class="btn ghost" data-film="${esc(m.id)}|${esc(m.label)}" style="justify-content:flex-start;font-size:14px">${m.thumb?`<img src="${esc(m.thumb)}" style="width:28px;height:40px;object-fit:cover;border-radius:4px;margin-right:8px">`:''}${esc(m.label)}</button>`).join('')}</div>`:''}
-    <div class="row"><button class="btn ghost" id="b-form-back">Terug</button></div>
-  </div>`;
-}
-function composePanelHTML(){
-  const view=app.composeView||'main';
-  const inner = view==='mc'?mcFormHTML() : view==='open'?openFormHTML() : view==='film'?filmFormHTML() : composeMainHTML();
-  const total=composeTotalCount();
-  const footer = view==='main' ? `<div class="row" style="flex-wrap:wrap;gap:8px">
-      <button class="btn grow" id="b-compose-apply" ${total&&!app.composeBusy?'':'disabled'}>Gebruik nu${total?` (${total})`:''}</button>
-      <button class="btn ghost" id="b-compose-save">Opslaan</button>
-      <button class="btn ghost" id="b-compose-export">Exporteer</button>
-      <button class="btn ghost" id="b-compose-close">Sluiten</button>
-    </div>` : '';
-  return `<div class="modal"><div class="modalcard stack" style="gap:10px;max-width:600px;width:94vw;max-height:90vh">
-    <div class="statusbar"><b>Stel je quiz samen</b><span class="muted" style="font-size:13px">${total} ${total===1?'vraag':'vragen'}</span></div>
-    ${inner}
-    ${app.composeErr?`<p class="err" style="margin:0;font-size:13px">${esc(app.composeErr)}</p>`:''}
-    ${app.composeMsg?`<p class="muted" style="margin:0;font-size:13px;color:var(--groen)">${esc(app.composeMsg)}</p>`:''}
-    ${app.composeBusy?`<p class="muted center" style="margin:0">Bezig…</p>`:''}
-    ${footer}
-  </div></div>`;
-}
-function wireCompose(){
-  const view=app.composeView||'main';
-  if(view==='mc'){
-    const a=$('#b-mc-add'); if(a)a.onclick=addMcQuestion;
-    const b=$('#b-form-back'); if(b)b.onclick=()=>{ readMcDraft(); app.composeView='main'; app.composeErr=''; renderHost(); };
-    return;
-  }
-  if(view==='open'){
-    const a=$('#b-op-add'); if(a)a.onclick=addOpenQuestion;
-    const b=$('#b-form-back'); if(b)b.onclick=()=>{ readOpenDraft(); app.composeView='main'; app.composeErr=''; renderHost(); };
-    return;
-  }
-  if(view==='film'){
-    const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
-    const fq=$('#film-q'); if(fq) fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
-    el.querySelectorAll('[data-film]').forEach(b=> b.onclick=()=>{ const v=b.dataset.film; const i=v.indexOf('|'); filmPickMovie(v.slice(0,i), v.slice(i+1)); });
-    el.querySelectorAll('[data-actor]').forEach(cb=> cb.onchange=()=> filmToggleActor(+cb.dataset.actor));
-    el.querySelectorAll('[data-amove]').forEach(b=> b.onclick=()=>{ const a=b.dataset.amove.split('|'); filmMoveActor(+a[0], +a[1]); });
-    const add=$('#b-film-add'); if(add)add.onclick=addFilmQuestion;
-    const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ app.filmPick=null; app.composeErr=''; renderHost(); };
-    const b=$('#b-form-back'); if(b)b.onclick=()=>{ app.composeView='main'; app.composeErr=''; renderHost(); };
-    return;
-  }
-  // main view
-  el.querySelectorAll('[data-key]').forEach(cb=> cb.onchange = ()=>{ syncComposeName(); toggleComposeItem(cb.dataset.folder, cb.dataset.key); });
-  el.querySelectorAll('[data-round]').forEach(cb=> cb.onchange = ()=>{ syncComposeName(); toggleComposeRound(cb.dataset.round); });
-  el.querySelectorAll('[data-rmcustom]').forEach(b=> b.onclick=()=>{ syncComposeName(); removeCustom(+b.dataset.rmcustom); });
-  el.querySelectorAll('[data-loadsaved]').forEach(b=> b.onclick=()=> useSavedQuiz(b.dataset.loadsaved));
-  el.querySelectorAll('[data-delsaved]').forEach(b=> b.onclick=()=>{ deleteSavedQuiz(b.dataset.delsaved); renderHost(); });
-  const goto=v=>()=>{ syncComposeName(); app.composeView=v; app.composeErr=''; app.composeMsg=''; renderHost(); };
-  const m=$('#b-add-mc'); if(m)m.onclick=goto('mc');
-  const o=$('#b-add-open'); if(o)o.onclick=goto('open');
-  const f=$('#b-add-film'); if(f)f.onclick=goto('film');
-  const apply=$('#b-compose-apply'); if(apply)apply.onclick=()=>{ syncComposeName(); applyComposed(); };
-  const save=$('#b-compose-save'); if(save)save.onclick=saveComposed;
-  const exp=$('#b-compose-export'); if(exp)exp.onclick=exportComposed;
-  const cl=$('#b-compose-close'); if(cl)cl.onclick=closeCompose;
-}
 function hostLobby(){
   const count = app.players.length;
   el.innerHTML = `
-    <div class="center stack" style="gap:4px">
-      <div class="qmeta">Open deze site en vul de code in</div>
-      <div class="code">${app.code}</div>
+    <div class="card stack" style="gap:10px">
+      <div class="statusbar">
+        <div><div class="qmeta" style="text-align:left">Spelers vullen deze code in</div><div class="code" style="font-size:clamp(36px,9vw,58px);margin:0">${app.code}</div></div>
+        <div class="stack" style="gap:8px;align-items:flex-end">
+          <span class="pill" style="font-size:15px">👥 ${count} verbonden</span>
+          <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">🔗 Kopieer geheime jurylink</button>
+        </div>
+      </div>
     </div>
     <div class="card stack" style="gap:10px">
-      <div class="statusbar"><b>Vragen &amp; media</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen${app.mediaCount?` · ${app.mediaCount} media`:''} · ${esc(app.quizName||'eigen set')}</span></div>
+      <div class="statusbar"><b>Vragen</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen · ${esc(app.quizName||'eigen set')}</span></div>
       ${app.loadInfo?(()=>{
         const li=app.loadInfo, miss=li.missing||[];
         const okN=li.mediaTotal-miss.length;
@@ -1809,34 +1149,25 @@ function hostLobby(){
         }
         return `<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(li.file)}</b> — ${li.count} vragen · ${okN}/${li.mediaTotal} media gekoppeld${miss.length?` · ${extra}`:''}</p>`;
       })():''}
-      <p class="muted" style="margin:0;font-size:12px">Stel een quiz samen uit bestaande vragen (en eigen vragen), of laad een JSON-bestand met links.</p>
-      <button class="btn" id="b-compose">📚 Stel quiz samen / opgeslagen quiz</button>
+      <p class="muted" style="margin:0;font-size:12px">Maak en beheer je quizzen op een eigen pagina, of laad hier direct een JSON-bestand met links.</p>
+      <a class="btn" href="quizzes.html" style="text-decoration:none;text-align:center">📚 Mijn quizzen</a>
+      <a class="btn ghost" href="questions.html" style="text-decoration:none;text-align:center;font-size:13px">✏️ Mijn losse vragen</a>
       <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">JSON-bestand laden</button>
       <input type="file" id="qfile" accept=".json,application/json" style="display:none">
       ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}
     </div>
-    ${app.composeOpen?composePanelHTML():''}
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
-    <div class="card stack" style="gap:8px">
-      <div class="statusbar"><b>Jurylid-link</b><span class="muted" style="font-size:12px">optioneel</span></div>
-      <p class="muted" style="margin:0;font-size:12px">Stuur deze link naar wie de antwoorden mag goed-/afkeuren. Alleen met deze link kun je jurylid worden — niet met de gewone code.</p>
-      <div class="row"><input id="ctrl-link" class="sinput" readonly value="${esc(ctrlLinkFor(app.code, app.judgeToken||''))}" style="flex:1;font-size:12px" onclick="this.select()"><button class="btn ghost" id="b-copyctrl">Kopieer</button></div>
-    </div>
     <div class="row">
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Stoppen</button>
     </div>`;
-  $('#b-compose').onclick = openCompose;
   $('#b-loadq').onclick = ()=> $('#qfile').click();
   $('#qfile').onchange = handleQuizFile;
-  if(app.composeOpen) wireCompose();
   const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
-    const inp=$('#ctrl-link'); if(!inp) return;
-    const txt=inp.value;
-    const done=()=>{ cc.textContent='Gekopieerd!'; setTimeout(()=>{ cc.textContent='Kopieer'; },1500); };
-    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{ inp.select(); try{document.execCommand('copy');}catch(e){} done(); }); }
-    else { inp.select(); try{document.execCommand('copy');}catch(e){} done(); }
+    const txt=ctrlLinkFor(app.code, app.judgeToken||'');
+    const done=()=>{ cc.textContent='✓ Jurylink gekopieerd!'; setTimeout(()=>{ cc.textContent='🔗 Kopieer geheime jurylink'; },1600); };
+    copyText(txt, done);
   };
   $('#b-start').onclick = hostStart;
   $('#b-end').onclick = hostEnd;
@@ -1911,6 +1242,12 @@ function hostQuestion(){
 
   // ---- SPELEN ----
   const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
+  // "toon antwoord" is pas blauw (uitnodigend) als IEDEREEN (die niet past) het goed heeft; anders gedempt
+  const activeP = app.players.filter(p=> !(p.pass && p.pass[app.round]));
+  const everyoneCorrect = activeP.length>0
+    && activeP.every(p=> p.ans && p.ans[app.round]!=null)
+    && activeP.every(p=> effectiveCorrect(app.round, p.id, isCorrectAns(r, p.ans[app.round])));
+  const revealCls = everyoneCorrect ? 'btn big' : 'btn ghost big';
   const opts = r.optionsMode==='list'
     ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
     : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
@@ -1922,16 +1259,16 @@ function hostQuestion(){
     if(!app.checked){
       const everyonePassed = app.players.length>0 && app.players.every(p=> p.pass && p.pass[app.round]);
       controls = everyonePassed
-        ? `<button class="btn big" id="b-reveal">Toon het antwoord</button>`
+        ? `<button class="${revealCls}" id="b-reveal">Toon het antwoord</button>`
         : `<button class="btn big" id="b-check" ${answeredAny?'':'disabled'}>Controleer antwoorden</button>`;
     } else {
       const moreHints = app.stage < r.stages.length-1;
-      controls = `${moreHints?`<button class="btn ghost" id="b-hint">Volgende hint (${app.stage+2}/${r.stages.length})</button>`:''}
-                  <button class="btn big" id="b-reveal">Toon het antwoord</button>`;
+      controls = `${moreHints?`<button class="btn big" id="b-hint">Volgende hint (${app.stage+2}/${r.stages.length})</button>`:''}
+                  <button class="${revealCls}" id="b-reveal">Toon het antwoord</button>`;
     }
   } else {
     spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${qMediaHTML(r, true)}<div class="qtext">${esc(r.question)}</div></div>`;
-    controls = `<button class="btn big" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
+    controls = `<button class="${revealCls}" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   }
   el.innerHTML = `
     <div class="hostgrid">

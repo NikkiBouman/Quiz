@@ -1,4 +1,4 @@
 {
   "_doc": "Catalogus-index voor de 'Stel quiz samen'-functie. Somt de ronde-mappen op die elk een round.json bevatten. De host-app leest deze lijst, haalt elke round.json op en bouwt daaruit de keuzelijst. Een nieuwe ronde toevoegen = map + round.json maken en hier de mapnaam toevoegen.",
-  "rounds": ["bandle", "actors", "puzzle", "dog-breeds"]
+  "rounds": ["bandle", "puzzle", "dog-breeds"]
 }
