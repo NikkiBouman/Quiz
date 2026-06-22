@@ -230,3 +230,8 @@
   .funbanner{border-color:rgba(43,127,255,.5)!important;background:rgba(43,127,255,.10)}
   .checkrow{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--muted);cursor:pointer}
   .checkrow input{margin-top:2px;flex:none}
+  /* slepen om te herordenen (quizzes.html / questions.html) */
+  .grip{flex:none;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;color:var(--muted);background:transparent;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+  .grip:hover{background:var(--surface);color:var(--ink)}
+  .grip:active{cursor:grabbing}
+  [data-idx].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}

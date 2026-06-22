@@ -20,7 +20,8 @@
 
 <script type="module">
 import * as core from './lib/quiz-core.js';
-const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, loadCatalog, buildQuestion, tmdbSearch, movieCast,
+import { enableDragSort } from './lib/drag.js';
+const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion, tmdbSearch, movieCast,
         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
         flattenQuiz, exportQuizJSON, setActiveQuiz } = core;
 /* lijst-regel: het ANTWOORD eerst (zodat je ziet wélke vraag het is), dan type + vraagtekst */
@@ -96,8 +97,9 @@ async function addSelections(){
   }catch(e){ S.err='Toevoegen mislukt: '+e.message; }
   S.sel={}; S.bankSel={}; S.busy=false; S.view='edit'; S.msg=added?`${added} vraag/vragen toegevoegd.`:''; render();
 }
-function moveRound(i,dir){ const d=S.draft; const j=i+dir; if(!d||j<0||j>=d.rounds.length)return; [d.rounds[i],d.rounds[j]]=[d.rounds[j],d.rounds[i]]; render(); }
-function moveQ(ri,qi,dir){ const r=S.draft&&S.draft.rounds[ri]; if(!r)return; const j=qi+dir; if(j<0||j>=r.questions.length)return; [r.questions[qi],r.questions[j]]=[r.questions[j],r.questions[qi]]; render(); }
+/* slepen: herorden rondes / vragen op basis van de nieuwe data-idx-volgorde */
+function reorderRounds(order){ syncName(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
+function reorderQ(ri,order){ syncName(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
 function delQ(ri,qi){ const d=S.draft, r=d&&d.rounds[ri]; if(!r)return; r.questions.splice(qi,1); if(!r.questions.length) d.rounds.splice(ri,1); render(); }
 
 /* meerkeuze */
@@ -126,7 +128,7 @@ function addOpen(){
 async function filmSearch(){ const e=$('#film-q'); const q=e?e.value.trim():''; S.filmQuery=q; if(!q){ S.filmResults=[]; render(); return; } S.filmBusy=true; render(); try{ S.filmResults=await tmdbSearch(q); }catch(err){ S.filmResults=[]; S.err='Zoeken mislukt: '+err.message; } S.filmBusy=false; render(); }
 async function filmPick(id,label){ S.filmBusy=true; S.filmResults=[]; S.filmQuery=''; render(); const cast=await movieCast(id,5); S.filmPick={ tmdbId:id, label, cast: cast.slice().reverse().map(c=>({...c, checked:true})) }; S.filmBusy=false; render(); }   // omgekeerd: minst bekende bovenaan (eerst getoond), ster onderaan (laatst)
 function filmToggle(i){ const p=S.filmPick; if(!p)return; p.cast[i].checked=!p.cast[i].checked; render(); }
-function filmMove(i,dir){ const p=S.filmPick; if(!p)return; const j=i+dir; if(j<0||j>=p.cast.length)return; [p.cast[i],p.cast[j]]=[p.cast[j],p.cast[i]]; render(); }
+function reorderCast(order){ const p=S.filmPick; if(!p)return; p.cast = order.map(i=>p.cast[i]); render(); }
 function addFilm(){
   const p=S.filmPick; if(!p){ S.err='Kies eerst een film.'; render(); return; }
   const sel=p.cast.filter(c=>c.checked);
@@ -172,14 +174,14 @@ function listHTML(){
 function editHTML(){
   const d=S.draft||{name:'',rounds:[]};
   const rounds = d.rounds.length ? d.rounds.map((rd,ri)=>`
-    <div class="card stack" style="gap:6px;padding:12px">
-      <div class="statusbar"><b style="font-size:15px">${esc(rd.name)} <span class="muted" style="font-weight:400;font-size:12px">· ${rd.questions.length}</span></b>
-        <span style="display:flex;gap:4px"><button class="mini" data-rmove="${ri}|-1" ${ri===0?'disabled':''}>▲</button><button class="mini" data-rmove="${ri}|1" ${ri===d.rounds.length-1?'disabled':''}>▼</button></span></div>
-      ${rd.questions.map((q,qi)=>`<div class="row" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:7px 9px">
+    <div class="card stack" data-idx="${ri}" style="gap:6px;padding:12px">
+      <div class="statusbar"><b style="font-size:15px;display:flex;align-items:center;gap:6px"><span class="grip" title="Sleep om de ronde te verplaatsen">${ICON_GRIP}</span>${esc(rd.name)} <span class="muted" style="font-weight:400;font-size:12px">· ${rd.questions.length}</span></b></div>
+      <div class="stack qlist" data-round="${ri}" style="gap:6px">
+      ${rd.questions.map((q,qi)=>`<div class="row" data-idx="${qi}" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:7px 9px">
+        <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
         <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rowText(q)}</span>
-        <button class="mini" data-qmove="${ri}|${qi}|-1" ${qi===0?'disabled':''}>▲</button>
-        <button class="mini" data-qmove="${ri}|${qi}|1" ${qi===rd.questions.length-1?'disabled':''}>▼</button>
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')}
+      </div>
     </div>`).join('') : `<p class="muted" style="margin:0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
   return `<div class="statusbar"><h1 style="font-size:clamp(22px,5vw,32px)">${S.editingName?'Quiz wijzigen':'Nieuwe quiz'}</h1></div>
     <input id="q-name" class="sinput" placeholder="Naam van je quiz" value="${esc(d.name||'')}" style="font-size:18px">
@@ -222,9 +224,9 @@ function openFormHTML(){ const d=S.openDraft||{}; return `<div class="statusbar"
   <div class="row"><button class="btn grow" id="b-op-add">Toevoegen</button><button class="btn ghost" id="b-formback">Terug</button></div>`; }
 function filmFormHTML(){
   if(S.filmPick){ const p=S.filmPick;
-    const cast=p.cast.map((c,i)=>`<div class="row" style="gap:8px;align-items:center;padding:3px 0"><span class="cnum" style="flex:none">${i+1}</span><input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}><img src="${esc(c.img)}" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><span style="flex:1;font-size:14px">${esc(c.name)}</span><button class="mini" data-amove="${i}|-1" ${i===0?'disabled':''}>▲</button><button class="mini" data-amove="${i}|1" ${i===p.cast.length-1?'disabled':''}>▼</button></div>`).join('');
+    const cast=p.cast.map((c,i)=>`<div class="row" data-idx="${i}" style="gap:8px;align-items:center;padding:3px 0"><span class="grip" title="Sleep om te herordenen">${ICON_GRIP}</span><span class="cnum" style="flex:none">${i+1}</span><input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}><img src="${esc(c.img)}" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><span style="flex:1;font-size:14px">${esc(c.name)}</span></div>`).join('');
     return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Film: ${esc(p.label)}</h1></div>
-      <p class="muted" style="font-size:13px;margin:0">Volgorde van tonen: <b>1 bovenaan = eerst</b> (lastigst, meeste punten), de ster staat onderaan. Vink aan wie meedoet en sleep met ▲▼.</p>
+      <p class="muted" style="font-size:13px;margin:0">Volgorde van tonen: <b>1 bovenaan = eerst</b> (lastigst, meeste punten), de ster staat onderaan. Vink aan wie meedoet en sleep ze in de juiste volgorde.</p>
       <div class="stack" id="ed-scroll" style="gap:2px">${cast || '<p class="muted">Geen acteurfoto’s gevonden (Worker gedeployd?).</p>'}</div>
       <div class="row"><button class="btn grow" id="b-film-add">Toevoegen aan quiz</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>`;
   }
@@ -256,8 +258,8 @@ function wire(){
     return;
   }
   if(v==='edit'){
-    el.querySelectorAll('[data-rmove]').forEach(b=>b.onclick=()=>{ syncName(); const a=b.dataset.rmove.split('|'); moveRound(+a[0],+a[1]); });
-    el.querySelectorAll('[data-qmove]').forEach(b=>b.onclick=()=>{ syncName(); const a=b.dataset.qmove.split('|'); moveQ(+a[0],+a[1],+a[2]); });
+    enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderRounds });
+    el.querySelectorAll('.qlist').forEach(ql=> enableDragSort(ql, { handle:'.grip', onDrop:order=>reorderQ(+ql.dataset.round, order) }));
     el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncName(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
     const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
     const sv=$('#b-save'); if(sv)sv.onclick=saveDraft;
@@ -283,7 +285,7 @@ function wire(){
     const fq=$('#film-q'); if(fq)fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
     el.querySelectorAll('[data-film]').forEach(b=>b.onclick=()=>{ const val=b.dataset.film; const i=val.indexOf('|'); filmPick(val.slice(0,i), val.slice(i+1)); });
     el.querySelectorAll('[data-actor]').forEach(cb=>cb.onchange=()=>filmToggle(+cb.dataset.actor));
-    el.querySelectorAll('[data-amove]').forEach(b=>b.onclick=()=>{ const a=b.dataset.amove.split('|'); filmMove(+a[0],+a[1]); });
+    if(S.filmPick) enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderCast });
     const add=$('#b-film-add'); if(add)add.onclick=addFilm;
     const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ S.filmPick=null; S.err=''; render(); };
     const b=$('#b-formback'); if(b)b.onclick=()=>{ S.filmPick=null; S.view='add'; S.err=''; render(); };
