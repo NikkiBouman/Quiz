@@ -17,16 +17,23 @@ sync with `index.html` when behaviour changes.
 
 ## 1. What it is, at a glance
 
-- **One HTML file** (`index.html`) contains the entire app: host view, player view,
-  controller view, all CSS and all JS (vanilla, ES modules, no build step).
-- **Firebase Realtime Database (RTDB)** is the only backend. All shared game state lives
-  under `games/{CODE}`. Clients subscribe with `onValue` listeners.
-- **GitHub Pages** hosts the static file. Repo: `https://github.com/NikkiBouman/Quiz`,
+- **The game** is one HTML file (`index.html`): host view, player view, controller view, all
+  gameplay JS (vanilla, ES modules, no build step). It imports one thing — `takeActiveQuiz` —
+  from the shared module.
+- **Two manager pages** sit beside it: `quizzes.html` (build/edit/use a quiz) and
+  `questions.html` (a personal question bank). They share `lib/quiz-core.js` (the quiz
+  pipeline + catalog + TMDB + localStorage) and `lib/style.css`. See §22.
+- **Firebase Realtime Database (RTDB)** is the only backend, and only the *game* uses it. All
+  shared game state lives under `games/{CODE}`; clients subscribe with `onValue`. The manager
+  pages are backend-free — quizzes/questions live in **localStorage (per device)**.
+- **GitHub Pages** hosts the static files. Repo: `https://github.com/NikkiBouman/Quiz`,
   served at `https://nikkibouman.github.io/Quiz/`.
-- **Question content** lives in `questions.json`, loaded at runtime by the host (it is *not*
-  hardcoded; a built-in `SAMPLE` set is the fallback).
-- **Media** (images/audio) is loaded by the host from a local folder at runtime, OR served
-  from the repo via relative paths. See §9 — this is the single biggest source of confusion.
+- **Question content**: a host either picks a saved quiz (built on `quizzes.html` from the
+  self-describing media library, §22), loads a JSON file, or falls back to the built-in
+  `SAMPLE`. `questions.json` is a legacy loadable set.
+- **Media** is **link-based** (URLs / repo-relative paths). The committed library media
+  (`bandle/`, `puzzle/`, `dog-breeds/`) resolves repo-served; actor photos come live from TMDB.
+  The old "load a local folder" path is gone. See §9.
 
 ---
 
@@ -34,27 +41,39 @@ sync with `index.html` when behaviour changes.
 
 | Concern        | Choice |
 |----------------|--------|
-| Frontend       | Vanilla JS, ES modules, single `<script type="module">` block |
-| State sync     | Firebase RTDB (`firebase-app` + `firebase-database` v12.14.0 from gstatic CDN) |
+| Frontend       | Vanilla JS, native ES modules (each page has one `<script type="module">`; shared code in `lib/quiz-core.js`) |
+| State sync     | Firebase RTDB (`firebase-app` + `firebase-database` v12.14.0 from gstatic CDN) — game only |
 | Hosting        | GitHub Pages (static) |
-| Movie search   | TMDB REST API (`/3/search/movie`), Bearer read-token, client-side |
+| Movie search / cast | TMDB via the Worker proxy (`/search`, `?type=person`, `?type=credits`); see §16 |
 | Song search    | Deezer API via JSONP (`/search`, `output=jsonp`) |
 | Fonts          | Google Fonts (preconnected) |
 
-No bundler, no transpiler, no npm runtime dependency. Edit `index.html`, push, done.
+No bundler, no transpiler, no npm runtime dependency. Edit a file, push, done. Because the
+pages use native ES module imports, they must be served over http (GitHub Pages, or a local
+`python3 -m http.server`) — opening via `file://` breaks the imports.
 
 ---
 
-## 3. File layout (in `/mnt/user-data/outputs` working copy)
+## 3. File layout
 
 ```
-index.html        # the entire app
-questions.json    # the loadable question set (round-structured; see §7)
+index.html        # the GAME: host/player/controller, Firebase sync, gameplay
+quizzes.html      # the quiz manager (build/edit/reorder/save/export/use a quiz)  — see §22
+questions.html    # the personal question bank (create/manage reusable questions) — see §22
+lib/quiz-core.js  # shared ES module: quiz pipeline + catalog + TMDB + localStorage
+lib/style.css     # shared stylesheet (linked by all three HTML pages)
+library.json      # catalog index of round folders (see §22)
+questions.json    # a legacy loadable question set (round-structured; see §7)
 ARCHITECTURE.md   # this file
 ```
 
-In production these live in the GitHub repo root. Media folders (e.g. `dog-breed/`,
-`actors/`, `bandle/`, `puzzle/`) live alongside `index.html` if you want repo-served media.
+All HTML pages are plain static files (GitHub Pages, no build step). `index.html` imports only
+`takeActiveQuiz` from `lib/quiz-core.js`; the two manager pages import the full core. Media
+folders (`bandle/`, `puzzle/`, `dog-breeds/`) live at the repo root and resolve as repo-served
+URLs. **Note:** the quiz pipeline (`flattenQuiz`/`normalizeQuiz`/`applyShuffles`/…) currently
+exists both inline in `index.html` (the game's own copy) and in `lib/quiz-core.js` (for the
+pages); the two are kept logic-identical. De-duplicating `index.html` to import them is a
+possible future cleanup.
 
 ---
 
@@ -260,14 +279,21 @@ raw JSON ──flattenQuiz──▶ { questions[], rounds[] }
 
 ## 9. Media system (read this carefully)
 
-Media is referenced in the JSON by **relative path** (e.g. `puzzle/Simba/1`,
-`bandle/Coldplay-Fix_You_(2005_725M_par-3)/1`). There are two ways the host can supply it:
+> **Update:** media is now **link-based**. The "load a local folder" UI was removed; media is
+> referenced by URL or repo-relative path and resolves as a plain URL. `loadFolder`/`mediaMap`/
+> the fuzzy `resolveMediaKey` matching below still exist in `index.html` but are **dead code**
+> (no UI triggers them) — kept for now, safe to delete. The committed library (`bandle/`,
+> `puzzle/`, `dog-breeds/`) is repo-served; custom content uses absolute URLs; actor photos come
+> from TMDB's image CDN.
 
-1. **Local folder load ("Map laden").** The host picks a folder; `loadFolder()` reads every
-   file into an in-memory `mediaMap` (`path → data-URI`). This lives **only in that browser
-   tab's memory** — it is *not* uploaded to Firebase.
-2. **Repo-served.** If the media files are committed in the GitHub repo at the same relative
-   paths, the relative `src` resolves to a URL and just works on any device with no loading.
+Media is referenced in the JSON by **relative path** (e.g. `puzzle/Simba/1`,
+`bandle/Coldplay-Fix_You_(2005_725M_par-3)/1`) or an absolute URL. Historically there were two
+ways the host could supply it:
+
+1. ~~**Local folder load ("Map laden").**~~ *(removed)* The host picked a folder; `loadFolder()`
+   read every file into an in-memory `mediaMap` (`path → data-URI`), per-tab only.
+2. **Repo-served / link.** Media committed in the repo at the same relative path (or any absolute
+   URL) resolves directly — works on any device with no loading. **This is now the only path.**
 
 ### Resolution
 
@@ -283,17 +309,12 @@ Media is referenced in the JSON by **relative path** (e.g. `puzzle/Simba/1`,
 - `loadFolder` skips obvious non-media (`SKIP_RE`: dotfiles, `.json/.txt/.md/.html/...`),
   and applies a per-type size cap (audio 40 MB host-only, else 12 MB).
 
-### The cross-device gotcha (important)
+### The cross-device gotcha (now mostly moot)
 
-Because `mediaMap` is per-tab memory:
-- The **host renders images from `mediaMap`**, not from `state`. On a *second* device that
-  resumed the game, `mediaMap` is empty → every image falls back to its raw path. If the
-  media is **not** in the repo, images are broken and the question screen looks stuck.
-- Fix in the app: the host **in-game side panel has a "Map laden / herladen" button**
-  (§15) so you can re-attach the folder after resuming, without losing progress. Reloading
-  also re-`pushState()`s so players receive the now-resolved image data-URIs.
-- **Best practice for multi-device:** commit the media into the repo so paths resolve as
-  URLs everywhere and "Map laden" becomes unnecessary.
+This used to bite hard: `mediaMap` was per-tab memory, so a resumed game on a second device had
+broken images. With **link-based media** that's gone — every `src` is a URL (repo-relative or
+absolute) that resolves on any device. Just make sure custom content uses URLs that are reachable
+everywhere (don't paste a `localhost`/private link), and keep committed library media in the repo.
 
 ---
 
@@ -428,10 +449,9 @@ Because all shared state is in Firebase, a host can move to another device.
 - **`hostResume`** reads back `state` (phase/round/stage/betStep/checked/scores/names/results),
   `judge`, `judgeToken`, `quiz`, `rounds`, reconstructs `preRoundScores`, re-attaches host
   listeners, and renders. Progress is fully restored.
-- **Media is NOT restored** (it was never in Firebase). On the new device the in-game side
-  panel shows **"Geen media op dit apparaat geladen"** + a **Map laden** button. Loading the
-  folder re-attaches `mediaMap` and re-`pushState()`s so players get the images. See §9 for
-  the repo-served alternative that avoids this entirely.
+- **Media just works on resume** now that it's link-based (§9): images/video are URLs in `state`,
+  so a resumed game on any device shows them with nothing to re-attach. (Audio stays host-only and
+  also resolves by URL.)
 - **Do not run two host tabs at once.** Both would write `state` on every action
   (last-write-wins) and conflict. Hand off; don't parallelize. Players stay connected through
   the handoff (their listeners are on the same nodes).
@@ -461,14 +481,16 @@ Because all shared state is in Firebase, a host can move to another device.
 
 ## 17. Credentials & config (public by design)
 
-These ship in `index.html` and are meant to be public for this app:
+These ship in the client and are meant to be public for this app:
 
 - **Firebase** project `quiz-db61a`, RTDB
   `https://quiz-db61a-default-rtdb.europe-west1.firebasedatabase.app`,
-  apiKey `AIzaSyB5E7zxQ9sAMQeNUz2PmI_PcWAoiz_iMf4`. RTDB rules are **open (test mode)** — no
-  auth. Anyone with a code can read/write that game; acceptable for a party game, not for
-  anything sensitive.
-- **TMDB** read-access Bearer token (read-only).
+  apiKey `AIzaSyB5E7zxQ9sAMQeNUz2PmI_PcWAoiz_iMf4` (in `index.html`). RTDB rules are **open (test
+  mode)** — no auth. Anyone with a code can read/write that game; acceptable for a party game,
+  not for anything sensitive.
+- **TMDB** — the read token is **not** in the client: it's a Worker secret (`tmdb-proxy/`, §16).
+  Clients only know the public proxy URL (`TMDB_PROXY`).
+- **`TMDB_PROXY`** URL lives in both `index.html` and `lib/quiz-core.js`.
 - Firebase JS SDK **v12.14.0** from the gstatic CDN (ES modules).
 
 If the RTDB ever needs locking down, that is a rules + minor client change, not an
@@ -478,38 +500,52 @@ architecture change.
 
 ## 18. Dev workflow & validation
 
-The app is one file with an inline module, so you can't `node` it directly (it imports
-Firebase from a CDN). Use these checks after edits.
+The HTML pages have an inline module that imports from a CDN and from `lib/quiz-core.js`, so you
+can't `node` a page directly. Use these checks after edits.
 
-**Syntax-check the JS** (strip the module, stub the CDN imports):
+**Syntax-check the shared module directly** (it's a real `.js` ES module):
 ```bash
-cd /mnt/user-data/outputs && \
-sed -n '/<script type="module">/,/<\/script>/p' index.html | sed '1d;$d' | \
-sed 's#https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js#a#; \
-     s#https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js#b#' > /tmp/quiz.mjs && \
-node --check /tmp/quiz.mjs && echo "JS OK"
+node --check lib/quiz-core.js && echo "core OK"
+node --check tmdb-proxy/worker.js && echo "worker OK"
 ```
 
-**Validate the question JSON:**
+**Syntax-check a page's inline module** (extract it, stub the imports, `node --check`):
 ```bash
-python3 -c "import json; json.load(open('questions.json')); print('JSON OK')"
+python3 - <<'PY'
+import re
+html=open('index.html').read()              # or quizzes.html / questions.html
+js=re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
+for u in ('firebase-app.js','firebase-database.js','./lib/quiz-core.js'): js=js.replace(u,'x')
+open('/tmp/page.mjs','w').write(js)
+PY
+node --check /tmp/page.mjs && echo "page JS OK"
 ```
 
-**Unit-test pure helpers** without a browser: a harness reads `index.html`, `grab()`s a
-function by brace-matching its `function name(` signature, `eval`s the needed cluster, and
-runs it. Useful targets: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`
-(needs `normStage`), `isCorrectAns` (needs `normTxt`), `resolveMediaKey`, `labelFromFile`.
-Example shape:
-```js
-import fs from 'fs';
-const html = fs.readFileSync('index.html','utf8');
-function grab(name){ /* find 'function name(' then brace-match to the close */ }
-eval(['flattenQuiz','validateQuiz','validateQuestions','normalizeQuiz','normStage']
-  .map(grab).join('\n') + '\nglobalThis._t={flattenQuiz,validateQuiz,normalizeQuiz};');
+**Validate JSON** (manifests + any saved set):
+```bash
+for f in library.json bandle/round.json puzzle/round.json dog-breeds/round.json; do
+  python3 -c "import json;json.load(open('$f'));print('OK $f')"; done
 ```
 
-**End-to-end** still requires a real browser + Firebase (listeners, media, search). After
-changes: push `index.html` to the repo; on the host, load the folder via **Map laden**.
+**Unit-test the pipeline** without a browser: `lib/quiz-core.js` is importable. Copy it to a
+`.mjs` and import (its `fetch`/`localStorage`/`document` deps only run inside functions you don't
+call for the pure pipeline):
+```bash
+cp lib/quiz-core.js /tmp/core.mjs
+node --input-type=module -e "
+import * as c from '/tmp/core.mjs';
+const f=c.flattenQuiz({rounds:[{name:'R',questions:[{question:'q',options:['A','B'],answer:0,shuffle:true}]}]});
+console.log(c.validateQuiz({rounds:[{name:'R',questions:f.questions}]})===null?'OK':'ERR');
+console.log(c.applyShuffles(c.normalizeQuiz(f.questions))[0].answerLabel==='A');
+"
+```
+`index.html` keeps its own inline copy of the pipeline (kept logic-identical to core, see §3); to
+diff them, brace-match `function <name>(` out of each file and compare comment-stripped bodies.
+
+**End-to-end** still requires a real browser + Firebase (listeners, media, search), **served over
+http** (GitHub Pages, or `python3 -m http.server` locally — `file://` breaks the module imports).
+After changes: push (or serve locally), open the page. Test the cross-page flow too: build on
+`quizzes.html` → **Gebruik** → host on `index.html`.
 
 ---
 
@@ -530,8 +566,10 @@ changes: push `index.html` to the repo; on the host, load the folder via **Map l
   `ctrlLinkFor`.
 - **Quiz/data:** `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`,
   `normStage`, `setQuiz`, `handleQuizFile`, `roundCtx`, `isRoundStart`, `pRoundLbl`.
-- **Media:** `loadFolder`, `loadMediaFiles`, `fileToDataURL`, `resolveMedia`,
-  `resolveMediaKey`, `labelFromFile`, `applyAudioLabels`, `quizMediaReport`.
+- **Media:** `resolveMedia`, `resolveMediaKey`, `applyAudioLabels`, `qMediaHTML`, `videoHTML`.
+  (`loadFolder`/`loadMediaFiles`/`fileToDataURL`/`quizMediaReport` still exist but are dead — no
+  UI triggers them. `labelFromFile` now lives in `lib/quiz-core.js`, mirrored inline.)
+- **Shared module (`lib/quiz-core.js`):** see §22 for the full export list.
 - **Scoring/state:** `pushState`, `publicCurrent`, `buildResults`, `computeGain`,
   `isCorrectAns`, `effectiveCorrect`, `setJudge`, `normTxt`.
 - **Search:** `tmdbSearch`, `deezerSearch`, `searchOptions`, `refreshSearchOut`,
@@ -549,29 +587,35 @@ changes: push `index.html` to the repo; on the host, load the folder via **Map l
 - **"round" = question index.** `app.round` and `state.round` are the flat question index,
   not the round number. Round info is in `app.rounds` / `roundCtx`. Historical naming; don't
   "fix" it without updating every reader.
-- **Media is per-device** unless committed to the repo (§9). The #1 support issue.
+- **Media is link-based** (§9) — repo-served or absolute URLs; no per-device folder loading.
+  Saved quizzes/questions, however, live in **localStorage per device** (export to move them).
 - **Open RTDB rules** — fine for a party game, not for sensitive data.
 - **Single host writer** — never run two host tabs simultaneously (§15).
 - **Audio never reaches players** by design (host-only playback).
 - **Deezer via JSONP** — depends on the public Deezer endpoint; no key, can rate-limit.
-- **No build step** — keep everything in the one file; CSS uses `:root` variables (light
-  blue/white theme) so re-theming is centralized.
+- **No build step** — plain static files with native ES module imports. Shared logic goes in
+  `lib/quiz-core.js`; shared CSS in `lib/style.css` (`:root` variables, light blue/white theme).
+  Must be served over http (not `file://`).
+- **Pipeline is duplicated** — `index.html` keeps its own inline copy of the quiz pipeline; keep
+  it logic-identical to `lib/quiz-core.js` when editing (or de-dup by importing — see §3).
 
 ---
 
 ## 21. How to extend
 
-- **Add a question:** append to the right round's `questions[]` in `questions.json`. Choose
-  the mode via `options` (array / `":tmdb"` / `":deezer"` / `":text"`, optionally
-  `search:true`). For staged/betting, add `stages[]` with `betMultiplier` (and matching
-  media files). Validate (§18), reload the folder on the host.
+- **Add a question:** either build it on `quizzes.html`, or hand-write it in a quiz JSON. Choose
+  the mode via `options` (array / `":tmdb"` / `":deezer"` / `":text"`, optionally `search:true`).
+  For staged/betting, add `stages[]` with `betMultiplier`. Media is a URL/repo path. Validate (§18).
+- **Add a library item/round:** drop a folder + `round.json` and list it in `library.json` (§22);
+  it shows up in the `quizzes.html` picker.
 - **Add a round:** add another `{name, intro, questions:[…]}` object. Boundaries are derived
   automatically by `flattenQuiz`; the round intro screen and labels follow.
 - **Add a new answer mode:** extend the `optionsMode` derivation in `normalizeQuiz`, the
   answer UI in `answerAreaHTML`/`wireAnswerArea`, correctness in `isCorrectAns`, and the
   reveal/label paths. Keep `publicCurrent` in sync for what players receive.
-- **Add a new media type:** extend `loadFolder`'s detection + `SKIP_RE`, `resolveMediaKey`
-  matching, and `publicCurrent` (decide host-only vs sent-to-players).
+- **Add a new media type:** extend the render helpers (`qMediaHTML`/`stageRowHTML`/`normStage`),
+  `validateQuestions`, and `publicCurrent` (decide host-only vs sent-to-players) — mirror render
+  changes in both `index.html` and, if relevant, the manager pages.
 - **Lock down the DB:** add Firebase Auth + RTDB rules; gate writes to `players/{pid}` by
   uid and `state`/`quiz`/`rounds` to the host. Client changes are localized to the ref
   helpers and join flows.
@@ -580,10 +624,9 @@ changes: push `index.html` to the repo; on the host, load the folder via **Map l
 
 ## 22. Quiz samenstellen uit de bibliotheek (catalog)
 
-Instead of hand-writing `questions.json`, the host can **tick existing questions** from a
-self-describing media library and the app builds the quiz. This is the primary authoring path
-in the lobby; the old "Map laden / JSON laden" flow is still there (collapsed under a
-`<details>`).
+Instead of hand-writing `questions.json`, a host builds a quiz on **`quizzes.html`** by ticking
+existing questions from a self-describing media library (and/or adding their own). The library is
+a set of repo folders, each with a `round.json` manifest holding the answers the media lacks.
 
 ### Library layout
 
@@ -596,65 +639,69 @@ in the lobby; the old "Map laden / JSON laden" flow is still there (collapsed un
 
   | Round | `mode` | Per-item fields | Stages built from |
   |-------|--------|-----------------|-------------------|
-  | bandle | `:deezer` | `deezerId`, `label`, `tracks[]` | audio tracks (host-only), folder name → year/views/par |
+  | bandle | `:deezer` | `deezerId`, `label`, `tracks[]` | audio tracks (host-only); folder name → year/views/par; track filename → instrument label |
   | puzzle | `:text` | `answer`, `accept[]`, `parts[]`, `full` | part images; `full` → `answerImage` (reveal) |
-  | actors | `:tmdb` | `tmdbId`, `label`, `actors[]` (obscure→famous) | **TMDB person photos**, no images committed (see below) |
   | dog-breeds | `listsearch` | `breed` (+ shared `breeds[]` options list) | single image, no stages |
 
-  Betting rounds set `betting:true`; `betMultipliers` are derived by stage count
+  `library.json` lists these folders (currently `bandle`, `puzzle`, `dog-breeds`). The prepared
+  `:tmdb` **actors** round was dropped from the index; movie-by-actors is now built per-quiz with
+  the **film builder** (§below) which pulls cast live from TMDB. `actors/round.json` still exists
+  but is unused. Betting rounds set `betting:true`; `betMultipliers` derive from stage count
   (`defaultBetMults`). The per-question prompt comes from the round's `heading`.
 
-### The editor (client)
+### The editor lives on its own pages (`quizzes.html` / `questions.html`)
 
-`openCompose` → `loadCatalog` fetches `library.json` + each `round.json` → opens a **modal
-editor** (`composePanelHTML`, view-routed via `app.composeView`: `main`/`mc`/`open`/`film`):
+The quiz builder is **not** in `index.html` anymore — it's two standalone pages that import
+`lib/quiz-core.js`. Each has its own tiny render loop (a module-local `S` state object + a
+`render()`/`wire()` pair; the scroll container keeps its position across re-renders via
+`S.scroll`).
 
-- **Kant-en-klare rondes** — the library checklist (tick items, per-round select-all). Default
-  selection is *none*; the host picks.
-- **Eigen vragen** — custom questions the host authors, kept in `app.composeCustom`:
-  - **Meerkeuze** (`addMcQuestion`) — type the question (+ optional media link), the correct
-    answer, and ≥1 distractor. Stored as `{options:[correct,…], answer:0, shuffle:true}`.
-  - **Open vraag** (`addOpenQuestion`) — `:text`, manually judged, optional `accept[]`.
-  - **Film (acteurs)** (`filmSearch`→`filmPickMovie`→`addFilmQuestion`) — search a movie (TMDB),
-    load its top-10 cast (`type=credits`), tick + reorder (▲▼ buttons) the actors, build a
-    betting `:tmdb` question whose stages are the chosen actors' TMDB photos in that order.
-- **Form drafts** survive re-renders via `app.mcDraft`/`app.openDraft` (read DOM → state before a
-  structural re-render; forms use fixed inputs, no dynamic add/remove, to avoid focus loss).
+- **`quizzes.html`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
+  `list`/`edit`/`add`/`mc`/`open`/`film`):
+  - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
+  - **edit** — quiz name + rounds; **▲▼ reorder rounds and questions**, 🗑 per question,
+    **+ Vraag toevoegen**. Only **Opslaan / Annuleer** (no "use now" inside editing).
+  - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
+    or make a new **Meerkeuze / Open / Film** question.
+  - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`) → tick +
+    ▲▼ reorder → a betting `:tmdb` question with the actors' TMDB photos as stages.
+- **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create
+  reusable Meerkeuze/Open/Film questions and delete them; they show up under "Vraag toevoegen" in
+  `quizzes.html`.
 
-`buildComposedQuiz` assembles a standard `{name, rounds:[{name,intro,questions}]}` object
-(library rounds + a "Films (eigen)" round + an "Eigen vragen" round) and hands it to the
-**existing** `setQuiz` pipeline. No new question schema — the editor sits *in front of* the
-normal pipeline. Library `:tmdb` actor photos and the bandle/puzzle media resolve repo-served;
-custom content is link-based. The old `loadFolder` ("Map laden") path was **removed** — all
-media is now URL/link-based (committed library media counts as repo-relative links).
+Custom MC is stored `{options:[correct,…], answer:0, shuffle:true}`; films land in a round named
+**"Films"**, other customs in **"Eigen vragen"**. A saved/edited quiz is a plain questions.json
+object (`{name, rounds:[…]}`); editing reconstructs rounds via `flattenQuiz`.
 
-### Shuffle, save, export
+### Handoff to the game
 
-- **Shuffle** (`applyShuffles`, run inside `setQuiz`) — questions with `shuffle:true` (custom MC)
-  have their `options` randomized and `answer` re-pointed each hosting session. Resume-safe:
-  `hostResume` reads the already-shuffled set back from Firebase, it never re-shuffles.
-- **localStorage** (`SAVED_KEY`, `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`) — saved
-  quizzes are full questions.json objects keyed by name; listed in the editor and on host start
-  (`useSavedQuiz`). **Export** (`exportQuizJSON`) downloads the same JSON to move to another
-  device; import is the normal "JSON laden" path.
+**Gebruik** on `quizzes.html` calls `setActiveQuiz(name, quiz)` (writes `localStorage['quiz:active']`)
+and navigates to `index.html`. On the next **hostCreate**, the game `takeActiveQuiz()`s it
+(consuming the key) and runs it through `flattenQuiz → normalizeQuiz → applyShuffles` instead of
+the built-in `SAMPLE`. The lobby links out to both pages; the old in-game "Map laden" folder
+upload is gone (all media is URL/link-based — committed library media counts as repo-relative
+links).
 
-### Video & audio
+### Shuffle, save, export, video
 
-`video` is a first-class media field on questions and stages (`videoHTML`, `qMediaHTML`, handled
-in `publicCurrent`/`stageRowHTML`/`normStage`/`validateQuestions`). Like images, video is sent to
-players; **audio stays host-only** everywhere (host plays on the big screen).
+- **Shuffle** (`applyShuffles`, inside `setQuiz`/`hostCreate`) — `shuffle:true` MC options are
+  randomized and `answer` re-pointed each hosting session. Resume-safe: `hostResume` reads the
+  already-shuffled set back from Firebase.
+- **Store** (`lib/quiz-core.js`): `SAVED_KEY` (quizzes), `BANK_KEY` (questions), `ACTIVE_KEY`
+  (handoff). `exportQuizJSON` downloads a quiz; import is the game's "JSON laden" path.
+- **Video** is a first-class media field on questions and stages (`videoHTML`, `qMediaHTML`,
+  handled in `publicCurrent`/`stageRowHTML`/`normStage`/`validateQuestions`). Like images, video
+  is sent to players; **audio stays host-only**.
 
-### Functions
+### `lib/quiz-core.js` exports
 
-`loadCatalog`, `openCompose`/`closeCompose`, `composePanelHTML` + `composeMainHTML`/`mcFormHTML`/
-`openFormHTML`/`filmFormHTML`/`composeLibraryHTML`/`mediaRowHTML`, `wireCompose`,
-`toggleComposeItem`/`toggleComposeRound`/`removeCustom`, `addMcQuestion`/`addOpenQuestion`/
-`addFilmQuestion`, `filmSearch`/`filmPickMovie`/`filmToggleActor`/`filmMoveActor`,
-`buildComposedQuiz`/`buildQuestion`/`actorImage`/`defaultBetMults`/`itemLabel`,
-`applyComposed`/`saveComposed`/`exportComposed`/`useSavedQuiz`, `applyShuffles`,
-`loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`/`exportQuizJSON`. State: `app.compose*`,
-`app.mcDraft`/`app.openDraft`, `app.film*`. The loose actor JPEGs in `img/` are now unused (dogs
-moved to `dog-breeds/`) and can be deleted.
+Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `normStage`,
+`applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `defaultBetMults`,
+`itemLabel`. Catalog/TMDB: `TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `actorImage`,
+`tmdbSearch`, `movieCast`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`, `loadSavedQuizzes`/
+`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/`addToBank`/`deleteBankItem`,
+`setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`. The loose actor JPEGs in `img/`
+are unused (dogs moved to `dog-breeds/`) and can be deleted.
 
 ---
 
