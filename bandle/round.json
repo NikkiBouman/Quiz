@@ -1,7 +1,7 @@
 {
   "_doc": "Bandle-ronde. Per liedje krijg je de instrumenten één voor één te horen (audio-stages, host-only — spelers horen niets, alleen de host speelt af). Antwoordmodus ':deezer' = de speler zoekt het nummer live in Deezer en stuurt een Deezer-track-id in; goed = id == deezerId. 'tracks' somt de audiobestanden in afspeelvolgorde op (1 = kaalst, laatste = met zang). Jaar/views/par worden automatisch uit de mapnaam gehaald. Inzetronde: eerder durven raden = hogere vermenigvuldiger.",
   "name": "Bandle",
-  "intro": "Raad het liedje. Bij elke hint komt er een instrument bij. Hoe eerder je inzet, hoe meer punten.",
+  "intro": "Raad het liedje. Bij elke hint komt er een instrument bij. Eerder raden betekent meer punten!",
   "mode": ":deezer",
   "betting": true,
   "heading": "Welk lied is dit?",

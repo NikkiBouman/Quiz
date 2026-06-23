@@ -1,7 +1,7 @@
 {
   "_doc": "Puzzel-ronde. Per figuur worden genummerde stukjes één voor één onthuld (image-stages). Antwoordmodus ':text' = vrije tekst, handmatig te beoordelen door host/jury; 'accept' bevat extra goede spellingen/varianten zodat veel antwoorden automatisch goedgekeurd worden. 'parts' = de hint-plaatjes in onthul-volgorde; 'full' = het complete plaatje dat bij het antwoord wordt getoond. Inzetronde: eerder durven raden = hogere vermenigvuldiger.",
   "name": "Wie of wat is dit?",
-  "intro": "Raad de figuur. Bij elke hint zie je een stukje meer. Hoe eerder je inzet, hoe meer punten.",
+  "intro": "Raad de figuur. Bij elke hint zie je een stukje meer. Eerder raden betekent meer punten!",
   "mode": ":text",
   "betting": true,
   "heading": "Wie of wat is dit?",

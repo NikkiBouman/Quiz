@@ -992,7 +992,7 @@ function renderJoin(){
       <div class="stack"><label class="lbl" for="i-code">Spelcode</label>
         <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
       <div class="stack" id="namewrap"><label class="lbl" for="i-name">Jouw naam</label>
-        <input id="i-name" maxlength="16" placeholder="Bijv. Nikki"></div>
+        <input id="i-name" maxlength="16"></div>
       <p id="join-err" class="err" style="min-height:18px;margin:0"></p>
       <button class="btn big" id="b-go">Verbinden</button>
       <button class="btn ghost" id="b-back">Terug</button>
@@ -1046,7 +1046,7 @@ function playerRowsHTML(mode){
     let betCell = '';
     if(betting){
       if(passed) betCell = '<span class="betcell">—</span>';
-      else if(bet==null) betCell = '<span class="betcell">nog niet</span>';
+      else if(bet==null) betCell = '<span class="betcell">…</span>';
       else if(!betsRevealed) betCell = '<span class="betcell">✓ ingezet</span>';   // verbergen tot reveal
       else { const over = app.stage>bet && !correct; betCell = `<span class="betcell ${over?'over':''}">uiterlijk hint ${bet+1}${over?' · te laat':''}</span>`; }
     }
@@ -1302,7 +1302,7 @@ function passModalHTML(){
   const betStep = !!(cur && cur.betting && g.betStep==='bet');
   const body = betStep
     ? 'Je doet dan deze vraag niet mee voor punten.'
-    : 'Pas telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.';
+    : 'Passen telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.';
   return `<div class="modal"><div class="modalcard stack" style="gap:12px">
       <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
       <p class="muted" style="margin:0;font-size:13px">${body}</p>
