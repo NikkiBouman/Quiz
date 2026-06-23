@@ -521,6 +521,7 @@ function hostCreate(){
   const f = flattenQuiz(src);
   app.quiz = applyShuffles(normalizeQuiz(f.questions)); app.rounds = f.rounds;
   app.quizName = (active && active.name) ? active.name : 'Voorbeeldset';
+  app.quizFromLibrary = !!(active && active.name);   // alleen dan kunnen we naar die quiz linken
   remember(app.code);
   saveSession({ role:'host', code:app.code });   // refresh → terug als host
   set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
@@ -597,6 +598,7 @@ async function hostResume(code){
   const rs = await get(roundsRef(code));
   app.rounds = rs.exists() ? rs.val() : flattenQuiz(qs.exists()?qs.val():SAMPLE).rounds;
   app.quizName = qs.exists() ? 'geladen set' : 'Voorbeeldset';
+  app.quizFromLibrary = false;                    // hervatte set heeft geen bekende lijst-naam
   remember(code);
   saveSession({ role:'host', code });            // refresh → terug als host
   startHost(); renderHost();
@@ -1297,46 +1299,23 @@ function renderHost(){
 }
 function hostLobby(){
   const count = app.players.length;
+  const quizLink = app.quizFromLibrary
+    ? `<a href="account/quizzes/new/?edit=${encodeURIComponent(app.quizName)}" target="_blank" rel="noopener" style="font-weight:600">${esc(app.quizName)} ↗</a>`
+    : `<b>${esc(app.quizName||'eigen set')}</b>`;
   el.innerHTML = `
     <div class="card stack" style="gap:10px">
       <div class="statusbar">
         <div><div class="qmeta" style="text-align:left">Spelers vullen deze code in</div><div class="code" style="font-size:clamp(36px,9vw,58px);margin:0">${app.code}</div></div>
-        <div class="stack" style="gap:8px;align-items:flex-end">
-          <span class="pill" style="font-size:15px">👥 ${count} verbonden</span>
-          <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">🔗 Kopieer geheime jurylink</button>
-        </div>
+        <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">🔗 Kopieer geheime jurylink</button>
       </div>
-    </div>
-    <div class="card stack" style="gap:10px">
-      <div class="statusbar"><b>Vragen</b><span class="muted" style="font-size:13px">${app.quiz.length} vragen · ${esc(app.quizName||'eigen set')}</span></div>
-      ${app.loadInfo?(()=>{
-        const li=app.loadInfo, miss=li.missing||[];
-        const okN=li.mediaTotal-miss.length;
-        let extra='';
-        if(miss.length){
-          const paths = miss.slice(0,5).map(m=>esc(m.path)).join(', ')+(miss.length>5?` (+${miss.length-5})`:'');
-          const withC = miss.find(m=>m.cands&&m.cands.length);
-          if(withC) extra = `<br><span class="muted">Die map is wél gevonden; de bestanden daarin heten: <b>${esc([...new Set(withC.cands)].slice(0,8).join(', '))}</b>. De paden in de JSON moeten dus naar die namen verwijzen (of hernoem de bestanden naar <code>1-…</code>, <code>2-…</code>).</span>`;
-          else extra = `<br><span class="muted">In géén geladen map matcht deze naam — de mapnaam zelf wijkt af van wat in de JSON staat.</span>`;
-          extra = `<span class="err">niet gevonden: ${paths}</span>${extra}`;
-        }
-        return `<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(li.file)}</b> — ${li.count} vragen · ${okN}/${li.mediaTotal} media gekoppeld${miss.length?` · ${extra}`:''}</p>`;
-      })():''}
-      <p class="muted" style="margin:0;font-size:12px">Maak en beheer je quizzen op een eigen pagina, of laad hier direct een JSON-bestand met links.</p>
-      <a class="btn" href="account/quizzes/" style="text-decoration:none;text-align:center">📚 Mijn quizzen</a>
-      <a class="btn ghost" href="account/questions/" style="text-decoration:none;text-align:center;font-size:13px">✏️ Mijn losse vragen</a>
-      <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">JSON-bestand laden</button>
-      <input type="file" id="qfile" accept=".json,application/json" style="display:none">
-      ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}
+      <p class="muted" style="margin:0;font-size:13px">Quiz: ${quizLink} · ${app.quiz.length} ${app.quiz.length===1?'vraag':'vragen'}</p>
     </div>
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
     <div class="row">
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
-      <button class="btn ghost" id="b-end">Stoppen</button>
+      <button class="btn ghost" id="b-end">Annuleren</button>
     </div>`;
-  $('#b-loadq').onclick = ()=> $('#qfile').click();
-  $('#qfile').onchange = handleQuizFile;
   const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
     const txt=ctrlLinkFor(app.code, app.judgeToken||'');
     const done=()=>{ cc.textContent='✓ Jurylink gekopieerd!'; setTimeout(()=>{ cc.textContent='🔗 Kopieer geheime jurylink'; },1600); };
