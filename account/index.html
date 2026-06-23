@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mijn account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main class="screen">
+    <div class="center stack titleblock"><h1 class="h-lg">Mijn account</h1><p class="muted m0">Beheer je quizzen en losse vragen op dit apparaat.</p></div>
+    <div class="stack">
+      <a class="card stack nolink linkcard" href="quizzes/">
+        <h2 class="h-sm m0">🎬 Mijn quizzen</h2>
+        <p class="muted m0">Quizzen bouwen, bewerken, exporteren en in het spel gebruiken.</p>
+      </a>
+      <a class="card stack nolink linkcard" href="questions/">
+        <h2 class="h-sm m0">❓ Mijn losse vragen</h2>
+        <p class="muted m0">Je persoonlijke vragenbank — herbruikbaar in elke quiz.</p>
+      </a>
+    </div>
+  </main>
+</div>
+<script type="module">
+import { navMenuHTML } from '../lib/quiz-core.js';
+document.getElementById('chrome').innerHTML = navMenuHTML(undefined, '../');
+</script>
+</body>
+</html>

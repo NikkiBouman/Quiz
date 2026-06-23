@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mijn vragen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+import { esc, ICON_TRASH, loadBank, deleteBankItem, navMenuHTML } from '../../lib/quiz-core.js';
+import { rowText, wireScroll } from '../../lib/editor-ui.js';
+
+const el = document.getElementById('app');
+const $ = s => document.querySelector(s);
+const S = { scroll:0 };
+document.getElementById('chrome').innerHTML = navMenuHTML('questions', '../../');
+
+function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); render(); } }
+function render(){
+  const bank=loadBank();
+  const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
+      <span class="ellip f14">${rowText(it.q)}</span>
+      <a class="mini nolink" href="new/?edit=${i}">Wijzig</a>
+      <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')
+    : `<p class="muted m0">Nog geen losse vragen. Maak er een — je kunt ze daarna in elke quiz hergebruiken.</p>`;
+  el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Mijn vragen</h1><p class="muted m0">Je persoonlijke vragenbank op dit apparaat.</p></div>
+    <div class="row" style="gap:6px">
+      <a class="btn grow center nolink" href="new/?type=mc">+ Meerkeuze</a>
+      <a class="btn grow center nolink" href="new/?type=open">+ Open vraag</a>
+      <a class="btn grow center nolink" href="new/?type=film">+ Film (acteurs)</a>
+      <a class="btn grow center nolink" href="new/?type=song">+ Liedje</a>
+    </div>
+    <div class="stack edscroll" id="ed-scroll" style="gap:6px">${rows}</div>
+    <p class="muted center hint">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="../quizzes/">je quizzen</a>.</p>`;
+  wireScroll($, S);
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
+}
+render();
+</script>
+</body>
+</html>

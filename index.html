@@ -24,8 +24,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getDatabase, ref, get, set, remove, onValue }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
-/* gedeelde kern: hier alleen de overdracht van een op quizzes.html gekozen quiz */
-import { takeActiveQuiz } from "./lib/quiz-core.js";
+/* gedeelde kern: hier alleen de overdracht van een op de quizzen-pagina gekozen quiz */
+import { takeActiveQuiz, navMenuHTML } from "./lib/quiz-core.js";
 
 /* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
    Firebase console → tandwiel (Project settings) → tab "General"
@@ -454,7 +454,7 @@ function hostCreate(){
   app.scores={}; app.names={}; app.players=[]; app.results=null;
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
   app.judgeToken = genToken(); app.loadInfo=null;
-  // op quizzes.html gekozen quiz oppakken, anders de voorbeeldset
+  // op de quizzen-pagina gekozen quiz oppakken, anders de voorbeeldset
   const active = takeActiveQuiz();
   const src = (active && active.quiz) ? active.quiz : SAMPLE;
   const f = flattenQuiz(src);
@@ -825,13 +825,7 @@ function renderHome(){
   const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   const saved = recall();
   el.innerHTML = `
-    <details class="hmenu">
-      <summary aria-label="Menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></summary>
-      <div class="hmenu-list">
-        <a href="quizzes.html">📚 Mijn quizzen</a>
-        <a href="questions.html">✏️ Mijn vragen</a>
-      </div>
-    </details>
+    ${navMenuHTML('home','')}
     <div class="center stack" style="gap:6px">
       <div class="qmeta">Party-quiz · meerdere apparaten</div>
       <h1 style="font-size:clamp(38px,9vw,64px)">Speel mee op<br>je eigen scherm</h1>
@@ -1227,8 +1221,8 @@ function hostLobby(){
         return `<p class="muted" style="margin:2px 0 0;font-size:12px">Geladen uit <b>${esc(li.file)}</b> — ${li.count} vragen · ${okN}/${li.mediaTotal} media gekoppeld${miss.length?` · ${extra}`:''}</p>`;
       })():''}
       <p class="muted" style="margin:0;font-size:12px">Maak en beheer je quizzen op een eigen pagina, of laad hier direct een JSON-bestand met links.</p>
-      <a class="btn" href="quizzes.html" style="text-decoration:none;text-align:center">📚 Mijn quizzen</a>
-      <a class="btn ghost" href="questions.html" style="text-decoration:none;text-align:center;font-size:13px">✏️ Mijn losse vragen</a>
+      <a class="btn" href="account/quizzes/" style="text-decoration:none;text-align:center">📚 Mijn quizzen</a>
+      <a class="btn ghost" href="account/questions/" style="text-decoration:none;text-align:center;font-size:13px">✏️ Mijn losse vragen</a>
       <button class="btn ghost" id="b-loadq" style="font-size:13px;opacity:.85">JSON-bestand laden</button>
       <input type="file" id="qfile" accept=".json,application/json" style="display:none">
       ${app.quizErr?`<p class="err" style="margin:0">${esc(app.quizErr)}</p>`:''}

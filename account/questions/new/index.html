@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nieuwe vraag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+import { esc, loadBank, addToBank, saveBank, pickFromQuestion } from '../../../lib/quiz-core.js';
+import { readMc, mcDraftToQuestion, mcFormHTML, readOpen, openDraftToQuestion, openFormHTML,
+         filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
+         editorTopbarHTML } from '../../../lib/editor-ui.js';
+
+const el = document.getElementById('app');
+const $ = s => document.querySelector(s);
+
+/* welk type / welke bewerk-index? komt uit de URL (/new/?type=film of ?edit=3) */
+const params = new URLSearchParams(location.search);
+const editIndex = params.has('edit') ? +params.get('edit') : null;
+const typeParam = params.get('type');
+const editing = editIndex!=null;
+const toList = ()=>{ location.href = '../'; };
+
+const S = { view:'mc', err:'', scroll:0, editIndex, mcDraft:null, openDraft:null,
+  filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
+  songQuery:'', songResults:[], songBusy:false, songPick:null };
+const actions = makeMediaActions(S, render);
+let mbSync = null;   // sync van de media-bouwer (voor de top-bar Opslaan)
+
+/* beginstand: een bestaande vraag bewerken, of een vers formulier van het gevraagde type */
+function initForm(){
+  if(editing){
+    const it=loadBank()[editIndex]; if(!it){ toList(); return; }
+    const q=it.q, mt=q.video?'video':q.audio?'audio':'image', media=(q.image||q.video||q.audio||'');
+    if(it.bucket==='films'){ S.filmPick=pickFromQuestion(q); S.view='film'; }
+    else if(it.bucket==='liedjes'){ S.songPick=pickFromQuestion(q); S.view='song'; }
+    else if(q.options===':text'){ S.openDraft={ question:q.question||'', media, mediaType:mt, answer:q.answer||'', accept:(q.accept||[]).join(', ') }; S.view='open'; }
+    else { const ai=q.answer!=null?q.answer:0; S.mcDraft={ question:q.question||'', media, mediaType:mt, correct:(q.options||[])[ai]||'', distractors:(q.options||[]).filter((_,idx)=>idx!==ai) }; S.view='mc'; }
+  } else {
+    S.view = ['mc','open','film','song'].includes(typeParam) ? typeParam : 'mc';
+  }
+}
+
+/* opslaan in de bank (nieuw of, bij ?edit, vervangen) → terug naar de lijst */
+function bankAdd(bucket, label, q){
+  const item={ bucket, label, q: JSON.parse(JSON.stringify(q)) };
+  if(editing){ const b=loadBank(); if(b[editIndex]){ b[editIndex]=item; saveBank(b); } }
+  else addToBank(item);
+  toList();
+}
+function addMc(){ const d=readMc(S.mcDraft||(S.mcDraft={}), $); const {q,error,label}=mcDraftToQuestion(d); if(error){ S.err=error; render(); return; } bankAdd('eigen', label, q); }
+function addOpen(){ const d=readOpen(S.openDraft||(S.openDraft={}), $); const {q,error,label}=openDraftToQuestion(d); if(error){ S.err=error; render(); return; } bankAdd('eigen', label, q); }
+function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd(r.isFilm?'films':'liedjes', r.label, r.q); }
+/* de top-bar 'Opslaan' kiest de juiste actie; bij de media-bouwer eerst de DOM terug-syncen */
+function saveCurrent(){
+  if(S.view==='mc') addMc();
+  else if(S.view==='open') addOpen();
+  else { if(mbSync) mbSync(); addMedia(); }
+}
+
+function render(){
+  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);
+  const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
+  const inner =
+    S.view==='mc'   ? mcFormHTML(S.mcDraft||{},    { title:editing?'Meerkeuze wijzigen':'Meerkeuzevraag', showActions:false }) :
+    S.view==='open' ? openFormHTML(S.openDraft||{},{ title:editing?'Open vraag wijzigen':'Open vraag',     showActions:false }) :
+    S.view==='film' ? filmFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
+    S.view==='song' ? songFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
+                      '';
+  el.innerHTML = `${inner}${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}`;
+  wire();
+}
+function wire(){
+  wireScroll($, S);
+  if(S.view==='film' || S.view==='song'){
+    mbSync = wireMediaForms(el, S, render, actions, { onAdd:addMedia, onBack:toList, backId:'b-formback' });
+  }
+}
+
+initForm();
+document.getElementById('chrome').innerHTML = editorTopbarHTML({ saveLabel: editing?'Bijwerken':'Opslaan' });
+$('#b-topback').onclick = toList;
+$('#b-save').onclick = saveCurrent;
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mijn quizzen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+import { esc, ICON_TRASH, loadSavedQuizzes, deleteSavedQuiz, loadBank,
+         flattenQuiz, exportQuizJSON, setActiveQuiz, navMenuHTML } from '../../lib/quiz-core.js';
+import { wireScroll } from '../../lib/editor-ui.js';
+
+const el = document.getElementById('app');
+const $ = s => document.querySelector(s);
+const S = { scroll:0, msg:'' };
+document.getElementById('chrome').innerHTML = navMenuHTML('quizzes', '../../');
+
+function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q) return; setActiveQuiz(name, q); location.href='../../index.html'; }
+function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.msg=`"${name}" geëxporteerd.`; render(); } }
+function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQuiz(name); S.msg=''; render(); } }
+
+function render(){
+  const saved=loadSavedQuizzes(), names=Object.keys(saved), bankN=loadBank().length;
+  const rows = names.length ? names.map(n=>{ let c='?'; try{ c=flattenQuiz(saved[n]).questions.length; }catch(e){}
+    return `<div class="card stack" style="gap:8px;padding:14px">
+      <div class="statusbar"><b class="f16">${esc(n)}</b><span class="muted f12">${c} vragen</span></div>
+      <div class="row" style="gap:6px">
+        <button class="btn grow sm" data-use="${esc(n)}">▶ Gebruik in spel</button>
+        <a class="btn ghost sm nolink center" href="new/?edit=${encodeURIComponent(n)}">Wijzig</a>
+        <button class="btn ghost sm" data-export="${esc(n)}">Export</button>
+        <button class="mini danger" data-del="${esc(n)}" title="verwijderen">${ICON_TRASH}</button>
+      </div></div>`; }).join('')
+    : `<p class="muted m0">Nog geen quizzen. Maak er een met “+ Nieuwe quiz”.</p>`;
+  el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Jouw quizzen</h1><p class="muted m0">Op dit apparaat opgeslagen.</p></div>
+    <a class="btn big nolink center" href="new/">+ Nieuwe quiz</a>
+    <div class="stack edscroll" id="ed-scroll" style="gap:10px">${rows}</div>
+    ${bankN?`<p class="muted center hint">Je hebt ${bankN} losse vraag/vragen in je <a href="../questions/">vragenbank</a>.</p>`:''}
+    ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}`;
+  wireScroll($, S);
+  el.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>useQuiz(b.dataset.use));
+  el.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportSaved(b.dataset.export));
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delQuiz(b.dataset.del));
+}
+render();
+</script>
+</body>
+</html>

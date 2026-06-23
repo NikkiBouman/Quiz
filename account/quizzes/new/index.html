@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quiz maken</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+import { esc, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
+         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
+         flattenQuiz } from '../../../lib/quiz-core.js';
+import { enableDragSort } from '../../../lib/drag.js';
+import { rowText, readMc, mcDraftToQuestion, mcFormHTML, readOpen, openDraftToQuestion, openFormHTML,
+         filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
+         editorTopbarHTML } from '../../../lib/editor-ui.js';
+
+const el = document.getElementById('app');
+const $ = s => document.querySelector(s);
+const toList = ()=>{ location.href = '../'; };
+const S = {
+  view:'edit', catalog:null, busy:false, err:'', msg:'', scroll:0,
+  draft:null, editingName:null, sel:{}, bankSel:{},
+  mcDraft:null, openDraft:null,
+  filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
+  songQuery:'', songResults:[], songBusy:false, songPick:null,
+};
+const actions = makeMediaActions(S, render);
+
+/* ---------- helpers ---------- */
+function syncName(){ const e=$('#q-name'); if(e && S.draft) S.draft.name=e.value; }
+/* lees naam + rondenaam/uitleg uit de DOM terug in de draft (vóór een re-render/opslaan) */
+function syncEdit(){
+  syncName();
+  if(!S.draft) return;
+  el.querySelectorAll('.r-name').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri]; if(r) r.name=inp.value; });
+  el.querySelectorAll('.r-intro').forEach(t=>{ const r=S.draft.rounds[+t.dataset.ri]; if(r) r.intro=t.value; });
+  el.querySelectorAll('.q-pts').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri], q=r&&r.questions[+inp.dataset.qi]; if(q){ const v=parseInt(inp.value,10); q.points = (isNaN(v)||v<0) ? 100 : v; } });
+}
+function ensureRound(d, name, intro){ let r=d.rounds.find(x=>x.name===name); if(!r){ r={name,intro:intro||'',questions:[]}; d.rounds.push(r); } return r; }
+function selCount(){ return Object.keys(S.sel).reduce((n,f)=> n+Object.keys(S.sel[f]||{}).filter(k=>S.sel[f][k]).length, 0); }
+function bankSelCount(){ return Object.keys(S.bankSel).filter(k=>S.bankSel[k]).length; }
+function qCount(d){ return ((d&&d.rounds)||[]).reduce((n,r)=>n+(r.questions?r.questions.length:0),0); }
+function pushToDraft(round, bucket, label, q){
+  round.questions.push(q);
+  addToBank({ bucket, label, q: JSON.parse(JSON.stringify(q)) });
+}
+function betOf(q){ return q.bet!=null ? !!q.bet : (Array.isArray(q.stages) && q.stages.some(s=>s.betMultiplier!=null)); }
+
+/* doelronde-kiezer: kies een bestaande ronde van de quiz of maak een nieuwe. */
+function roundPickerHTML(pfx, defName){
+  const rounds=(S.draft&&S.draft.rounds)||[];
+  const opts = rounds.map(r=>`<option value="${esc(r.name)}">${esc(r.name)} (${r.questions.length})</option>`).join('');
+  return `<label class="lbl">In welke ronde?</label>
+    <select id="${pfx}-round" class="sinput">${opts}<option value="" selected>➕ Nieuwe ronde…</option></select>
+    <input id="${pfx}-newround" class="sinput" placeholder="Naam van de nieuwe ronde" value="${esc(defName||'')}">`;
+}
+function wireRoundPicker(pfx){
+  const sel=$('#'+pfx+'-round'), inp=$('#'+pfx+'-newround');
+  if(!sel||!inp) return;
+  const upd=()=>{ inp.style.display = sel.value==='' ? '' : 'none'; };
+  sel.onchange=upd; upd();
+}
+function targetRoundFor(pfx, fallbackName, fallbackIntro){
+  const sel=$('#'+pfx+'-round');
+  let name = sel ? sel.value : '';
+  if(!name){ const inp=$('#'+pfx+'-newround'); name = (inp && inp.value.trim()) || fallbackName; }
+  return ensureRound(S.draft, name, fallbackIntro);
+}
+
+/* ---------- init / acties ---------- */
+async function boot(){
+  S.busy=true; render();
+  try{ if(!S.catalog) S.catalog = await loadCatalog(); }catch(e){ S.err='Bibliotheek laden mislukt: '+e.message; }
+  S.busy=false;
+  const editName=new URLSearchParams(location.search).get('edit');
+  if(editName){
+    const q=loadSavedQuizzes()[editName];
+    if(q){ const f=flattenQuiz(q);
+      S.draft={ name:q.name||editName, rounds: f.rounds.map(rr=>({ name:rr.name||'Ronde', intro:rr.intro||'', questions: f.questions.slice(rr.start,rr.end).map(x=>JSON.parse(JSON.stringify(x))) })) };
+      S.editingName=editName;
+    } else { S.err='Quiz niet gevonden.'; S.draft={name:'',rounds:[]}; }
+  } else { S.draft={name:'',rounds:[]}; S.editingName=null; }
+  S.view='edit'; render();
+}
+function saveDraft(){
+  syncEdit(); const d=S.draft; if(!d) return;
+  const nm=(d.name||'').trim();
+  if(!nm){ S.err='Geef je quiz een naam.'; S.view='edit'; render(); return; }
+  d.rounds=(d.rounds||[]).filter(r=>r.questions&&r.questions.length);
+  if(!qCount(d)){ S.err='Voeg minstens één vraag toe.'; S.view='edit'; render(); return; }
+  d.name=nm;
+  if(S.editingName && S.editingName!==nm) deleteSavedQuiz(S.editingName);
+  if(!saveQuizToDevice(nm, JSON.parse(JSON.stringify(d)))){ S.err='Opslaan mislukt (opslag vol?).'; S.view='edit'; render(); return; }
+  toList();
+}
+function gotoAdd(){ syncEdit(); S.sel={}; S.bankSel={}; S.view='add'; S.err=''; S.msg=''; render(); }
+function toggleItem(f,k){ if(!S.sel[f])S.sel[f]={}; S.sel[f][k]=!S.sel[f][k]; render(); }
+function toggleRound(f){ const rd=(S.catalog||[]).find(r=>r.folder===f); if(!rd)return; const keys=Object.keys(rd.items); const sel=S.sel[f]||(S.sel[f]={}); const all=keys.every(k=>sel[k]); keys.forEach(k=>sel[k]=!all); render(); }
+function toggleBank(i){ S.bankSel[i]=!S.bankSel[i]; render(); }
+async function addSelections(){
+  if(!S.draft) return;
+  const bank=loadBank();
+  const bankPicked=Object.keys(S.bankSel).filter(i=>S.bankSel[i]&&bank[+i]);
+  let bankRoundName=null;
+  if(bankPicked.length){
+    const sel=$('#bank-round'); const nm=sel?sel.value:'';
+    bankRoundName = nm || (($('#bank-newround')&&$('#bank-newround').value.trim()) || 'Eigen vragen');
+  }
+  S.busy=true; render(); let added=0;
+  try{
+    for(const rd of (S.catalog||[])){
+      const picked=Object.keys(rd.items).filter(k=> S.sel[rd.folder]&&S.sel[rd.folder][k]);
+      if(!picked.length) continue;
+      const round=ensureRound(S.draft, rd.name, rd.intro);
+      for(const k of picked){ round.questions.push(await buildQuestion(rd,k,rd.items[k])); added++; }
+    }
+    if(bankPicked.length){
+      const round=ensureRound(S.draft, bankRoundName, '');
+      bankPicked.forEach(i=>{ round.questions.push(JSON.parse(JSON.stringify(bank[+i].q))); added++; });
+    }
+  }catch(e){ S.err='Toevoegen mislukt: '+e.message; }
+  S.sel={}; S.bankSel={}; S.busy=false; S.view='edit'; S.msg=added?`${added} vraag/vragen toegevoegd.`:''; render();
+}
+function reorderRounds(order){ syncEdit(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
+function reorderQ(ri,order){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
+function delQ(ri,qi){ const d=S.draft, r=d&&d.rounds[ri]; if(!r)return; r.questions.splice(qi,1); if(!r.questions.length) d.rounds.splice(ri,1); render(); }
+function toggleQBet(ri,qi){ syncEdit(); const q=S.draft&&S.draft.rounds[ri]&&S.draft.rounds[ri].questions[qi]; if(!q)return; q.bet=!betOf(q); render(); }
+function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions.forEach(q=>{ if(Array.isArray(q.stages)) q.bet=on; }); render(); }
+
+/* maken → aan de gekozen ronde toevoegen (validatie + opbouw zit in editor-ui.js) */
+function addMc(){ const d=readMc(S.mcDraft||(S.mcDraft={}), $); const {q,error,label}=mcDraftToQuestion(d); if(error){ S.err=error; render(); return; } const round=targetRoundFor('mc','Eigen vragen',''); pushToDraft(round,'eigen',label,q); S.mcDraft=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
+function addOpen(){ const d=readOpen(S.openDraft||(S.openDraft={}), $); const {q,error,label}=openDraftToQuestion(d); if(error){ S.err=error; render(); return; } const round=targetRoundFor('op','Eigen vragen',''); pushToDraft(round,'eigen',label,q); S.openDraft=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
+function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('mb', r.isFilm?'Films':'Liedjes', r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.'); pushToDraft(round, r.isFilm?'films':'liedjes', r.label, r.q); if(r.isFilm) S.filmPick=null; else S.songPick=null; S.err=''; S.view='edit'; S.msg=`${r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
+
+/* ---------- HTML ---------- */
+function libraryHTML(){
+  const cat=S.catalog||[];
+  if(S.busy && !cat.length) return `<p class="muted center m0">Bibliotheek laden…</p>`;
+  if(!cat.length) return `<p class="muted m0 f12">Geen bibliotheek gevonden.</p>`;
+  return cat.map(rd=>{
+    const keys=Object.keys(rd.items), on=keys.filter(k=>S.sel[rd.folder]&&S.sel[rd.folder][k]).length, all=keys.length>0&&on===keys.length;
+    const modeLbl=rd.mode===':deezer'?'Deezer':rd.mode===':tmdb'?'TMDB':rd.mode===':text'?'tekst':rd.mode==='listsearch'?'lijst':rd.mode;
+    return `<div class="card stack" style="gap:4px">
+      <div class="statusbar"><label class="picklabel"><input type="checkbox" data-round="${esc(rd.folder)}" ${all?'checked':''}><b>${esc(rd.name)}</b></label><span class="muted f12">${on}/${keys.length}${rd.betting?' · inzet':''} · ${esc(modeLbl)}</span></div>
+      ${keys.map(k=>`<label class="picklabel"><input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(S.sel[rd.folder]&&S.sel[rd.folder][k])?'checked':''}><span>${esc(itemLabel(rd,rd.items[k])||k)}</span></label>`).join('')}
+    </div>`;
+  }).join('');
+}
+function editHTML(){
+  const d=S.draft||{name:'',rounds:[]};
+  const rounds = d.rounds.length ? d.rounds.map((rd,ri)=>{
+    const staged=rd.questions.filter(q=>Array.isArray(q.stages)), betN=staged.filter(betOf).length;
+    const allBet=staged.length>0&&betN===staged.length, someBet=betN>0&&!allBet;
+    const roundBet = staged.length ? `<label class="betlbl" title="Inzetten aan/uit voor alle hint-vragen in deze ronde"><input type="checkbox" class="r-bet" data-ri="${ri}" data-some="${someBet?1:0}" ${allBet?'checked':''}>inzet</label>` : '';
+    return `
+    <div class="card stack" data-idx="${ri}" style="gap:6px;padding:12px">
+      <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap">
+        <span class="grip" title="Sleep om de ronde te verplaatsen">${ICON_GRIP}</span>
+        <input class="sinput r-name" data-ri="${ri}" value="${esc(rd.name)}" placeholder="Rondenaam">
+        ${roundBet}
+        <span class="muted f12 nowrap">${rd.questions.length} ${rd.questions.length===1?'vraag':'vragen'}</span>
+      </div>
+      <textarea class="r-intro" data-ri="${ri}" rows="2" placeholder="Uitleg voor de spelers (zien ze bij ‘Ik snap het 👍’ aan het begin van de ronde)">${esc(rd.intro||'')}</textarea>
+      <div class="stack qlist" data-round="${ri}" style="gap:6px">
+      ${rd.questions.map((q,qi)=>`<div class="listrow tight" data-idx="${qi}">
+        <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
+        <span class="ellip f14">${rowText(q)}</span>
+        <span class="ptsfield" title="Punten voor deze vraag (standaard 100)"><input type="number" min="0" step="10" class="q-pts" data-ri="${ri}" data-qi="${qi}" value="${q.points??100}">pt</span>
+        ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
+        <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('') : `<p class="muted m0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
+  return `<div class="statusbar"><h1 class="h-md">${S.editingName?'Quiz wijzigen':'Nieuwe quiz'}</h1></div>
+    <input id="q-name" class="sinput f18" placeholder="Naam van je quiz" value="${esc(d.name||'')}">
+    <div class="stack edscroll" id="ed-scroll" style="gap:10px">${rounds}</div>
+    <button class="btn ghost" id="b-goadd">+ Vraag toevoegen</button>`;
+}
+function addHTML(){
+  const libN=selCount(), bankN=bankSelCount(), bank=loadBank();
+  const bankHTML = bank.length ? `<div class="card stack" style="gap:4px"><div class="statusbar"><b>Mijn opgeslagen vragen</b><span class="muted f12">${bankN} gekozen</span></div>
+    ${bank.map((it,i)=>`<label class="picklabel"><input type="checkbox" data-bank="${i}" ${S.bankSel[i]?'checked':''}><span class="ellip f14">${rowText(it.q)}</span></label>`).join('')}
+    ${bankN?`<div class="stack" style="gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)">${roundPickerHTML('bank','Eigen vragen')}</div>`:''}</div>` : '';
+  return `<div class="statusbar"><h1 class="h-md">Vraag toevoegen</h1></div>
+    <div class="stack edscroll" id="ed-scroll" style="gap:10px">
+      <div class="statusbar"><b>Kant-en-klare rondes</b><span class="muted f12">${libN} gekozen</span></div>
+      ${libraryHTML()}
+      ${bankHTML}
+      <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
+      <div class="row" style="gap:6px"><button class="btn ghost" id="b-mc">+ Meerkeuze</button><button class="btn ghost" id="b-open">+ Open vraag</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
+    </div>
+    <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
+}
+function render(){
+  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);   // brede twee-koloms-bouwer
+  const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
+  const inner =
+    S.view==='add'  ? addHTML() :
+    S.view==='mc'   ? mcFormHTML(S.mcDraft||{},    { title:'Meerkeuzevraag', addLabel:'Toevoegen', backId:'b-formback', roundPickerHTML:roundPickerHTML('mc','Eigen vragen') }) :
+    S.view==='open' ? openFormHTML(S.openDraft||{},{ title:'Open vraag',     addLabel:'Toevoegen', backId:'b-formback', roundPickerHTML:roundPickerHTML('op','Eigen vragen') }) :
+    S.view==='film' ? filmFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
+    S.view==='song' ? songFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
+                      editHTML();
+  el.innerHTML = `${inner}
+    ${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}
+    ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}
+    ${S.busy?`<p class="muted center feedback">Bezig…</p>`:''}`;
+  wire();
+}
+function wire(){
+  wireScroll($, S);
+  const v=S.view;
+  if(v==='edit'){
+    enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderRounds });
+    el.querySelectorAll('.qlist').forEach(ql=> enableDragSort(ql, { handle:'.grip', onDrop:order=>reorderQ(+ql.dataset.round, order) }));
+    el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
+    el.querySelectorAll('[data-qbet]').forEach(cb=>cb.onchange=()=>{ const a=cb.dataset.qbet.split('|'); toggleQBet(+a[0],+a[1]); });
+    el.querySelectorAll('.r-bet').forEach(cb=>{ cb.indeterminate = cb.dataset.some==='1'; cb.onchange=()=>toggleRoundBet(+cb.dataset.ri, cb.checked); });
+    const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
+    return;
+  }
+  if(v==='add'){
+    el.querySelectorAll('[data-key]').forEach(cb=>cb.onchange=()=>toggleItem(cb.dataset.folder,cb.dataset.key));
+    el.querySelectorAll('[data-round]').forEach(cb=>cb.onchange=()=>toggleRound(cb.dataset.round));
+    el.querySelectorAll('[data-bank]').forEach(cb=>cb.onchange=()=>toggleBank(+cb.dataset.bank));
+    const go=v2=>()=>{ S.view=v2; S.err=''; S.msg=''; render(); };
+    const m=$('#b-mc'); if(m)m.onclick=go('mc');
+    const o=$('#b-open'); if(o)o.onclick=go('open');
+    const f=$('#b-film'); if(f)f.onclick=go('film');
+    const sg=$('#b-song'); if(sg)sg.onclick=go('song');
+    const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
+    const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.err=''; S.msg=''; render(); };
+    wireRoundPicker('bank');
+    return;
+  }
+  if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-formback'); if(b)b.onclick=()=>{ readMc(S.mcDraft||(S.mcDraft={}), $); S.view='add'; S.err=''; render(); }; wireRoundPicker('mc'); return; }
+  if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-formback'); if(b)b.onclick=()=>{ readOpen(S.openDraft||(S.openDraft={}), $); S.view='add'; S.err=''; render(); }; wireRoundPicker('op'); return; }
+  if(v==='film' || v==='song'){
+    wireMediaForms(el, S, render, actions, {
+      onAdd:addMedia,
+      onBack:()=>{ S.filmPick=null; S.songPick=null; S.view='add'; S.err=''; render(); },
+      backId:'b-formback',
+      afterBuilderWire:()=>wireRoundPicker('mb'),
+    });
+    return;
+  }
+}
+
+document.getElementById('chrome').innerHTML = editorTopbarHTML({ saveLabel:'Opslaan' });
+$('#b-topback').onclick = toList;
+$('#b-save').onclick = saveDraft;
+boot();
+</script>
+</body>
+</html>
