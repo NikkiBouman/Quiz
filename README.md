@@ -23,13 +23,18 @@ De pagina's gebruiken native ES-modules; die werken **alleen via http**, niet vi
 Open daarna **http://localhost:8000/index.html** (host het spel) of
 **http://localhost:8000/quizzes.html** (bouw een quiz).
 
-`serve.sh` niet gebruiken kan ook — elke statische server volstaat:
+`serve.sh` niet gebruiken kan ook — elke statische server volstaat, **mits op poort 8000**:
 
 ```bash
 python3 -m http.server 8000
 # of
-npx serve .
+npx serve -l 8000 .
 ```
+
+> Let op de poort: de TMDB-zoekproxy (Cloudflare Worker) heeft een CORS-allowlist die
+> alleen `http://localhost:8000` en `http://127.0.0.1:8000` toestaat. `npx serve .` zónder
+> `-l 8000` draait op een andere poort, waardoor de browser de proxy-response blokkeert en
+> film-zoeken faalt ("Zoeken mislukt"). Quizzen bouwen werkt dan wel; alleen `:tmdb`-zoeken niet.
 
 > Het spel zelf praat met Firebase (live), dus voor een echte test met spelers heb je
 > internet nodig. Quizzen bouwen en bewerken werkt volledig lokaal (localStorage).

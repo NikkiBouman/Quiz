@@ -5,6 +5,9 @@
 #
 # Gebruik:   ./serve.sh           (poort 8000)
 #            ./serve.sh 5500       (andere poort)
+#
+# Let op: de TMDB-zoekproxy staat via CORS alleen poort 8000 toe. Op een andere
+# poort faalt het film-zoeken (":tmdb"). Gebruik 8000 als je TMDB wilt testen.
 set -e
 PORT="${1:-8000}"
 cd "$(dirname "$0")"
