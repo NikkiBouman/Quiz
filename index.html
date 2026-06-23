@@ -869,7 +869,7 @@ function ctrlToggle(pid){
   setJudge(round, pid, !effectiveCorrect(round, pid, auto));
 }
 async function playerSubmit(){
-  if(app.kicked || app.passed[app.game.round]) return;   // na passen niet meer gokken
+  if(app.kicked) return;
   const cur = app.game.current, r = app.game.round;
   let val, label;
   if(cur.optionsMode==='list'){
@@ -894,17 +894,33 @@ async function playerSubmit(){
   renderPlayer();
 }
 async function playerBet(k){
-  if(app.kicked || app.passed[app.game.round]) return;   // na passen geen inzet meer
+  if(app.kicked) return;
   const r = app.game.round;
   app.bet[r] = k;
   await set(ref(db, `games/${app.code}/players/${app.pid}/bet/${r}`), k);
   renderPlayer();
 }
+/* PASS_ANS: sentinel die nooit als juist telt (isCorrectAns matcht 'm niet) — "pas" = fout antwoord */
+const PASS_ANS = ' pas';
 async function playerPass(){
-  if(app.kicked || app.passed[app.game.round]) return;
-  const r = app.game.round;
-  app.confirmPass=false; app.passed[r]=true;
-  await set(ref(db, `games/${app.code}/players/${app.pid}/pass/${r}`), true);
+  if(app.kicked) return;
+  const g = app.game, r = g.round, cur = g.current;
+  app.confirmPass=false;
+  // in de inzet-stap: "pas" = deze vraag niet meedoen (er is nog geen hint om te beantwoorden)
+  if(cur && cur.betting && g.betStep==='bet'){
+    app.passed[r]=true;
+    await set(ref(db, `games/${app.code}/players/${app.pid}/pass/${r}`), true);
+    renderPlayer();
+    return;
+  }
+  // anders: "pas" telt als een fout antwoord voor deze hint; bij een volgende hint mag je opnieuw raden
+  app.ans[r]=PASS_ANS; app.submittedRound=r; app.lastSubmitLabel='⤴ gepast'; app.reguess=false;
+  await set(ansRef(app.code, app.pid, r), PASS_ANS);
+  await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), '⤴ gepast');
+  if(cur && cur.staged){
+    app.myStage = cur.stage||0;
+    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), cur.stage||0);
+  }
   renderPlayer();
 }
 
@@ -1277,11 +1293,17 @@ function hostAside(){
 /* pas-knop + bevestigingspopup (speler) */
 const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
 function passModalHTML(){
-  return app.confirmPass ? `<div class="modal"><div class="modalcard stack" style="gap:12px">
+  if(!app.confirmPass) return '';
+  const g=app.game, cur=g&&g.current;
+  const betStep = !!(cur && cur.betting && g.betStep==='bet');
+  const body = betStep
+    ? 'Je doet dan deze vraag niet mee voor punten.'
+    : 'Pas telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.';
+  return `<div class="modal"><div class="modalcard stack" style="gap:12px">
       <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
-      <p class="muted" style="margin:0;font-size:13px">Je doet dan deze vraag niet mee voor punten — ook de volgende hints niet.</p>
+      <p class="muted" style="margin:0;font-size:13px">${body}</p>
       <div class="row"><button class="btn grow" id="b-passno">Nee</button><button class="btn grow danger" id="b-passyes">Ja, passen</button></div>
-    </div></div>` : '';
+    </div></div>`;
 }
 function wirePass(){
   const pb=$('#b-pass'); if(pb) pb.onclick=()=>{ app.confirmPass=true; renderPlayer(); };
