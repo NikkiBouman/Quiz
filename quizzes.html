@@ -41,6 +41,13 @@ const S = {
 
 /* ---------- helpers ---------- */
 function syncName(){ const e=$('#q-name'); if(e && S.draft) S.draft.name=e.value; }
+/* lees naam + rondenaam/uitleg uit de DOM terug in de draft (vóór een re-render/opslaan) */
+function syncEdit(){
+  syncName();
+  if(!S.draft) return;
+  el.querySelectorAll('.r-name').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri]; if(r) r.name=inp.value; });
+  el.querySelectorAll('.r-intro').forEach(t=>{ const r=S.draft.rounds[+t.dataset.ri]; if(r) r.intro=t.value; });
+}
 function ensureRound(d, name, intro){ let r=d.rounds.find(x=>x.name===name); if(!r){ r={name,intro:intro||'',questions:[]}; d.rounds.push(r); } return r; }
 function selCount(){ return Object.keys(S.sel).reduce((n,f)=> n+Object.keys(S.sel[f]||{}).filter(k=>S.sel[f][k]).length, 0); }
 function bankSelCount(){ return Object.keys(S.bankSel).filter(k=>S.bankSel[k]).length; }
@@ -92,7 +99,7 @@ function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQ
 function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.msg=`"${name}" geëxporteerd.`; render(); } }
 function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q){ S.err='Quiz niet gevonden.'; render(); return; } setActiveQuiz(name, q); location.href='index.html'; }
 function saveDraft(){
-  syncName(); const d=S.draft; if(!d) return;
+  syncEdit(); const d=S.draft; if(!d) return;
   const nm=(d.name||'').trim();
   if(!nm){ S.err='Geef je quiz een naam.'; render(); return; }
   d.rounds=(d.rounds||[]).filter(r=>r.questions&&r.questions.length);
@@ -102,7 +109,7 @@ function saveDraft(){
   if(!saveQuizToDevice(nm, JSON.parse(JSON.stringify(d)))){ S.err='Opslaan mislukt (opslag vol?).'; render(); return; }
   S.editingName=null; S.draft=null; S.view='list'; S.err=''; S.msg=`Opgeslagen: "${nm}".`; render();
 }
-function gotoAdd(){ syncName(); S.sel={}; S.bankSel={}; S.view='add'; S.err=''; S.msg=''; render(); }
+function gotoAdd(){ syncEdit(); S.sel={}; S.bankSel={}; S.view='add'; S.err=''; S.msg=''; render(); }
 function toggleItem(f,k){ if(!S.sel[f])S.sel[f]={}; S.sel[f][k]=!S.sel[f][k]; render(); }
 function toggleRound(f){ const rd=(S.catalog||[]).find(r=>r.folder===f); if(!rd)return; const keys=Object.keys(rd.items); const sel=S.sel[f]||(S.sel[f]={}); const all=keys.every(k=>sel[k]); keys.forEach(k=>sel[k]=!all); render(); }
 function toggleBank(i){ S.bankSel[i]=!S.bankSel[i]; render(); }
@@ -132,8 +139,8 @@ async function addSelections(){
   S.sel={}; S.bankSel={}; S.busy=false; S.view='edit'; S.msg=added?`${added} vraag/vragen toegevoegd.`:''; render();
 }
 /* slepen: herorden rondes / vragen op basis van de nieuwe data-idx-volgorde */
-function reorderRounds(order){ syncName(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
-function reorderQ(ri,order){ syncName(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
+function reorderRounds(order){ syncEdit(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
+function reorderQ(ri,order){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
 function delQ(ri,qi){ const d=S.draft, r=d&&d.rounds[ri]; if(!r)return; r.questions.splice(qi,1); if(!r.questions.length) d.rounds.splice(ri,1); render(); }
 
 /* meerkeuze */
@@ -212,7 +219,12 @@ function editHTML(){
   const d=S.draft||{name:'',rounds:[]};
   const rounds = d.rounds.length ? d.rounds.map((rd,ri)=>`
     <div class="card stack" data-idx="${ri}" style="gap:6px;padding:12px">
-      <div class="statusbar"><b style="font-size:15px;display:flex;align-items:center;gap:6px"><span class="grip" title="Sleep om de ronde te verplaatsen">${ICON_GRIP}</span>${esc(rd.name)} <span class="muted" style="font-weight:400;font-size:12px">· ${rd.questions.length}</span></b></div>
+      <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap">
+        <span class="grip" title="Sleep om de ronde te verplaatsen">${ICON_GRIP}</span>
+        <input class="sinput r-name" data-ri="${ri}" value="${esc(rd.name)}" placeholder="Rondenaam" style="flex:1;min-width:0;font-size:15px;font-weight:600;padding:9px 11px;margin:0">
+        <span class="muted" style="font-size:12px;white-space:nowrap">${rd.questions.length} ${rd.questions.length===1?'vraag':'vragen'}</span>
+      </div>
+      <textarea class="r-intro" data-ri="${ri}" rows="2" placeholder="Uitleg voor de spelers (zien ze bij ‘Ik snap het 👍’ aan het begin van de ronde)">${esc(rd.intro||'')}</textarea>
       <div class="stack qlist" data-round="${ri}" style="gap:6px">
       ${rd.questions.map((q,qi)=>`<div class="row" data-idx="${qi}" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:7px 9px">
         <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
@@ -301,7 +313,7 @@ function wire(){
   if(v==='edit'){
     enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderRounds });
     el.querySelectorAll('.qlist').forEach(ql=> enableDragSort(ql, { handle:'.grip', onDrop:order=>reorderQ(+ql.dataset.round, order) }));
-    el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncName(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
+    el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
     const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
     const sv=$('#b-save'); if(sv)sv.onclick=saveDraft;
     const cn=$('#b-cancel'); if(cn)cn.onclick=()=>{ S.draft=null; S.editingName=null; S.view='list'; S.err=''; S.msg=''; render(); };

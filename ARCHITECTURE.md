@@ -659,8 +659,10 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
 - **`quizzes.html`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
   `list`/`edit`/`add`/`mc`/`open`/`film`):
   - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
-  - **edit** — quiz name + rounds; **drag to reorder rounds and questions** (grip handle, see
-    `lib/drag.js`), 🗑 per question, **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
+  - **edit** — quiz name + rounds; each round has an **editable name and intro** (the intro is the
+    "Ik snap het 👍" explanation players see at the round start; synced via `syncEdit`),
+    **drag to reorder rounds and questions** (grip handle, see `lib/drag.js`), 🗑 per question,
+    **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
   - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
     or make a new **Meerkeuze / Open / Film** question. Each of these (bank picks + every custom
     form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
