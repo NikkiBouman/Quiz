@@ -253,3 +253,32 @@
   .betlbl input{width:16px;height:16px}
   .ptsfield{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
   .ptsfield input{width:62px;font-size:13px;padding:6px 8px;text-align:right}
+  /* info-subkop bij de vraag (jaar/genre/… en evt. een acteurfoto) — game */
+  .factsrow{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:2px}
+  .factimg{display:inline-flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted)}
+  .factimg img{width:64px;height:64px;border-radius:10px;object-fit:cover}
+  /* sleep-bouwer met drie zones (quizzes.html / questions.html) */
+  .czone{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--surface)}
+  .czone-h{font-size:13px;font-weight:700;color:var(--ink);margin:0 2px 6px}
+  .czone-sub{font-weight:400;color:var(--muted)}
+  .czone-drop{display:flex;flex-direction:column;gap:6px;min-height:42px}
+  .cchip{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:14px}
+  .cchip.fixed{opacity:.85;background:var(--surface);border-style:dashed}
+  .cchip-img{width:34px;height:34px;border-radius:8px;object-fit:cover;flex:none}
+  .cchip-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cchip-ck{flex:none;display:flex;gap:8px;font-size:12px;color:var(--muted);font-weight:600}
+  .cchip-ck label{display:inline-flex;align-items:center;gap:3px;cursor:pointer}
+  .cchip-ck input{width:15px;height:15px}
+  .cchip-role{font-size:11px;color:var(--muted);font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+  .cluempty{font-size:12px;text-align:center;padding:8px;border:1px dashed var(--line);border-radius:8px}
+  [data-id].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}
+  /* builder gebruikt (bijna) de volle breedte */
+  .wrap.builderwide{max-width:min(1400px,96vw)}
+  /* twee helften: links de vraag, rechts de bron-info + versleepbare pool (stapelt op mobiel) */
+  .mb-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  @media (max-width:640px){ .mb-grid{grid-template-columns:1fr;gap:14px} }
+  .mb-col{min-width:0}
+  .mb-arthead{display:flex;gap:10px;align-items:center}
+  .mb-art{width:62px;height:92px;object-fit:cover;border-radius:10px;border:1px solid var(--line);flex:none}
+  .mb-arttitle{font-family:var(--display);font-weight:700;font-size:18px;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+  .mb-pool{background:var(--surface-2);border:1px dashed var(--line);border-radius:12px;padding:8px;min-height:120px}

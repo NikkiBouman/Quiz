@@ -20,8 +20,8 @@
 
 <script type="module">
 import * as core from './lib/quiz-core.js';
-import { enableDragSort } from './lib/drag.js';
-const { esc, qLabel, qTypeLabel, answerText, ICON_TRASH, ICON_GRIP, loadBank, addToBank, saveBank, deleteBankItem, tmdbSearch, movieCast, deezerSearch, popularMoviesHTML, defaultBetMults } = core;
+import { enableDragGroup } from './lib/drag.js';
+const { esc, qLabel, qTypeLabel, answerText, ICON_TRASH, loadBank, addToBank, saveBank, deleteBankItem, tmdbSearch, deezerSearch, popularMoviesHTML } = core;
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
@@ -46,13 +46,9 @@ function editItem(i){
   S.editIndex=i; S.err=''; S.msg='';
   const mt = q.video?'video':q.audio?'audio':'image', media=(q.image||q.video||q.audio||'');
   if(it.bucket==='films'){
-    S.filmPick={ tmdbId:q.answer, label:q.answerLabel||'', cast:(q.stages||[]).map(s=>({img:s.image, name:'', checked:true})) };
-    S.view='film';
+    S.filmPick=core.pickFromQuestion(q); S.view='film';
   } else if(it.bucket==='liedjes'){
-    const mode=q.options===':deezer'?':deezer':':text';
-    const label = mode===':deezer' ? (q.answerLabel||'') : (q.answer||'');
-    S.songPick={ deezerId:mode===':deezer'?q.answer:null, label, preview:q.audio||'', prompt:q.question||'Welk nummer is dit?', start:q.clipStart??0, end:q.clipEnd??'', mode };
-    S.view='song';
+    S.songPick=core.pickFromQuestion(q); S.view='song';
   } else if(q.options===':text'){
     S.openDraft={ question:q.question||'', media, mediaType:mt, answer:q.answer||'', accept:(q.accept||[]).join(', ') };
     S.view='open';
@@ -86,34 +82,20 @@ function addOpen(){
   if(!q.question && !q.image && !q.video && !q.audio){ S.err='Geef een vraag of een medialink op.'; render(); return; }
   S.openDraft=null; S.err=''; bankAdd('eigen', (q.question||ans), q);
 }
-/* film */
+/* film/liedje delen één bouwer (bron → vraag → info → hints → antwoord), zie quiz-core.js */
 async function filmSearch(){ const e=$('#film-q'); const q=e?e.value.trim():''; S.filmQuery=q; if(!q){ S.filmResults=[]; render(); return; } S.filmBusy=true; render(); try{ S.filmResults=await tmdbSearch(q); }catch(err){ S.filmResults=[]; S.err='Zoeken mislukt: '+err.message; } S.filmBusy=false; render(); }
-async function filmPick(id,label){ S.filmBusy=true; S.filmResults=[]; S.filmQuery=''; render(); const cast=await movieCast(id,5); S.filmPick={ tmdbId:id, label, cast: cast.slice().reverse().map(c=>({...c, checked:true})) }; S.filmBusy=false; render(); }   // minst bekende bovenaan (eerst getoond)
-function filmToggle(i){ const p=S.filmPick; if(!p)return; p.cast[i].checked=!p.cast[i].checked; render(); }
-function reorderCast(order){ const p=S.filmPick; if(!p)return; p.cast = order.map(i=>p.cast[i]); render(); }
-function addFilm(){
-  const p=S.filmPick; if(!p){ S.err='Kies eerst een film.'; render(); return; }
-  const sel=p.cast.filter(c=>c.checked); if(sel.length<2){ S.err='Kies minstens 2 acteurs.'; render(); return; }
-  const mults=defaultBetMults(sel.length);
-  const q={ question:'In welke film spelen deze acteurs?', options:':tmdb', answer:Number(p.tmdbId)||p.tmdbId, answerLabel:p.label, points:100, stages: sel.map((c,i)=>({ image:c.img, betMultiplier:mults[i] })) };
-  S.filmPick=null; S.err=''; bankAdd('films', p.label, q);
-}
-/* liedje: zoek via Deezer → preview-fragment (~30s) → kies een clip-venster */
+async function filmPick(id,label){ S.filmBusy=true; S.filmResults=[]; S.filmQuery=''; render(); let d=await core.movieDetails(id); if(!d){ const cast=await core.movieCast(id,10); d={ id, title:label, cast, genres:[] }; }  /* val terug op alleen-cast als type=details nog niet gedeployd is */ S.filmPick=core.newFilmPick(d); S.filmBusy=false; render(); }
 async function songSearch(){ const e=$('#song-q'); const q=e?e.value.trim():''; S.songQuery=q; if(!q){ S.songResults=[]; render(); return; } S.songBusy=true; render(); try{ S.songResults=await deezerSearch(q); }catch(err){ S.songResults=[]; S.err='Zoeken mislukt: '+err.message; } S.songBusy=false; render(); }
-function songPickTrack(i){ const t=S.songResults[i]; if(!t)return; if(!t.preview){ S.err='Geen fragment beschikbaar voor dit nummer.'; render(); return; } S.songPick={ deezerId:t.id, label:t.label, preview:t.preview, prompt:'Welk nummer is dit?', start:0, end:15, mode:':deezer' }; S.songResults=[]; S.songQuery=''; S.err=''; render(); }
-function addSong(){
-  const p=S.songPick; if(!p){ S.err='Kies eerst een nummer.'; render(); return; }
-  const g=id=>{ const e=$('#'+id); return e?e.value:''; };
-  const start=Math.max(0, parseFloat(g('song-start'))||0);
-  let end=parseFloat(g('song-end')); if(isNaN(end)) end=null;
-  if(end!=null && end<=start){ S.err='“tot” moet ná “van” liggen.'; render(); return; }
-  const mode=g('song-mode')||':deezer';
-  const prompt=(g('song-prompt')||'').trim() || 'Welk nummer is dit?';
-  const q = mode===':text'
-    ? { question:prompt, options:':text', answer:p.label, audio:p.preview, clipStart:start }
-    : { question:prompt, options:':deezer', answer:Number(p.deezerId)||p.deezerId, answerLabel:p.label, audio:p.preview, clipStart:start };
-  if(end!=null) q.clipEnd=end;
-  S.songPick=null; S.err=''; bankAdd('liedjes', p.label, q);
+async function songPickTrack(i){ const t=S.songResults[i]; if(!t)return; if(!t.preview){ S.err='Geen fragment beschikbaar voor dit nummer.'; render(); return; } S.songBusy=true; render(); const det=await core.deezerTrack(t.id); S.songPick=core.newSongPick(t, det?core.songFacts(det):[]); S.songResults=[]; S.songQuery=''; S.songBusy=false; S.err=''; render(); }
+/* één opslaan-actie voor film én liedje (nieuw of, bij editIndex, vervangen) */
+function addMedia(){
+  const p = S.view==='film' ? S.filmPick : S.songPick;
+  if(!p){ S.err='Kies eerst een film of nummer.'; render(); return; }
+  const { q, error } = core.buildMediaQuestion(p);
+  if(error){ S.err=error; render(); return; }
+  const isFilm=p.kind==='film';
+  if(isFilm) S.filmPick=null; else S.songPick=null;
+  S.err=''; bankAdd(isFilm?'films':'liedjes', (q.source&&q.source.label)||p.label, q);
 }
 function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); render(); } }
 
@@ -151,15 +133,12 @@ function openFormHTML(){ const d=S.openDraft||{}; return `<div class="statusbar"
   </div>
   <div class="row"><button class="btn grow" id="b-op-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-back">Terug</button></div>`; }
 function filmFormHTML(){
-  if(S.filmPick){ const p=S.filmPick;
-    const cast=p.cast.map((c,i)=>`<div class="row" data-idx="${i}" style="gap:8px;align-items:center;padding:3px 0"><span class="grip" title="Sleep om te herordenen">${ICON_GRIP}</span><span class="cnum" style="flex:none">${i+1}</span><input type="checkbox" data-actor="${i}" ${c.checked?'checked':''}><img src="${esc(c.img)}" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><span style="flex:1;font-size:14px">${esc(c.name)}</span></div>`).join('');
-    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Film wijzigen':'Film'}: ${esc(p.label)}</h1></div>
-      <p class="muted" style="font-size:13px;margin:0">Volgorde: <b>1 bovenaan = eerst getoond</b> (lastigst), de ster onderaan. Vink aan en sleep ze in de juiste volgorde.</p>
-      <div class="stack" id="ed-scroll" style="gap:2px">${cast || '<p class="muted">Geen acteurfoto’s gevonden (Worker gedeployd?).</p>'}</div>
-      <div class="row"><button class="btn grow" id="b-film-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-film-reset">Andere film</button></div>`;
+  if(S.filmPick){
+    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Film wijzigen':'Film'}: ${esc(S.filmPick.label)}</h1></div>`
+      + core.mediaBuilderHTML(S.filmPick, { addLabel:S.editIndex!=null?'Bijwerken':'Opslaan', resetLabel:'Andere film' });
   }
   const res=S.filmResults||[];
-  return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Film (acteurs raden)</h1></div>
+  return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Film</h1></div>
     <div class="row" style="gap:6px"><input id="film-q" class="sinput" placeholder="Zoek een film…" value="${esc(S.filmQuery||'')}" style="flex:1"><button class="btn" id="b-film-search">Zoek</button></div>
     ${S.filmBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
     <div class="stack" id="ed-scroll" style="gap:4px">${res.map(m=>`<button class="btn ghost" data-film="${esc(m.id)}|${esc(m.label)}" style="display:flex;align-items:center;text-align:left;font-size:14px">${m.thumb?`<img src="${esc(m.thumb)}" style="width:28px;height:40px;object-fit:cover;border-radius:4px;margin-right:8px">`:''}${esc(m.label)}</button>`).join('')}</div>
@@ -167,25 +146,9 @@ function filmFormHTML(){
     <div class="row"><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
 function songFormHTML(){
-  if(S.songPick){ const p=S.songPick;
-    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Liedje wijzigen':'Liedje'}: ${esc(p.label)}</h1></div>
-      <p class="muted" style="font-size:13px;margin:0">Luister het ~30s-fragment en kies welk stukje de spelers horen. Het fragment speelt <b>alleen op het hostscherm</b>.</p>
-      <audio controls preload="none" src="${esc(p.preview)}" style="width:100%"></audio>
-      <div class="stack" id="ed-scroll" style="gap:8px">
-        <input id="song-prompt" class="sinput" placeholder="De vraag" value="${esc(p.prompt||'Welk nummer is dit?')}">
-        <label class="lbl">Welk stukje van het fragment spelen?</label>
-        <div class="row" style="gap:8px;align-items:center">
-          <span class="muted">van</span><input type="number" id="song-start" class="sinput" min="0" max="30" step="1" value="${p.start??0}" style="width:80px">
-          <span class="muted">tot</span><input type="number" id="song-end" class="sinput" min="0" max="30" step="1" value="${p.end??''}" style="width:80px">
-          <span class="muted">seconde (leeg = einde)</span>
-        </div>
-        <label class="lbl">Hoe antwoorden de spelers?</label>
-        <select id="song-mode" class="sinput">
-          <option value=":deezer" ${p.mode!==':text'?'selected':''}>Spelers zoeken het nummer in Deezer</option>
-          <option value=":text" ${p.mode===':text'?'selected':''}>Open antwoord (jij beoordeelt)</option>
-        </select>
-      </div>
-      <div class="row"><button class="btn grow" id="b-song-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-song-reset">Ander nummer</button></div>`;
+  if(S.songPick){
+    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Liedje wijzigen':'Liedje'}: ${esc(S.songPick.label)}</h1></div>`
+      + core.mediaBuilderHTML(S.songPick, { addLabel:S.editIndex!=null?'Bijwerken':'Opslaan', resetLabel:'Ander nummer' });
   }
   const res=S.songResults||[];
   return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Liedje (fragment afspelen)</h1></div>
@@ -196,6 +159,8 @@ function songFormHTML(){
 }
 function render(){
   const v=S.view;
+  const builder = (v==='film'&&S.filmPick) || (v==='song'&&S.songPick);   // brede twee-koloms-bouwer
+  const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner = v==='mc'?mcFormHTML() : v==='open'?openFormHTML() : v==='film'?filmFormHTML() : v==='song'?songFormHTML() : listHTML();
   el.innerHTML = `${inner}
     ${S.err?`<p class="err" style="margin:4px 0 0">${esc(S.err)}</p>`:''}
@@ -219,24 +184,23 @@ function wire(){
   const cancel=()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.songPick=null; S.editIndex=null; S.view='list'; S.err=''; render(); };
   if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
   if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
-  if(v==='film'){
-    const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
-    const fq=$('#film-q'); if(fq)fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
-    el.querySelectorAll('[data-film]').forEach(b=>b.onclick=()=>{ const val=b.dataset.film; const i=val.indexOf('|'); filmPick(val.slice(0,i), val.slice(i+1)); });
-    el.querySelectorAll('.pmovie').forEach(b=>b.onclick=()=>filmPick(b.dataset.pid, b.dataset.plabel));
-    el.querySelectorAll('[data-actor]').forEach(cb=>cb.onchange=()=>filmToggle(+cb.dataset.actor));
-    if(S.filmPick) enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderCast });
-    const add=$('#b-film-add'); if(add)add.onclick=addFilm;
-    const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ S.filmPick=null; S.err=''; render(); };
-    const b=$('#b-back'); if(b)b.onclick=cancel;
-    return;
-  }
-  if(v==='song'){
-    const s=$('#b-song-search'); if(s)s.onclick=songSearch;
-    const sq=$('#song-q'); if(sq)sq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); songSearch(); } };
-    el.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>songPickTrack(+b.dataset.song));
-    const add=$('#b-song-add'); if(add)add.onclick=addSong;
-    const rs=$('#b-song-reset'); if(rs)rs.onclick=()=>{ S.songPick=null; S.err=''; render(); };
+  if(v==='film' || v==='song'){
+    const pick = v==='film' ? S.filmPick : S.songPick;
+    if(pick){
+      const sync = core.wireMediaBuilder(el, pick, render);
+      enableDragGroup(Array.from(el.querySelectorAll('[data-zone]')), { handle:'.grip', onDrop:()=>{ sync(); render(); } });
+      const add=$('#b-mb-add'); if(add)add.onclick=()=>{ sync(); addMedia(); };
+      const rs=$('#b-mb-reset'); if(rs)rs.onclick=()=>{ if(v==='film') S.filmPick=null; else S.songPick=null; S.err=''; render(); };
+    } else if(v==='film'){
+      const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
+      const fq=$('#film-q'); if(fq)fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
+      el.querySelectorAll('[data-film]').forEach(b=>b.onclick=()=>{ const val=b.dataset.film; const i=val.indexOf('|'); filmPick(val.slice(0,i), val.slice(i+1)); });
+      el.querySelectorAll('.pmovie').forEach(b=>b.onclick=()=>filmPick(b.dataset.pid, b.dataset.plabel));
+    } else {
+      const s=$('#b-song-search'); if(s)s.onclick=songSearch;
+      const sq=$('#song-q'); if(sq)sq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); songSearch(); } };
+      el.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>songPickTrack(+b.dataset.song));
+    }
     const b=$('#b-back'); if(b)b.onclick=cancel;
     return;
   }

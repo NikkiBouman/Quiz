@@ -169,6 +169,15 @@ function metaHTML(r){
   if(r.par!=null) bits.push(`par ${r.par}`);
   return bits.length ? `<div class="metarow">${bits.map(b=>`<span class="pill">${esc(b)}</span>`).join('')}</div>` : '';
 }
+/* info-subkop bij de vraag (jaar/genre/regisseur/… en evt. een acteurfoto). Altijd zichtbaar,
+   nooit het antwoord (de editor sluit dat uit). Spiegelt factsHTML in lib/quiz-core.js. */
+function factsHTML(r){
+  const facts = r && Array.isArray(r.facts) ? r.facts : null;
+  if(!facts || !facts.length) return '';
+  return `<div class="factsrow">${facts.map(f=> f.image
+    ? `<span class="factimg"><img src="${esc(resolveMedia(f.image))}" alt="">${f.label?`<span>${esc(f.label)}</span>`:''}</span>`
+    : `<span class="pill">${f.label?esc(f.label)+': ':''}${esc(f.value)}</span>`).join('')}</div>`;
+}
 /* tekst normaliseren voor losse antwoordvergelijking */
 function normTxt(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
 /* is dit antwoord goed? ondersteunt lijst/zoek (id of index), tekst, én meerdere juiste antwoorden (array) */
@@ -300,6 +309,7 @@ function publicCurrent(){
   if(r.year!=null) base.year=r.year;
   if(r.views!=null) base.views=r.views;
   if(r.par!=null) base.par=r.par;
+  if(Array.isArray(r.facts)) base.facts=r.facts.map(f=> f.image ? { label:f.label, image:resolveMedia(f.image) } : f);  // info-subkop is context, geen antwoord → altijd meesturen
   if(!staged){
     base.image = resolveMedia(r.image) || null;
     if(r.video) base.video = resolveMedia(r.video) || null;
@@ -309,7 +319,8 @@ function publicCurrent(){
     base.stages = r.stages.map((s,idx)=>{
       const revealed = reveal || idx<=app.stage;
       const kind = s.audio?'audio':s.video?'video':s.image?'image':'text';
-      const o = { kind, label:s.label||'', revealed };
+      // label: audio-labels (instrument) mogen vooraf zichtbaar zijn; andere (bv acteurnaam) pas bij onthulling — anders lekt het antwoord
+      const o = { kind, label:(kind==='audio'||revealed)?(s.label||''):'', revealed };
       if(revealed){
         if(kind==='text') o.text = s.text||'';
         if(kind==='image') o.image = resolveMedia(s.image) || '';
@@ -686,7 +697,7 @@ function renderController(){
     el.innerHTML = `
       <div class="statusbar"><span class="pill">${esc(roundLbl)}</span><span class="pill ok">controleur · inzet</span></div>
       <div class="spotlight"><div class="qmeta">${esc(rc.name||'')}</div><div class="qtext" style="font-size:20px">${esc(r.question||'')}</div></div>
-      ${metaHTML(r)}
+      ${metaHTML(r)}${factsHTML(r)}
       <div class="card stack" style="gap:8px"><b>Inzetten — zien en wijzigen</b>
         <p class="muted" style="margin:0;font-size:12px">Tik een hintnummer om iemands inzet te zetten of te corrigeren, vóórdat de vraag begint.</p>
         ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
@@ -1080,9 +1091,9 @@ function stageRowHTML(kind, label, idx, cur, revealed, media, isHost, clipStart,
     body = `<span class="slabel">${esc(label||('Fragment '+(idx+1)))}</span>${isCur?'<span class="nowtag">▶ nu</span>':''}`;
     if(isHost && revealed) body += audioHTML(media, clipStart, clipEnd);
   } else if(kind==='image'){
-    body = revealed ? imgHTML(media) : `<span class="slocked">nog niet getoond</span>`;
+    body = revealed ? imgHTML(media)+(label?`<div class="slabel">${esc(label)}</div>`:'') : `<span class="slocked">nog niet getoond</span>`;
   } else if(kind==='video'){
-    body = revealed ? videoHTML(media) : `<span class="slocked">nog niet getoond</span>`;
+    body = revealed ? videoHTML(media)+(label?`<div class="slabel">${esc(label)}</div>`:'') : `<span class="slocked">nog niet getoond</span>`;
   } else {
     body = revealed ? `<div class="qtext sm">${esc(media||'')}</div>` : `<span class="slocked">nog niet getoond</span>`;
   }
@@ -1102,7 +1113,12 @@ function hostStagesHTML(r, cur){
 /* lijst met hint-namen (vooraf zichtbaar, bv bij inzetten) */
 function hintLabelsHTML(r){
   if(!Array.isArray(r.stages)) return '';
-  return `<div class="hintlist">${r.stages.map((s,i)=>`<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(s.label||('Hint '+(i+1)))}</span></div>`).join('')}</div>`;
+  // vóór onthulling alleen de categorie tonen — nooit de waarde/naam (geen spoiler op het gedeelde scherm).
+  // audio-labels (instrument) zijn wél bedoeld vooraf zichtbaar.
+  return `<div class="hintlist">${r.stages.map((s,i)=>{
+    const lbl = s.audio ? (s.label||('Fragment '+(i+1))) : s.image ? 'Foto' : s.video ? 'Video' : ('Hint '+(i+1));
+    return `<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(lbl)}</span></div>`;
+  }).join('')}</div>`;
 }
 function playerStagesHTML(c){
   const cur = c.stage||0;
@@ -1237,7 +1253,7 @@ function hostQuestion(){
         <div class="hostmain">
           ${hostHead('<span class="pill">inzetten</span>', true)}
           <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
-          ${metaHTML(r)}
+          ${metaHTML(r)}${factsHTML(r)}
           <div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>
           <div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(r)}</div>
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
@@ -1302,7 +1318,7 @@ function hostQuestion(){
       <div class="hostmain">
         ${hostHead(app.checked?'<span class="pill ok">gecontroleerd</span>':'', true)}
         ${spot}
-        ${metaHTML(r)}
+        ${metaHTML(r)}${factsHTML(r)}
         ${opts}
         ${controls}
       </div>
@@ -1536,7 +1552,7 @@ function playerQuestion(){
       el.innerHTML = `
         <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">inzet</span></div>
         ${spot}
-        ${metaHTML(r)}
+        ${metaHTML(r)}${factsHTML(r)}
         <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
         <div class="card stack" style="gap:8px">
           <b>Hints die je gaat krijgen</b>
@@ -1614,7 +1630,7 @@ function playerQuestion(){
   el.innerHTML = `
     <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">${pill}</span></div>
     ${spot}
-    ${metaHTML(r)}
+    ${metaHTML(r)}${factsHTML(r)}
     ${funBanner}
     ${answerAreaHTML(r)}
     <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>
