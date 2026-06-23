@@ -25,7 +25,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/fireba
 import { getDatabase, ref, get, set, remove, onValue }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 /* gedeelde kern: hier alleen de overdracht van een op de quizzen-pagina gekozen quiz */
-import { takeActiveQuiz, navMenuHTML } from "./lib/quiz-core.js";
+import { takeActiveQuiz, navMenuHTML, ACTIVE_KEY } from "./lib/quiz-core.js";
 
 /* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
    Firebase console → tandwiel (Project settings) → tab "General"
@@ -335,6 +335,15 @@ const remember = c => { try{ localStorage.setItem('quizHost', c); }catch(e){} };
 const forget   = () => { try{ localStorage.removeItem('quizHost'); }catch(e){} };
 const recall   = () => { try{ return localStorage.getItem('quizHost'); }catch(e){ return null; } };
 
+/* actieve sessie onthouden zodat een refresh je niet uit het spel gooit.
+   Per-tab (sessionStorage): overleeft een refresh, maar verdwijnt als je het tabblad
+   sluit — dus geen 'blijf voor altijd hangen in een oud spel'. De controleur gebruikt
+   hiervoor al de URL (?judge&t); host heeft daarnaast nog de losse 'Hervat quiz'-knop. */
+const SESSION_KEY = 'quizSession';
+const saveSession  = o => { try{ sessionStorage.setItem(SESSION_KEY, JSON.stringify(o)); }catch(e){} };
+const loadSession  = () => { try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null'); }catch(e){ return null; } };
+const clearSession = () => { try{ sessionStorage.removeItem(SESSION_KEY); }catch(e){} };
+
 /* tekst naar klembord (met fallback), zonder de tekst zichtbaar te tonen */
 function copyText(txt, cb){
   const fallback=()=>{ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); if(cb)cb(); };
@@ -453,7 +462,7 @@ function startPlayer(){
   });
   // eigen node bewaken: verdwijnt die, dan ben je door de host verwijderd
   app.unsubMe = onValue(playerRef(app.code, app.pid), snap=>{
-    if(!snap.exists() && !app.kicked){ app.kicked=true; cleanup(); renderPlayerKicked(); }
+    if(!snap.exists() && !app.kicked){ app.kicked=true; clearSession(); cleanup(); renderPlayerKicked(); }
   });
 }
 function cleanup(){
@@ -478,6 +487,7 @@ function hostCreate(){
   app.quiz = applyShuffles(normalizeQuiz(f.questions)); app.rounds = f.rounds;
   app.quizName = (active && active.name) ? active.name : 'Voorbeeldset';
   remember(app.code);
+  saveSession({ role:'host', code:app.code });   // refresh → terug als host
   set(quizRef(app.code), app.quiz);      // vragenset bewaren voor hervatten
   set(roundsRef(app.code), app.rounds);
   set(ref(db, `games/${app.code}/judgeToken`), app.judgeToken);   // geheime sleutel voor de jurylid-link
@@ -553,6 +563,7 @@ async function hostResume(code){
   app.rounds = rs.exists() ? rs.val() : flattenQuiz(qs.exists()?qs.val():SAMPLE).rounds;
   app.quizName = qs.exists() ? 'geladen set' : 'Voorbeeldset';
   remember(code);
+  saveSession({ role:'host', code });            // refresh → terug als host
   startHost(); renderHost();
   return true;
 }
@@ -661,7 +672,7 @@ function hostNext(){
   else app.phase='final';
   pushState(); renderHost();
 }
-async function hostEnd(){ forget(); cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
+async function hostEnd(){ forget(); clearSession(); cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
 
 /* host vult zelf een antwoord in namens een speler (backup) */
 async function hostSetAnswer(pid, idx){
@@ -691,6 +702,35 @@ async function playerJoin(code, name){
   if(!snap.exists()) return false;
   const pr = playerRef(app.code, app.pid);
   await set(pr, { id:app.pid, name:app.name, ans:app.ans, seen:Date.now() });
+  saveSession({ role:'player', code:app.code, pid:app.pid, name:app.name });  // refresh → zelfde speler
+  startPlayer();
+  return true;
+}
+/* speler hervat na een refresh: terugkoppelen aan dezelfde speler-node (zelfde pid → zelfde
+   score en antwoorden), met de lokale voortgang opnieuw opgebouwd uit Firebase. */
+async function playerResume(code, pid, name){
+  code = (code||'').toUpperCase();
+  if(!code || !pid) return false;
+  const snap = await get(stateRef(code));
+  if(!snap.exists()) return false;                          // spel bestaat niet meer → naar home
+  const pSnap = await get(playerRef(code, pid));
+  if(!pSnap.exists()){                                      // host heeft je verwijderd terwijl je weg was
+    clearSession();
+    app.role='player'; app.code=code; app.pid=pid; app.kicked=true;
+    renderPlayerKicked();
+    return true;
+  }
+  const pv = pSnap.val() || {};
+  app.role='player'; app.code=code; app.pid=pid; app.name=(pv.name||name||'').trim();
+  app.kicked=false; app.sel=null; app.searchPick=null; app.searchText=''; app.textAns='';
+  // antwoorden / inzetten / passes / ready terughalen zodat de UI je voortgang toont
+  app.ans = pv.ans || {}; app.bet = pv.bet || {}; app.passed = pv.pass || {};
+  app.readyRounds = pv.ready || {};
+  const round = (snap.val().round!=null) ? snap.val().round : -1;
+  app.searchRound = round;                                  // voorkomt dat playerQuestion de per-ronde staat (myStage) wist
+  if(pv.ans && pv.ans[round]!=null){ app.submittedRound = round; app.lastSubmitLabel = (pv.anslabel&&pv.anslabel[round])||null; }
+  else app.submittedRound = -1;
+  app.myStage = (pv.astage && pv.astage[round]!=null) ? pv.astage[round] : null;
   startPlayer();
   return true;
 }
@@ -834,7 +874,7 @@ async function playerPass(){
 /* ============================================================
    NAVIGATIE
    ============================================================ */
-function resetToHome(){ cleanup(); app.role=null; app.code=null; app.game=null; app.kicked=false; setConn(''); renderHome(); }
+function resetToHome(){ cleanup(); clearSession(); app.role=null; app.code=null; app.game=null; app.kicked=false; setConn(''); renderHome(); }
 
 /* ============================================================
    RENDER — HOME
@@ -1779,6 +1819,19 @@ async function boot(){
       const hb=$('#b-home'); if(hb) hb.onclick=()=>{ history.replaceState(null,'',location.pathname); renderHome(); };
     }
     return;
+  }
+  // refresh-herstel: zat je in een spel (per-tab sessie), koppel dan terug i.p.v. naar home.
+  // Uitzondering: staat er een vers gekozen quiz klaar (handoff vanaf account/quizzes/ in
+  // hetzelfde tabblad), dan home tonen zodat je die kunt hosten i.p.v. het oude spel.
+  let pendingQuiz=false; try{ pendingQuiz = !!localStorage.getItem(ACTIVE_KEY); }catch(e){}
+  const sess = loadSession();
+  if(sess && sess.code && !pendingQuiz){
+    el.innerHTML = `<div class="center stack"><div class="qmeta">Even geduld</div><h1>Verbinden…</h1></div>`;
+    try{
+      if(sess.role==='host'){ if(await hostResume(sess.code)) return; }
+      else if(sess.role==='player'){ if(await playerResume(sess.code, sess.pid, sess.name)) return; }
+    }catch(e){}
+    clearSession();   // spel weg of herstel mislukt → schoon naar home
   }
   renderHome();
 }

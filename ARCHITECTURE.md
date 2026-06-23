@@ -480,6 +480,32 @@ Because all shared state is in Firebase, a host can move to another device.
   (last-write-wins) and conflict. Hand off; don't parallelize. Players stay connected through
   the handoff (their listeners are on the same nodes).
 
+### Refresh survival (per-tab session)
+
+A page **refresh** must not kick you out of a running game — for **host or player** alike (the
+controller was always refresh-safe because it reconnects from its `?judge=CODE&t=TOKEN` URL).
+
+- On join/create the app writes a tiny reconnect record to **`sessionStorage`** (`quizSession`):
+  `{role:'host', code}` or `{role:'player', code, pid, name}` (`saveSession`). sessionStorage is
+  **per-tab**: it survives a refresh but is dropped when the tab closes — so you never get yanked
+  back into a stale/old game on a later visit (unlike a code in the URL or `localStorage`).
+- **`boot()`** checks it before falling to home: host → `hostResume(code)`; player →
+  `playerResume(code, pid, name)`. On success it renders straight back into the game. If the game
+  is gone or resume throws, it clears the record and shows home.
+- **`playerResume`** reconnects to the **same `pid`** (so the same score + answers — no duplicate
+  player), and rehydrates local state from `players/{pid}` (`ans`/`bet`/`pass`/`ready`, plus the
+  current round's `submittedRound`/`myStage`/`lastSubmitLabel`) so the UI shows your progress. It
+  pre-sets `app.searchRound` to the current round so `playerQuestion`'s per-round reset doesn't wipe
+  the rehydrated `myStage`. If the player node is gone (kicked while away) it shows the kicked screen.
+- The record is cleared on explicit leave (`resetToHome`), game end (`hostEnd`), and when a player
+  is kicked (the `unsubMe` listener).
+- **Exception in `boot()`:** if a freshly picked quiz is waiting (`localStorage[ACTIVE_KEY]`, the
+  handoff from `account/quizzes/` in the *same tab*), auto-resume is skipped so you can host the new
+  quiz instead of being pulled back into the old game.
+- The host **also** keeps the existing `localStorage` `quizHost` code + manual **"Hervat quiz"**
+  button — that's the cross-tab / cross-device path; the sessionStorage record is only the
+  seamless same-tab refresh layer.
+
 ---
 
 ## 16. External APIs
@@ -588,14 +614,16 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
 
 ## 19. Function reference (grouped)
 
-- **Bootstrap/routing:** `boot`, `renderHome`, `renderJoin`, `renderHostResume`,
-  `resetToHome`, `cleanup`.
+- **Bootstrap/routing:** `boot` (controller URL → per-tab session auto-resume → home),
+  `renderHome`, `renderJoin`, `renderHostResume`, `resetToHome`, `cleanup`.
+- **Session reconnect:** `saveSession`/`loadSession`/`clearSession` (per-tab `sessionStorage`,
+  §15) — written on host create/resume + player join, read by `boot`.
 - **Host lifecycle:** `hostCreate`, `hostResume`, `startHost`, `hostStart`, `hostBeginRound`,
   `hostNext`, `hostSkip`, `hostEnd`, `initQuestion`, `hostKick`.
 - **Host question flow:** `hostQuestion`, `hostStagesHTML`, `hostCheck`, `hostNextHint`,
   `hostStartPlay`, `hostRevealBets`, `hostReveal`, `hostRevealView`, `hostToggleCorrect`,
   `hostSetAnswer`, `hostHead`, `hostAside`, `hostRoundIntro`, `hostLobby`, `hostFinal`.
-- **Player:** `playerJoin`, `startPlayer`, `playerLobby`, `playerRoundIntro`, `playerReady`,
+- **Player:** `playerJoin`, `playerResume` (refresh reconnect, §15), `startPlayer`, `playerLobby`, `playerRoundIntro`, `playerReady`,
   `playerQuestion`, `playerStagesHTML`, `playerSubmit`, `playerBet`, `playerPass`,
   `playerPassed`, `playerWaiting`, `playerHold`, `playerReveal`, `playerFinal`,
   `playerLeaderboardHTML`, `renderPlayerKicked`.
