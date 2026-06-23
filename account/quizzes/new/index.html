@@ -196,7 +196,7 @@ function addHTML(){
       ${libraryHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
-      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">+ Custom</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
+      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">+ Custom</button><button class="btn ghost" id="b-film">+ Film</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
