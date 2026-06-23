@@ -47,6 +47,7 @@ function syncEdit(){
   if(!S.draft) return;
   el.querySelectorAll('.r-name').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri]; if(r) r.name=inp.value; });
   el.querySelectorAll('.r-intro').forEach(t=>{ const r=S.draft.rounds[+t.dataset.ri]; if(r) r.intro=t.value; });
+  el.querySelectorAll('.q-pts').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri], q=r&&r.questions[+inp.dataset.qi]; if(q){ const v=parseInt(inp.value,10); q.points = (isNaN(v)||v<0) ? 100 : v; } });
 }
 function ensureRound(d, name, intro){ let r=d.rounds.find(x=>x.name===name); if(!r){ r={name,intro:intro||'',questions:[]}; d.rounds.push(r); } return r; }
 function selCount(){ return Object.keys(S.sel).reduce((n,f)=> n+Object.keys(S.sel[f]||{}).filter(k=>S.sel[f][k]).length, 0); }
@@ -239,6 +240,7 @@ function editHTML(){
       ${rd.questions.map((q,qi)=>`<div class="row" data-idx="${qi}" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:7px 9px">
         <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
         <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rowText(q)}</span>
+        <span class="ptsfield" title="Punten voor deze vraag (standaard 100)"><input type="number" min="0" step="10" class="q-pts" data-ri="${ri}" data-qi="${qi}" value="${q.points??100}">pt</span>
         ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>

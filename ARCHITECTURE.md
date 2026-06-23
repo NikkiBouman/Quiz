@@ -209,7 +209,7 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
-| `points`      | Base points (default 100). |
+| `points`      | Base points (default 100). Editable per question in the quiz editor (number field); for betting questions this is the base that the multiplier scales. |
 | `pointsByStage` | Non-betting staged questions: points per stage (decreasing reward for later reveals). |
 | `year`, `views`, `par` | Bandle metadata; auto-parsed from the audio folder name if absent. |
 
