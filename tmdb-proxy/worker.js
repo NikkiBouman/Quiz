@@ -11,6 +11,11 @@
  *                                    builder: each cast member has name + profile_path; the
  *                                    client builds image.tmdb.org URLs — photos never pass
  *                                    through this Worker).
+ *   /search?type=details&id=862    → full movie details + credits in one call
+ *                                    (/movie/{id}?append_to_response=credits): genres, runtime,
+ *                                    vote_average, release_date, poster, and cast+crew. Feeds the
+ *                                    media builder's info-facts (year/genre/director/composer/…)
+ *                                    and the actor hints. Photos still load straight from the CDN.
  */
 
 const ALLOWED_ORIGINS = new Set([
@@ -49,8 +54,8 @@ export default {
     const type = params.get("type") || "movie";
 
     let tmdbUrl;
-    if (type === "credits") {
-      // movie cast lookup: /search?type=credits&id=862
+    if (type === "credits" || type === "details") {
+      // movie lookup by id: cast-only (/credits) or full details + credits (?append_to_response=credits)
       const id = params.get("id");
       if (!id || !/^\d+$/.test(id)) {
         return new Response(JSON.stringify({ cast: [], error: "invalid id" }), {
@@ -58,7 +63,9 @@ export default {
           headers: { ...cors, "Content-Type": "application/json" },
         });
       }
-      tmdbUrl = `https://api.themoviedb.org/3/movie/${id}/credits?language=nl-NL`;
+      tmdbUrl = type === "details"
+        ? `https://api.themoviedb.org/3/movie/${id}?language=nl-NL&append_to_response=credits`
+        : `https://api.themoviedb.org/3/movie/${id}/credits?language=nl-NL`;
     } else {
       const base = SEARCH_PATHS[type];
       if (!base) {
