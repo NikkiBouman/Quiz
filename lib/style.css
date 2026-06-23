@@ -153,6 +153,16 @@
   .sresult:hover{background:#dce9fb} .sresult.sel{border-color:var(--gold);background:#dce9fb}
   .sresult img{width:34px;height:50px;object-fit:cover;border-radius:5px;flex:none;background:var(--bg2)}
   .picked{margin-top:10px;padding:10px 12px;border-radius:11px;background:rgba(43,127,255,.12);border:1px solid var(--gold);font-size:14px}
+  /* snelkeuze-rooster populaire films */
+  .pmovies-wrap{margin-top:14px}
+  .pmovies-label{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:10px}
+  .pmovies{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+  .pmovie{display:flex;flex-direction:column;gap:6px;padding:0;background:none;border:none;color:var(--ink);text-align:center;cursor:pointer}
+  .pmovie img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:10px;background:var(--bg2);border:2px solid transparent;transition:border-color .12s,transform .12s}
+  .pmovie span{font-size:12px;font-weight:600;line-height:1.25}
+  .pmovie:hover img{border-color:#9cc4ff;transform:translateY(-2px)}
+  .pmovie.sel img{border-color:var(--gold);box-shadow:0 0 0 3px rgba(43,127,255,.25)}
+  .pmovie.sel span{color:var(--gold)}
   /* audio in stages */
   .qaudio{width:100%;margin:4px 0 8px;height:38px}
   /* gok bij reveal (host) */
