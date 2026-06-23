@@ -5,8 +5,18 @@ scherm, **spelers** doen mee met hun telefoon via een 4-letter-code, een optione
 beoordeelt open antwoorden. Geen build-stap: het zijn statische bestanden.
 
 - `index.html` — het spel (host / speler / jury)
-- `quizzes.html` — bouw en bewerk je eigen quizzen
-- `questions.html` — je persoonlijke vragenbank
+- `account/` — beheer (landingspagina met links naar de twee onderstaande)
+  - `account/quizzes/` — je quizzen (lijst) · `account/quizzes/new/` — quiz maken/bewerken
+  - `account/questions/` — je vragenbank (lijst) · `account/questions/new/?type=film` — vraag maken
+- `lib/` — gedeelde code: `quiz-core.js` (data/opslag/API), `editor-ui.js` (gedeelde
+  beheer-UI), `drag.js` (slepen), `style.css`
+
+> Lijst en maak-scherm zijn aparte, bezoekbare paden (bookmarkbaar, browser-terug werkt). In een
+> maak-/bewerk-scherm staan linksboven **Terug zonder opslaan** en **Opslaan**; op de lijst- en
+> homepagina staat rechtsboven het hamburgermenu (Home · Quizzen · Vragen, huidige pagina actief).
+
+> De oude `quizzes.html` / `questions.html` bestaan nog als doorverwijzing naar de
+> nieuwe `account/`-paden, zodat bestaande links blijven werken.
 
 Zie [ARCHITECTURE.md](ARCHITECTURE.md) voor de volledige uitleg.
 
@@ -21,7 +31,7 @@ De pagina's gebruiken native ES-modules; die werken **alleen via http**, niet vi
 ```
 
 Open daarna **http://localhost:8000/index.html** (host het spel) of
-**http://localhost:8000/quizzes.html** (bouw een quiz).
+**http://localhost:8000/account/quizzes/** (bouw een quiz).
 
 `serve.sh` niet gebruiken kan ook — elke statische server volstaat, **mits op poort 8000**:
 

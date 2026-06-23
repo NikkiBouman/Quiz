@@ -20,15 +20,16 @@ sync with `index.html` when behaviour changes.
 - **The game** is one HTML file (`index.html`): host view, player view, controller view, all
   gameplay JS (vanilla, ES modules, no build step). It imports one thing — `takeActiveQuiz` —
   from the shared module.
-- **Two manager pages** sit beside it: `quizzes.html` (build/edit/use a quiz) and
-  `questions.html` (a personal question bank). They share `lib/quiz-core.js` (the quiz
-  pipeline + catalog + TMDB + localStorage) and `lib/style.css`. See §22.
+- **Two manager pages** sit under `account/`: `account/quizzes/` (build/edit/use a quiz) and
+  `account/questions/` (a personal question bank). They share `lib/quiz-core.js` (the quiz
+  pipeline + catalog + TMDB + localStorage), `lib/editor-ui.js` (their shared UI) and
+  `lib/style.css`. The old `quizzes.html`/`questions.html` are redirect stubs. See §22.
 - **Firebase Realtime Database (RTDB)** is the only backend, and only the *game* uses it. All
   shared game state lives under `games/{CODE}`; clients subscribe with `onValue`. The manager
   pages are backend-free — quizzes/questions live in **localStorage (per device)**.
 - **GitHub Pages** hosts the static files. Repo: `https://github.com/NikkiBouman/Quiz`,
   served at `https://nikkibouman.github.io/Quiz/`.
-- **Question content**: a host either picks a saved quiz (built on `quizzes.html` from the
+- **Question content**: a host either picks a saved quiz (built on `account/quizzes/` from the
   self-describing media library, §22), loads a JSON file, or falls back to the built-in
   `SAMPLE`. `questions.json` is a legacy loadable set.
 - **Media** is **link-based** (URLs / repo-relative paths). The committed library media
@@ -57,23 +58,34 @@ pages use native ES module imports, they must be served over http (GitHub Pages,
 ## 3. File layout
 
 ```
-index.html        # the GAME: host/player/controller, Firebase sync, gameplay
-quizzes.html      # the quiz manager (build/edit/reorder/save/export/use a quiz)  — see §22
-questions.html    # the personal question bank (create/manage reusable questions) — see §22
-lib/quiz-core.js  # shared ES module: quiz pipeline + catalog + TMDB + localStorage
-lib/style.css     # shared stylesheet (linked by all three HTML pages)
+index.html                      # the GAME: host/player/controller, Firebase sync, gameplay (repo root)
+account/index.html              # account landing — links to the two managers
+account/quizzes/index.html      # quiz LIST (saved quizzes; use/edit/export/delete) — see §22
+account/quizzes/new/index.html  # quiz EDITOR (new, or ?edit=<name>); top-bar opslaan/terug
+account/questions/index.html    # question bank LIST (edit/delete) — see §22
+account/questions/new/index.html# question CREATOR/EDITOR (?type=mc|open|film|song, or ?edit=<i>)
+quizzes.html, questions.html    # thin redirect stubs → account/quizzes/ , account/questions/ (old URLs)
+lib/quiz-core.js  # shared ES module: quiz pipeline + catalog + TMDB + localStorage + navMenuHTML
+lib/editor-ui.js  # shared ES module: the manager-page UI (forms, media search, wiring) — see §22
+lib/drag.js       # drag helpers: enableDragSort (single list) + enableDragGroup (cross-zone)
+lib/style.css     # shared stylesheet (linked by every HTML page)
 library.json      # catalog index of round folders (see §22)
 questions.json    # a legacy loadable question set (round-structured; see §7)
 ARCHITECTURE.md   # this file
 ```
 
-All HTML pages are plain static files (GitHub Pages, no build step). `index.html` imports only
-`takeActiveQuiz` from `lib/quiz-core.js`; the two manager pages import the full core. Media
-folders (`bandle/`, `puzzle/`, `dog-breeds/`) live at the repo root and resolve as repo-served
-URLs. **Note:** the quiz pipeline (`flattenQuiz`/`normalizeQuiz`/`applyShuffles`/…) currently
-exists both inline in `index.html` (the game's own copy) and in `lib/quiz-core.js` (for the
-pages); the two are kept logic-identical. De-duplicating `index.html` to import them is a
-possible future cleanup.
+All HTML pages are plain static files (GitHub Pages, no build step). `index.html` stays at the
+repo root (it's the host/share URL, and stored media paths like `bandle/…/x.m4a` resolve relative
+to it); it imports only `takeActiveQuiz` from `lib/quiz-core.js`. The two manager pages live under
+`account/` and import the full core plus `lib/editor-ui.js`; they reference shared code with
+`../../lib/…`. **Path resolution:** `loadCatalog()` fetches `library.json` + each `<folder>/round.json`
+relative to the repo root via `new URL('…', import.meta.url)` (exported as `ROOT`), so the catalog
+loads correctly from `account/quizzes/` *and* the root, and stays base-path-safe on GitHub Pages
+(`/Quiz/…`). Media folders (`bandle/`, `puzzle/`, `dog-breeds/`) live at the repo root.
+
+**Note:** the quiz pipeline (`flattenQuiz`/`normalizeQuiz`/`applyShuffles`/…) still exists both
+inline in `index.html` (the game's own copy) and in `lib/quiz-core.js` (for the pages); the two
+are kept logic-identical. De-duplicating `index.html` to import them is a possible future cleanup.
 
 ---
 
@@ -538,7 +550,7 @@ node --check tmdb-proxy/worker.js && echo "worker OK"
 ```bash
 python3 - <<'PY'
 import re
-html=open('index.html').read()              # or quizzes.html / questions.html
+html=open('index.html').read()              # or account/quizzes/index.html / account/questions/index.html
 js=re.search(r'<script type="module">(.*?)</script>', html, re.S).group(1)
 for u in ('firebase-app.js','firebase-database.js','./lib/quiz-core.js'): js=js.replace(u,'x')
 open('/tmp/page.mjs','w').write(js)
@@ -570,7 +582,7 @@ diff them, brace-match `function <name>(` out of each file and compare comment-s
 **End-to-end** still requires a real browser + Firebase (listeners, media, search), **served over
 http** (GitHub Pages, or `python3 -m http.server` locally — `file://` breaks the module imports).
 After changes: push (or serve locally), open the page. Test the cross-page flow too: build on
-`quizzes.html` → **Gebruik** → host on `index.html`.
+`account/quizzes/` → **Gebruik** → host on `index.html`.
 
 ---
 
@@ -633,11 +645,11 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
 
 ## 21. How to extend
 
-- **Add a question:** either build it on `quizzes.html`, or hand-write it in a quiz JSON. Choose
+- **Add a question:** either build it on `account/quizzes/`, or hand-write it in a quiz JSON. Choose
   the mode via `options` (array / `":tmdb"` / `":deezer"` / `":text"`, optionally `search:true`).
   For staged/betting, add `stages[]` with `betMultiplier`. Media is a URL/repo path. Validate (§18).
 - **Add a library item/round:** drop a folder + `round.json` and list it in `library.json` (§22);
-  it shows up in the `quizzes.html` picker.
+  it shows up in the `account/quizzes/` picker.
 - **Add a round:** add another `{name, intro, questions:[…]}` object. Boundaries are derived
   automatically by `flattenQuiz`; the round intro screen and labels follow.
 - **Add a new answer mode:** extend the `optionsMode` derivation in `normalizeQuiz`, the
@@ -654,7 +666,7 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
 
 ## 22. Quiz samenstellen uit de bibliotheek (catalog)
 
-Instead of hand-writing `questions.json`, a host builds a quiz on **`quizzes.html`** by ticking
+Instead of hand-writing `questions.json`, a host builds a quiz on **`account/quizzes/`** by ticking
 existing questions from a self-describing media library (and/or adding their own). The library is
 a set of repo folders, each with a `round.json` manifest holding the answers the media lacks.
 
@@ -679,14 +691,34 @@ a set of repo folders, each with a `round.json` manifest holding the answers the
   live from TMDB. Betting rounds set `betting:true`; `betMultipliers` derive from stage count
   (`defaultBetMults`). The per-question prompt comes from the round's `heading`.
 
-### The editor lives on its own pages (`quizzes.html` / `questions.html`)
+### The editor lives on its own pages (`account/quizzes/` / `account/questions/`)
 
-The quiz builder is **not** in `index.html` anymore — it's two standalone pages that import
-`lib/quiz-core.js`. Each has its own tiny render loop (a module-local `S` state object + a
-`render()`/`wire()` pair; the scroll container keeps its position across re-renders via
-`S.scroll`).
+The quiz builder is **not** in `index.html` anymore — it's under `account/`, and each manager is
+**split into a LIST page and a `new/` CREATOR/EDITOR page** so every screen is a real, bookmarkable,
+refresh-safe URL on GitHub Pages (no SPA-fallback hack needed):
 
-- **`quizzes.html`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
+- `account/questions/` (list) → `account/questions/new/?type=mc|open|film|song` (create) or
+  `…/new/?edit=<index>` (edit). Each question is independent → the form is its own page; **Opslaan**
+  saves to the bank and navigates back to the list.
+- `account/quizzes/` (list) → `account/quizzes/new/` (new) or `…/new/?edit=<name>` (edit). The quiz
+  draft spans many sub-steps (edit→add→mc/film…) and must persist, so those sub-views stay **in-page**
+  (`S.view`, draft in memory); only list↔editor is a real navigation.
+
+**Top bar (`editorTopbarHTML`)**: on a creator/editor page the top-left shows **← Terug zonder opslaan**
+(discard → list) and **Opslaan** (save → list) — replacing the old "← Spel". On the list pages and the
+home screen the top-right shows the shared **hamburger** (`navMenuHTML(active, base)` in `quiz-core.js`):
+Home · Mijn quizzen · Mijn vragen, with the current page marked `aria-current` + `.active`.
+
+The **shared editor UI lives in `lib/editor-ui.js`** — both managers differ only in where a built
+question goes (the bank vs. a round in a quiz), so the common parts are factored out: `rowText`,
+the **meerkeuze/open** forms (`mcFormHTML`/`readMc`/`mcDraftToQuestion`, idem `open`), the
+**film/liedje** search + forms (`makeMediaActions`/`filmFormHTML`/`songFormHTML`/`readMediaPick`),
+and the wiring (`wireMediaForms`/`wireScroll`/`editorTopbarHTML`). The form builders take
+`opts.showActions` (hide the bottom Toevoegen/Terug row when save is in the top bar) and
+`opts.hideAdd`; `wireMediaForms` returns the builder `sync` so a top-bar Opslaan can sync first.
+Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14`/`.btn.sm`).
+
+- **`account/quizzes/`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
   `list`/`edit`/`add`/`mc`/`open`/`film`):
   - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
   - **edit** — quiz name + rounds; each round has an **editable name and intro** (the intro is the
@@ -704,8 +736,9 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     → it yields a **clue pool**: the actors (film) plus the info-facts (year/genre/director/
     composer/rating/runtime for film; artist/album/year for song). Then four choices:
     - **Two columns** (`mb-grid`, stacks on mobile): **left** = the question (prompt + the **Info**,
-      **Hints** and **Antwoord** drop-zones); **right** = the source (poster/cover + title + the
-      draggable **pool** + a **"+ eigen stukje"** button). The pool is drag-zone `'off'`.
+      **Hints** and **Antwoord** drop-zones); **right** = the draggable **pool** + a **"+ eigen
+      stukje"** button. The pool is drag-zone `'off'`. (There is no separate poster/title header — the
+      poster/cover and title are themselves clues in the pool.)
     - **De vraag** — free prompt (`mb-prompt`), default "Welke film?" / "Welk nummer is dit?".
     - **Drag** (`enableDragGroup`, cross-container over `info`/`hint`/`answer`/`off`): drag a clue to
       **Info** (always-visible subkop, `q.facts`), **Hints** (revealed one at a time, `q.stages`,
@@ -713,7 +746,10 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
       a draggable clue too (defaults to the Antwoord zone). Clue kinds: `title` (searchable, film/track
       id), `fact` (year/genre/rating/runtime; for songs `artist`/`album` are *searchable* facts with a
       Deezer id, `year` plain), `person` (cast + director + composer, TMDB photo when available),
-      `audio` (the song fragment), `custom` (typed via "+ eigen stukje"). A person chip has
+      `image` (the **poster**/album **cover** — droppable in Info/Hints, **never** the answer:
+      `applyAnswerZone` rejects an image in Antwoord), `audio` (the song fragment), `custom` (typed via
+      "+ eigen stukje"). The `zoekbaar` badge carries a `title` tooltip ("compatibel met de zoeken-API").
+      A person chip has
       **naam / foto / rol** checkboxes — pick what players see (`showName`/`showPhoto`/`showRole`);
       "rol" = the job (Acteur/Regisseur/…), *not* who they played. The editor always shows a small role
       badge. For songs the **fragment is its own draggable clue** (inline player + `van…tot…` clip,
@@ -732,9 +768,9 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     pool so the question bank can re-open the builder losslessly. Default rounds: **"Films"** / **"Liedjes"**.
     Spoiler-safety: `hintLabelsHTML` shows only the category (Foto/Fragment/Hint N) before reveal, and
     `publicCurrent` withholds non-audio stage labels until a stage is revealed.
-- **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
+- **`account/questions/`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
   **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film/Liedje questions;
-  they show up under "Vraag toevoegen" in `quizzes.html`. (Edit routing is by stored `bucket`, so a
+  they show up under "Vraag toevoegen" in the quiz manager. (Edit routing is by stored `bucket`, so a
   `:text` song still loads the song form, not the open-question form.)
 
 Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
@@ -747,8 +783,9 @@ questions.json object (`{name, rounds:[…]}`); editing reconstructs rounds via 
 
 ### Handoff to the game
 
-**Gebruik** on `quizzes.html` calls `setActiveQuiz(name, quiz)` (writes `localStorage['quiz:active']`)
-and navigates to `index.html`. On the next **hostCreate**, the game `takeActiveQuiz()`s it
+**Gebruik** on `account/quizzes/` calls `setActiveQuiz(name, quiz)` (writes `localStorage['quiz:active']`)
+and navigates to `../../index.html`. localStorage is origin-scoped (not path-scoped), so the quiz
+saved under `account/quizzes/` is readable by the game at the root. On the next **hostCreate**, the game `takeActiveQuiz()`s it
 (consuming the key) and runs it through `flattenQuiz → normalizeQuiz → applyShuffles` instead of
 the built-in `SAMPLE`. The lobby links out to both pages; the old in-game "Map laden" folder
 upload is gone (all media is URL/link-based — committed library media counts as repo-relative
@@ -769,16 +806,31 @@ links).
 
 Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `normStage`,
 `applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `answerText`,
-`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`, `factsHTML`. Catalog/TMDB/Deezer:
+`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`, `factsHTML`, `navMenuHTML` (shared
+hamburger with active state). Catalog/TMDB/Deezer:
 `TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `movieDetails`,
 `deezerSearch`, `deezerTrack`, `popularMoviesHTML`. Media builder: `movieFacts`, `songFacts`,
 `newFilmPick`, `newSongPick`, `newCustomClue`, `pickFromQuestion`, `buildMediaQuestion`,
 `mediaBuilderHTML`, `wireMediaBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
 `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
 `addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
+Catalog base: `ROOT` (`new URL('../', import.meta.url)`) — the repo root used by `loadCatalog`.
 (The old `actorImage` helper and committed actor JPEGs in `img/` were removed — film/song questions
-come from the media builder via `movieDetails`/`deezerTrack`. `movieCast` lingers but is unused by the
-pages now. Drag lives in `lib/drag.js`: `enableDragSort` (single list) + `enableDragGroup` (cross-zone).)
+come from the media builder via `movieDetails`/`deezerTrack`; `movieCast` is the cast-only fallback
+when `type=details` isn't deployed. Drag lives in `lib/drag.js`: `enableDragSort` (single list) +
+`enableDragGroup` (cross-zone).)
+
+### `lib/editor-ui.js` exports
+
+Shared manager-page UI (imports from `quiz-core.js` + `drag.js`). List helpers: `rowText`,
+`mediaRowHTML`, `applyMediaToQ`. Meerkeuze/open: `readMc`/`mcDraftToQuestion`/`mcFormHTML`,
+`readOpen`/`openDraftToQuestion`/`openFormHTML`. Film/liedje: `makeMediaActions` (returns
+`filmSearch`/`filmPick`/`songSearch`/`songPickTrack` bound to the page's `S`+`render`),
+`filmFormHTML`, `songFormHTML`, `readMediaPick`. Wiring/chrome: `wireMediaForms` (returns the
+builder `sync`), `wireScroll`, `editorTopbarHTML` (the ← Terug zonder opslaan / Opslaan bar). The
+forms take an `opts` object (`title`/`addLabel`/`backId`/`roundPickerHTML`/`editing`/`showActions`/
+`hideAdd`) so the list/creator pages can vary labels, hide the bottom action row when save is in the
+top bar, and toggle the round-picker.
 
 ---
 
