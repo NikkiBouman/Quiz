@@ -892,5 +892,41 @@ removed — meerkeuze/open are now answer-modes of the custom builder.)
 
 ---
 
+## 23. Vraag-preview (host- + spelerscherm naast elkaar)
+
+A question can be previewed straight from the managers — the **quiz editor** rows
+(`account/quizzes/new/`), the **question bank** rows (`account/questions/`) — via an 👁 button.
+`openQuestionPreview(question, root)` (`lib/editor-ui.js`) opens a modal (`.pv-overlay`/`.pv-modal`
+in `lib/style.css`) holding **two iframes of the game itself**: `index.html?preview=host` and
+`index.html?preview=player`. `root` is the relative path to the repo root from the calling page
+(`../../../` for the editor, `../../` for the bank).
+
+This **reuses the real game rendering** — there is no second copy of the host/player views, so any
+change to how the host or player renders a question shows up in the preview automatically. It works
+by spinning up a **throwaway real game** on Firebase:
+
+- The question is handed to the iframes via `localStorage['quiz:preview']` (localStorage is
+  origin-scoped, so both iframes read it).
+- **`previewHost()`** (in `index.html`, reached from `boot()` on `?preview=host`) builds a one-round,
+  one-question game, jumps straight to `phase='question'` (betting questions start at the bet step),
+  attaches the normal host listeners (`startHost`), `pushState`s, and publishes the room code to
+  `localStorage['quiz:preview-code']`. It deliberately skips `remember()`/`saveSession()` so the
+  preview never hijacks the user's real "Hervat quiz" shortcut.
+- **`previewPlayer()`** (`?preview=player`) waits for that code (storage event + a short poll),
+  auto-joins as **"Speler"** via the normal `playerJoin`, and renders the player view. Host and
+  player therefore sync over real Firebase: the previewer plays both panes (answer on the right,
+  reveal/next-hint on the left) and the host even sees the player's answer.
+- On close the modal posts `{t:'qz-preview-close'}` to the host iframe → **`previewEnd()`** removes
+  the temporary `games/{CODE}` node and unsubscribes, **without** touching the real `quizHost`
+  localStorage or the per-tab session. `body.preview` hides the brand chrome inside the iframes.
+
+Related lobby changes: **"Host deze quiz"** on `account/quizzes/` navigates to `index.html?host=1`,
+which `boot()` turns into an immediate `hostCreate()` of the picked quiz (instead of landing on
+home). The host lobby (`hostLobby`) was trimmed to **code · jury link · players · Quiz starten ·
+Annuleren**, plus a line naming the loaded quiz that links back to it in the editor when it came
+from the saved list (`app.quizFromLibrary`).
+
+---
+
 *Keep this file current. When you change a phase, a schema field, the media flow, or the
 RTDB shape, update the matching section here in the same commit.*

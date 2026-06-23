@@ -18,7 +18,7 @@
 <script type="module">
 import { esc, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
          navMenuHTML } from '../../lib/quiz-core.js';
-import { rowText, wireScroll } from '../../lib/editor-ui.js';
+import { rowText, wireScroll, openQuestionPreview } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
@@ -59,6 +59,7 @@ function render(){
   const bank=loadBank();
   const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
       <span class="ellip f14">${rowText(it.q)}</span>
+      <button class="mini" data-prev="${i}" title="voorbeeld bekijken">👁</button>
       <button class="mini" data-addq="${i}" title="aan een quiz toevoegen">+ quiz</button>
       <a class="mini nolink" href="new/?edit=${i}">Wijzig</a>
       <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>${S.addFor===i?pickerHTML():''}`).join('')
@@ -74,6 +75,7 @@ function render(){
     <p class="muted center hint">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="../quizzes/">je quizzen</a>, of voeg ze hier direct toe met “+ quiz”.</p>`;
   wireScroll($, S);
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
+  el.querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.prev]; if(it) openQuestionPreview(it.q, '../../'); });
   el.querySelectorAll('[data-addq]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.addq; S.addFor = S.addFor===i?null:i; S.msg=''; render(); });
   if(S.addFor!=null){
     const sel=$('#aq-sel'), inp=$('#aq-new');

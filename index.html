@@ -1828,8 +1828,64 @@ function playerLeaderboardHTML(){
 function ctrlLinkFor(code, token){
   return location.origin + location.pathname + '?judge=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(token);
 }
+
+/* ============================================================
+   VRAAG-PREVIEW  (host- + spelerscherm, échte rendering, tijdelijk spel)
+   Twee iframes van deze pagina (?preview=host / ?preview=player) draaien een mini-spel met één
+   vraag: het host-iframe maakt het spel aan, het speler-iframe doet automatisch mee. Zo hergebruikt
+   de preview exact de spel-rendering — wijzig je het host- of spelerdeel, dan verandert de preview mee.
+   ============================================================ */
+function previewEnd(){
+  // tijdelijk preview-spel opruimen ZONDER de echte localStorage (quizHost) of sessie aan te raken
+  try{ cleanup(); }catch(e){}
+  try{ if(app.code) remove(ref(db, `games/${app.code}`)); }catch(e){}
+}
+async function previewHost(){
+  document.body.classList.add('preview');
+  window.addEventListener('message', e=>{ if(e.data && e.data.t==='qz-preview-close') previewEnd(); });
+  window.addEventListener('beforeunload', previewEnd);
+  let q=null; try{ q=JSON.parse(localStorage.getItem('quiz:preview')||'null'); }catch(e){}
+  if(!q){ el.innerHTML=`<div class="center stack"><p class="muted">Geen vraag om te tonen.</p></div>`; return; }
+  app.role='host'; app.code=genCode(); app.phase='question'; app.round=0; app.stage=0;
+  app.scores={}; app.names={}; app.players=[]; app.results=null; app.judges={};
+  app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr=''; app.loadInfo=null;
+  app.judgeToken=genToken(); app.quizFromLibrary=false; app.quizName='Voorbeeld';
+  const f=flattenQuiz({ rounds:[{ name:'Voorbeeld', intro:'', questions:[q] }] });
+  app.quiz=applyShuffles(normalizeQuiz(f.questions)); app.rounds=f.rounds;
+  initQuestion();                                            // stage/checked/betStep/preRoundScores
+  set(quizRef(app.code), app.quiz); set(roundsRef(app.code), app.rounds);
+  set(ref(db, `games/${app.code}/judgeToken`), app.judgeToken);
+  startHost(); pushState(); renderHost();
+  try{ localStorage.setItem('quiz:preview-code', app.code); }catch(e){}   // sein voor het speler-iframe
+}
+async function previewPlayer(){
+  document.body.classList.add('preview');
+  window.addEventListener('beforeunload', ()=>{ try{ cleanup(); }catch(e){} });
+  el.innerHTML=`<div class="center stack"><p class="muted">Voorbeeld laden… <span class="waiting-dots"></span></p></div>`;
+  let joining=false, joined=false, poll=null;
+  const tryJoin=async()=>{
+    if(joined||joining) return joined;
+    let code=null; try{ code=localStorage.getItem('quiz:preview-code'); }catch(e){}
+    if(!code) return false;
+    joining=true;
+    try{ joined=await playerJoin(code, 'Speler'); }catch(e){ joined=false; }
+    joining=false;
+    if(joined){ try{ clearSession(); }catch(e){} }            // preview heeft geen refresh-herstel nodig
+    return joined;
+  };
+  if(await tryJoin()) return;
+  // host-iframe heeft de code nog niet gepubliceerd → wachten op het storage-event (+ poll als fallback)
+  const onStore=async e=>{ if(e.key==='quiz:preview-code' && e.newValue){ window.removeEventListener('storage', onStore); if(poll) clearInterval(poll); await tryJoin(); } };
+  window.addEventListener('storage', onStore);
+  let tries=0;
+  poll=setInterval(async()=>{ if(++tries>40){ clearInterval(poll); return; } if(await tryJoin()){ clearInterval(poll); window.removeEventListener('storage', onStore); } }, 250);
+}
+
 async function boot(){
   const params = new URLSearchParams(location.search);
+  const pv = params.get('preview');
+  if(pv==='host'){ await previewHost(); return; }
+  if(pv==='player'){ await previewPlayer(); return; }
   const jc = params.get('judge');
   if(jc){
     el.innerHTML = `<div class="center stack"><div class="qmeta">Jurylid</div><h1>Verbinden…</h1></div>`;
