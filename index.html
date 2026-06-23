@@ -155,9 +155,40 @@ function normStage(s){
   if(s.type && s.display!=null){ if(s.type==='image')o.image=s.display; else if(s.type==='audio')o.audio=s.display; else if(s.type==='video')o.video=s.display; else o.text=s.display; }
   if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio; if(s.video!=null)o.video=s.video;
   if(s.label!=null)o.label=s.label;
+  if(s.previewLabel!=null)o.previewLabel=s.previewLabel;   // categorie voor 'Hints die je gaat krijgen' (geen spoiler)
   if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
   if(s.clipStart!=null)o.clipStart=s.clipStart; if(s.clipEnd!=null)o.clipEnd=s.clipEnd;  // audio-fragment afspelen van … tot …
   return o;
+}
+/* hint-preview categorieën (mirror van lib/quiz-core.js): oudere vragen hebben geen stage.previewLabel,
+   dus haal de categorie terug uit de bewaarde clue-pool (q.source.clues) via media-matching. Nooit waarde/naam. */
+function clueCategory(c){
+  if(!c) return '';
+  if(c.kind==='fact')   return c.label||'';
+  if(c.kind==='custom') return '';                          // 'Eigen' zegt niets → val terug op het mediatype
+  if(c.kind==='audio')  return c.role||'Fragment';
+  return c.role||'';                                        // person/image/title: rol = categorie
+}
+function clueMediaKey(c){
+  if(!c) return '';
+  if(c.kind==='audio')  return 'a:'+(c.preview||'');
+  if(c.kind==='image')  return 'i:'+(c.img||'');
+  if(c.kind==='person') return (c.showPhoto&&c.img) ? 'i:'+c.img
+    : 't:'+[c.showName&&c.name?c.name:'', c.showRole&&c.role?c.role:''].filter(Boolean).join(' · ');
+  if(c.kind==='custom'){ const t=c.mediaType||'text', url=(c.value||'').trim(); return (t!=='text'&&url) ? (t[0]+':'+url) : 't:'+(c.value||''); }
+  if(c.kind==='fact')   return 't:'+`${c.label}: ${c.value}`;
+  if(c.kind==='title')  return 't:'+(c.value||'');
+  return '';
+}
+function stageMediaKey(s){
+  return s.image!=null?'i:'+s.image : s.audio!=null?'a:'+s.audio : s.video!=null?'v:'+s.video : s.text!=null?'t:'+s.text : '';
+}
+function backfillPreviewLabels(stages, source){
+  if(!Array.isArray(stages) || !source || !Array.isArray(source.clues)) return;
+  if(stages.every(s=>s.previewLabel!=null)) return;
+  const cat={};
+  source.clues.forEach(c=>{ const k=clueMediaKey(c); if(k && cat[k]==null){ const v=clueCategory(c); if(v) cat[k]=v; } });
+  stages.forEach(s=>{ if(s.previewLabel==null){ const v=cat[stageMediaKey(s)]; if(v) s.previewLabel=v; } });
 }
 /* standaard inzet-multipliers per stage-aantal (mirror van lib/quiz-core.js) */
 function defaultBetMults(n){
@@ -168,7 +199,10 @@ function defaultBetMults(n){
 function normalizeQuiz(arr){
   return arr.map(q=>{
     const out = Object.assign({}, q);
-    if(Array.isArray(q.stages)) out.stages = q.stages.map(normStage);
+    if(Array.isArray(q.stages)){
+      out.stages = q.stages.map(normStage);
+      backfillPreviewLabels(out.stages, q.source);   // oudere vragen (vóór previewLabel): categorie uit de clue-pool halen
+    }
     if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':q.options===':deezer-title'?'deezertitle':q.options===':deezer-album'?'deezeralbum':q.options===':deezer-artist'?'deezerartist':q.options===':text'?'text':'list';
     else if(Array.isArray(q.options))      out.optionsMode = q.search ? 'listsearch' : 'list';   // search:true → autocomplete-veld
     else if(['tmdb','deezer','deezertitle','deezeralbum','deezerartist','text','listsearch'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
@@ -390,6 +424,7 @@ function publicCurrent(){
       return o;
     });
     base.totalStages = r.stages.length;
+    base.hintLabels = stageHintLabels(r.stages);   // host berekent labels uit de volledige vraag → speler ziet exact hetzelfde
     base.stage = app.stage;
     if(r.betting){ base.betting = true; base.betMultipliers = r.betMultipliers; }
     else if(r.pointsByStage){ base.points = r.pointsByStage[app.stage] ?? base.points; }
@@ -1196,15 +1231,24 @@ function hostStagesHTML(r, cur){
   }).join('')}</div>`;
 }
 /* speler: stage-meta uit state (geen audio-paden) */
-/* lijst met hint-namen (vooraf zichtbaar, bv bij inzetten) */
-function hintLabelsHTML(r){
-  if(!Array.isArray(r.stages)) return '';
-  // vóór onthulling alleen de categorie tonen — nooit de waarde/naam (geen spoiler op het gedeelde scherm).
-  // audio-labels (instrument) zijn wél bedoeld vooraf zichtbaar.
-  return `<div class="hintlist">${r.stages.map((s,i)=>{
-    const lbl = s.audio ? (s.label||('Fragment '+(i+1))) : s.image ? 'Foto' : s.video ? 'Video' : ('Hint '+(i+1));
-    return `<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(lbl)}</span></div>`;
-  }).join('')}</div>`;
+/* lijst met hint-namen (vooraf zichtbaar, bv bij inzetten).
+   één bron van waarheid: stages → labels. De host berekent dit uit de volledige vraag en stuurt
+   exact dezelfde lijst mee in publicCurrent(), zodat host en speler hetzelfde zien.
+   Toon alleen de categorie (previewLabel) of het type — nooit de waarde/naam (geen spoiler).
+   audio-labels (instrument) zijn wél bedoeld vooraf zichtbaar. */
+function stageHintLabels(stages){
+  if(!Array.isArray(stages)) return [];
+  return stages.map((s,i)=> s.previewLabel
+    || (s.audio ? (s.label||('Fragment '+(i+1)))
+      : s.image ? 'Foto'
+      : s.video ? 'Video'
+      : ('Hint '+(i+1))));
+}
+function hintLabelsHTML(labels){
+  if(!labels || !labels.length) return '';
+  return `<div class="hintlist">${labels.map((lbl,i)=>
+    `<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(lbl)}</span></div>`
+  ).join('')}</div>`;
 }
 function playerStagesHTML(c){
   const cur = c.stage||0;
@@ -1341,7 +1385,7 @@ function hostQuestion(){
           <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
           ${metaHTML(r)}${factsHTML(r, true)}
           <div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>
-          <div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(r)}</div>
+          <div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages))}</div>
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
         </div>
@@ -1642,7 +1686,7 @@ function playerQuestion(){
         <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
         <div class="card stack" style="gap:8px">
           <b>Hints die je gaat krijgen</b>
-          ${hintLabelsHTML(r)}
+          ${hintLabelsHTML(r.hintLabels)}
         </div>
         <div class="card stack" style="gap:10px">
           <b>Bij welke hint denk je het uiterlijk te weten?</b>

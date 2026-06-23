@@ -416,7 +416,7 @@ Dispatchers route on `app.phase` (host) / `app.game.phase` (player) / state (con
 
 Shared building blocks: `hostHead(right, skip)` (top bar: round name + "vraag X/Y" left,
 status pill + optional **Vraag overslaan** right), `hostAside()` (player status table +
-media bar), `playerRowsHTML(mode)`, `metaHTML`, `hintLabelsHTML`, `allGuessesHTML`,
+media bar), `playerRowsHTML(mode)`, `metaHTML`, `stageHintLabels`/`hintLabelsHTML`, `allGuessesHTML`,
 `leaderboardHTML`/`podiumHTML`, `pRoundLbl()` (player round label).
 
 ### Player status table (`playerRowsHTML`)
@@ -639,7 +639,7 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
   `isCorrectAns`, `effectiveCorrect`, `setJudge`, `normTxt`.
 - **Search:** `tmdbSearch`, `deezerSearch`, `searchOptions`, `refreshSearchOut`,
   `searchOutHTML`, `wireSearchResults`, `answerAreaHTML`, `wireAnswerArea`.
-- **Wiring/UI bits:** `wirePlayerControls`, `wirePass`, `metaHTML`, `hintLabelsHTML`,
+- **Wiring/UI bits:** `wirePlayerControls`, `wirePass`, `metaHTML`, `stageHintLabels`/`hintLabelsHTML`,
   `clueListHTML`, `betOverviewHTML`, `allGuessesHTML`, `stageRowHTML`, `leaderboardHTML`,
   `podiumHTML`, `passModalHTML`, `playerRowsHTML`, `pointsInfo`, `winNote`.
 
@@ -811,8 +811,17 @@ Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14
     Hints (`q.stages`) get `betMultiplier`s → a betting question by default (toggle per round/question
     with the **inzet** checkbox). The poster becomes `answerImage`. `q.source` stores the full clue
     pool so the question bank can re-open the builder losslessly. Default rounds: **"Films"** / **"Liedjes"**.
-    Spoiler-safety: `hintLabelsHTML` shows only the category (Foto/Fragment/Hint N) before reveal, and
-    `publicCurrent` withholds non-audio stage labels until a stage is revealed.
+    Spoiler-safety: the **"Hints die je gaat krijgen"** preview is one reusable component shared by host
+    and player. `stageHintLabels(stages)` is the single source of truth → it shows each stage's
+    `previewLabel` (the spoiler-safe **category**: Acteur/Regisseur/Jaar/Genre…, set at build time by
+    `clueToStage`), falling back to the media type (Foto/Video/Fragment/Hint N) — never the value/name.
+    Questions built before `previewLabel` existed get it **backfilled at load** (`backfillPreviewLabels`
+    in `normalizeQuiz`, mirrored in `index.html`): each stage is matched by media content to a clue in
+    `q.source.clues` and inherits that clue's category. Raw-JSON questions with no `source` keep the
+    media-type fallback.
+    The host computes the list from the full question and ships the exact same array in
+    `publicCurrent().hintLabels`, so host and player render identical previews. `publicCurrent` still
+    withholds non-audio stage `label`s (captions, which can be the answer) until a stage is revealed.
 - **`account/questions/`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
   **edit** (in place) and delete reusable Custom/Film/Liedje questions; they show up under "Vraag
   toevoegen" in the quiz manager. (Edit routing is by stored `bucket`: `films`→film, `liedjes`→song,
