@@ -25,7 +25,7 @@ const $ = s => document.querySelector(s);
 const S = { scroll:0, msg:'' };
 document.getElementById('chrome').innerHTML = navMenuHTML('quizzes', '../../');
 
-function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q) return; setActiveQuiz(name, q); location.href='../../index.html?host=1'; }
+function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q) return; setActiveQuiz(name, q); location.href='../../index.html#host=1'; }
 function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.msg=`"${name}" geëxporteerd.`; render(); } }
 function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQuiz(name); S.msg=''; render(); } }
 

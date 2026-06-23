@@ -1883,7 +1883,8 @@ async function previewPlayer(){
 
 async function boot(){
   const params = new URLSearchParams(location.search);
-  const pv = params.get('preview');
+  const hash = new URLSearchParams(location.hash.replace(/^#/,''));   // ook via de hash: sommige servers strippen de querystring (clean-URL)
+  const pv = hash.get('preview') || params.get('preview');
   if(pv==='host'){ await previewHost(); return; }
   if(pv==='player'){ await previewPlayer(); return; }
   const jc = params.get('judge');
@@ -1902,8 +1903,8 @@ async function boot(){
     return;
   }
   // "Host deze quiz" vanaf de quizzenlijst → meteen als host de gekozen quiz starten
-  if(params.get('host')==='1'){
-    history.replaceState(null,'',location.pathname);   // ?host=1 uit de URL (refresh herpakt via de sessie)
+  if(params.get('host')==='1' || hash.get('host')==='1'){
+    history.replaceState(null,'',location.pathname);   // host-vlag uit de URL (refresh herpakt via de sessie)
     let hasActive=false; try{ hasActive=!!localStorage.getItem(ACTIVE_KEY); }catch(e){}
     if(hasActive){ hostCreate(); return; }
   }
