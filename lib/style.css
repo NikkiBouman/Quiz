@@ -20,7 +20,9 @@
   .brand span{color:var(--muted);font-size:13px;margin-left:auto}
   h1{font-family:var(--display);font-weight:700;line-height:1.05;margin:.2em 0;letter-spacing:-.5px}
   .screen{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;animation:fade .35s ease both}
-  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  /* alleen opacity (geen transform): een getransformeerde voorouder zou een vast-gepositioneerd
+     element (zoals .hmenu) "vangen", waardoor het niet meer t.o.v. het scherm staat. */
+  @keyframes fade{from{opacity:0}to{opacity:1}}
   @media (prefers-reduced-motion:reduce){.screen{animation:none}}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
   .muted{color:var(--muted)} .center{text-align:center}
@@ -109,6 +111,7 @@
   .hmenu .hmenu-list a{padding:14px 16px;color:var(--ink);text-decoration:none;font-weight:600;font-size:15px;display:flex;align-items:center;gap:10px}
   .hmenu .hmenu-list a:hover{background:var(--surface-2)}
   .hmenu .hmenu-list a+a{border-top:1px solid var(--line)}
+  .hmenu .hmenu-list a.active{background:var(--surface-2);color:var(--gold);cursor:default}
   /* host vult antwoord in */
   .picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-2px 4px 4px}
   @media (max-width:520px){.picker{grid-template-columns:1fr}}
@@ -279,13 +282,53 @@
   .fragclip input{width:60px;font-size:13px;padding:5px 7px;text-align:right}
   .cluempty{font-size:12px;text-align:center;padding:8px;border:1px dashed var(--line);border-radius:8px}
   [data-id].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}
+  /* ============================================================
+     EDITOR-PAGINA'S — herbruikbare klassen i.p.v. inline styles
+     (account/quizzes, account/questions; zie lib/editor-ui.js)
+     ============================================================ */
+  /* koppen op drie maten (zelfstandig: display-font, werkt op elk element) */
+  .h-lg,.h-md,.h-sm{font-family:var(--display);font-weight:700;line-height:1.1;letter-spacing:-.4px}
+  .h-lg{font-size:clamp(28px,7vw,44px)}
+  .h-md{font-size:clamp(22px,5vw,32px)}
+  .h-sm{font-size:clamp(20px,5vw,28px)}
+  /* utilities */
+  .m0{margin:0}
+  .f12{font-size:12px} .f13{font-size:13px} .f14{font-size:14px}
+  .f15{font-size:15px} .f16{font-size:16px} .f18{font-size:18px}
+  .nowrap{white-space:nowrap}
+  .hint{font-size:12px;margin:0}                 /* hulptekst onder velden (met .muted) */
+  .nolink{text-decoration:none}                  /* nav-link die als knop/pill oogt */
+  .txt-ok{color:var(--groen)}
+  .feedback{margin:4px 0 0}                       /* err/melding onder een scherm */
+  .rowtype{font-size:11px}                        /* type-suffix in een lijstregel */
+  .ellip{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* kleine knopvarianten */
+  .btn.sm{font-size:14px;padding:11px 12px}
+  .btn.xs{font-size:13px;padding:8px 12px}
+  /* titelblok boven een lijst */
+  .titleblock{gap:2px;margin-bottom:6px}
+  /* een lichte lijstrij (los te kiezen / te verslepen item) */
+  .listrow{display:flex;align-items:center;gap:6px;background:var(--surface-2);border-radius:10px;padding:9px 11px}
+  .listrow.tight{padding:7px 9px}
+  /* keuze-/bewerk-lijst die scrollt (verving sc.style.* in JS) */
+  .edscroll{overflow:auto;max-height:56vh}
+  /* film/liedje-zoekresultaat-knop met thumbnail */
+  .searchbtn{display:flex;align-items:center;gap:8px;text-align:left;font-size:14px}
+  .searchthumb{object-fit:cover;flex:none}
+  .searchthumb.film{width:28px;height:40px;border-radius:4px}
+  .searchthumb.song{width:32px;height:32px;border-radius:6px}
+  /* keuzelabel met checkbox (bibliotheek + bank) */
+  .picklabel{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 2px;min-width:0}
+  /* rondenaam-veld in de quiz-editor */
+  .r-name{flex:1;min-width:0;font-weight:600;font-size:15px;padding:9px 11px;margin:0}
+  /* aanklikbare kaart (account-landing) */
+  .linkcard{color:var(--ink);transition:transform .08s ease, filter .15s ease}
+  .linkcard:hover{filter:brightness(1.02);transform:translateY(-2px)}
+
   /* builder gebruikt (bijna) de volle breedte */
   .wrap.builderwide{max-width:min(1400px,96vw)}
   /* twee helften: links de vraag, rechts de bron-info + versleepbare pool (stapelt op mobiel) */
   .mb-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
   @media (max-width:640px){ .mb-grid{grid-template-columns:1fr;gap:14px} }
   .mb-col{min-width:0}
-  .mb-arthead{display:flex;gap:10px;align-items:center}
-  .mb-art{width:62px;height:92px;object-fit:cover;border-radius:10px;border:1px solid var(--line);flex:none}
-  .mb-arttitle{font-family:var(--display);font-weight:700;font-size:18px;color:var(--ink);min-width:0;overflow-wrap:anywhere}
   .mb-pool{background:var(--surface-2);border:1px dashed var(--line);border-radius:12px;padding:8px;min-height:120px}
