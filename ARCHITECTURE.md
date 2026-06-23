@@ -208,7 +208,9 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `image`       | Single-shot image path (non-staged questions). |
 | `audio`       | Host-only audio for a non-staged question (e.g. a Deezer `preview` URL). **Never sent to players** (`publicCurrent` omits it); only the host machine plays it. |
 | `clipStart` / `clipEnd` | Optional seconds — play only this window of the `audio`. Works on a top-level `audio` *or* a stage's `audio`. Enforced host-side by `wireClips()` (seek to start, pause at end). Used by song questions (Deezer previews are a fixed ~30s, so this clips *within* that snippet). |
-| `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. |
+| `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. Film questions set this to the poster. |
+| `facts`       | **Info-subkop** (always-visible context): array of `{label, value}` (text pill) or `{label, image}` (small photo). Rendered by `factsHTML` on host + player; forwarded by `publicCurrent` in **all** phases (it's context, never the answer — the builder excludes the answer). Produced by the media builder's **Info** zone (§22). |
+| `source`      | Host-only builder metadata for film/song questions: `{kind:'tmdb'\|'deezer', id, label, clues:[…], preview?}`. Lets the question bank re-open the builder **losslessly** (zones + per-actor naam/foto toggles). Ignored by the game and **not** sent to players (`publicCurrent` omits it). Also makes `qTypeLabel` report film/lied even when the answer is a fact. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
 | `points`      | Base points (default 100). Editable per question in the quiz editor (number field); for betting questions this is the base that the multiplier scales. |
@@ -470,11 +472,15 @@ Because all shared state is in Firebase, a host can move to another device.
 - **TMDB** (`tmdbSearch` / `movieCast`): proxied via the Worker (token stays server-side).
   - Movie answer search: `GET {TMDB_PROXY}/search?query=…` → `/3/search/movie`. `answer` for
     `:tmdb` questions is the TMDB movie id (or an array of ids for "any of").
-  - Movie cast (film builder, §22): `GET {TMDB_PROXY}/search?type=credits&id=862` →
-    `/3/movie/{id}/credits`. The builder shows the top-billed cast (with photos) to tick + reorder.
-    This is the **only** way film/actor questions are created — there are no prepared/example film
-    rounds, and **no actor photos are committed** (the old `img/` folder and `actors/round.json`
-    were removed). Photos come live from TMDB.
+  - Movie cast (legacy): `GET {TMDB_PROXY}/search?type=credits&id=862` → `/3/movie/{id}/credits`.
+    Cast-only; kept for backward compat. `movieCast` in core is now unused by the pages.
+  - Movie details (media builder, §22): `GET {TMDB_PROXY}/search?type=details&id=862` →
+    `/3/movie/{id}?language=nl-NL&append_to_response=credits`. **One call** returns genres (nl-NL),
+    runtime, vote_average, release_date, poster and cast+crew — the source for the info-facts
+    (year/genre/director/composer/rating/runtime) and the actor hints (`movieDetails`/`movieFacts`).
+    Film questions are created **only** via the builder — no prepared film rounds, **no actor photos
+    committed**; photos come live from TMDB. **The Worker must be redeployed** for `type=details`;
+    until then the builder falls back to `type=credits` (actors load, but the info-facts stay empty).
   - **The photo itself never passes through the Worker** — it loads straight from TMDB's public
     image CDN (`https://image.tmdb.org/t/p/w500{path}`). **The Worker must support `type=credits`**
     (`tmdb-proxy/worker.js`); until redeployed, movie search still works but the cast lookup returns
@@ -484,8 +490,9 @@ Because all shared state is in Firebase, a host can move to another device.
   **`preview`** — a ~30s MP3 on Deezer's CDN, free and key-less. **Song questions** use it as
   host-only `audio` (optionally clipped via `clipStart`/`clipEnd`); the player answer side
   (`:deezer` search, or `:text`) is unchanged. `deezerSearch` lives in both `index.html` (game
-  answer search) and `lib/quiz-core.js` (editor song builder). Note: you only get Deezer's one
-  fixed 30s snippet, not an arbitrary range of the full track.
+  answer search) and `lib/quiz-core.js` (editor song builder). `deezerTrack(id)` (JSONP
+  `/track/{id}`) additionally fetches artist/album/year for the song builder's info-facts. Note:
+  you only get Deezer's one fixed 30s snippet, not an arbitrary range of the full track.
 - `searchOptions(mode, q)` dispatches to the right provider; the answer UI debounces input
   (`_sTimer`) and renders results via `searchOutHTML` / `wireSearchResults`.
 
@@ -685,14 +692,32 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
     round in the draft (e.g. add a custom question to **Hondenrassen**) or create a new one — so
     your own questions can be split across rounds. Library rounds still merge by name on their own.
-  - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`), shown
-    **reversed and numbered** (1 = top = revealed first = least famous; the lead sits last) → tick +
-    **drag to reorder** → a betting `:tmdb` question with the actors' TMDB photos as stages.
-  - **Song builder ("+ Liedje")** — search a track (`deezerSearch`) → pick one → its `preview`
-    (~30s MP3) becomes host-only `audio`; set a clip window (**van … tot …** seconds) and the
-    answer mode (`:deezer` = players find the track, or `:text` = host judges). Produces a plain
-    non-staged question `{question, options, answer/answerLabel, audio, clipStart, clipEnd}`.
-    Default target round: **"Liedjes"**.
+  - **Media builder (Film "+ Film" / Liedje "+ Liedje")** — one shared builder for both
+    (`mediaBuilderHTML` + `wireMediaBuilder` + `buildMediaQuestion` in `lib/quiz-core.js`).
+    Pick a source (TMDB film via `movieDetails`, or Deezer track via `deezerSearch`+`deezerTrack`)
+    → it yields a **clue pool**: the actors (film) plus the info-facts (year/genre/director/
+    composer/rating/runtime for film; artist/album/year for song). Then four choices:
+    - **Two columns** (`mb-grid`, stacks on mobile): **left** = the question (prompt + the **Info**
+      and **Hints** drop-zones + answer); **right** = the source (poster/cover + title + the
+      draggable **pool**). The pool is drag-zone `'off'`; there is no separate "Niet gebruiken" box.
+    - **De vraag** — free prompt (`mb-prompt`), default "Welke film?" / "Welk nummer is dit?".
+    - **Drag** (`enableDragGroup`, cross-container over `info`/`hint`/`off`): drag a clue from the
+      right pool to **Info** (always-visible subkop, `q.facts`) or **Hints** (revealed one at a time,
+      `q.stages`, order = reveal order); drag back to unuse. **Everything starts in the pool** (right).
+      Clues are **persons** (cast + director + composer, each with a TMDB photo when available) or
+      plain **facts** (year/genre/rating/runtime; artist/album/year for songs). A person chip has
+      **naam / foto / rol** checkboxes — pick what players see (`showName`/`showPhoto`/`showRole`);
+      "rol" = the job (Acteur/Regisseur/…), *not* who they played. The editor always shows a small role
+      badge so the maker knows what each chip is. For songs the **fragment is always hint 1** (the clip,
+      with `van…tot…` window); fact-hints follow as stage 2+.
+    - **Wat is het antwoord?** — *de titel* (→ `:tmdb`/`:deezer` search, or open `:text`), *een feit*
+      (year/genre/rating/… or **regisseur/componist** by name → open `:text`, host-judged), or *eigen
+      tekst*. The chosen answer is auto-excluded from the pool/zones so it can't be shown.
+    Hints (`q.stages`) get `betMultiplier`s → a betting question by default (toggle per round/question
+    with the **inzet** checkbox). The poster becomes `answerImage`. `q.source` stores the full clue
+    pool so the question bank can re-open the builder losslessly. Default rounds: **"Films"** / **"Liedjes"**.
+    Spoiler-safety: `hintLabelsHTML` shows only the category (Foto/Fragment/Hint N) before reveal, and
+    `publicCurrent` withholds non-audio stage labels until a stage is revealed.
 - **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
   **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film/Liedje questions;
   they show up under "Vraag toevoegen" in `quizzes.html`. (Edit routing is by stored `bucket`, so a
@@ -730,12 +755,16 @@ links).
 
 Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `normStage`,
 `applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `answerText`,
-`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`. Catalog/TMDB/Deezer: `TMDB_PROXY`,
-`loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `deezerSearch`. Store: `SAVED_KEY`/`BANK_KEY`/
-`ACTIVE_KEY`, `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
+`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`, `factsHTML`. Catalog/TMDB/Deezer:
+`TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `movieDetails`,
+`deezerSearch`, `deezerTrack`, `popularMoviesHTML`. Media builder: `movieFacts`, `songFacts`,
+`newFilmPick`, `newSongPick`, `pickFromQuestion`, `buildMediaQuestion`, `mediaBuilderHTML`,
+`wireMediaBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
+`loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
 `addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
-(The old `actorImage` helper and the committed actor JPEGs in `img/` were removed — film/actor
-questions come from the film builder via `movieCast`. Drag-to-reorder lives in `lib/drag.js`.)
+(The old `actorImage` helper and committed actor JPEGs in `img/` were removed — film/song questions
+come from the media builder via `movieDetails`/`deezerTrack`. `movieCast` lingers but is unused by the
+pages now. Drag lives in `lib/drag.js`: `enableDragSort` (single list) + `enableDragGroup` (cross-zone).)
 
 ---
 
