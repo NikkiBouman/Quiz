@@ -16,21 +16,52 @@
 </div>
 
 <script type="module">
-import { esc, ICON_TRASH, loadBank, deleteBankItem, navMenuHTML } from '../../lib/quiz-core.js';
+import { esc, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
+         navMenuHTML } from '../../lib/quiz-core.js';
 import { rowText, wireScroll } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
-const S = { scroll:0 };
+const S = { scroll:0, addFor:null, msg:'' };
 document.getElementById('chrome').innerHTML = navMenuHTML('questions', '../../');
 
-function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); render(); } }
+function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); if(S.addFor===i)S.addFor=null; render(); } }
+
+/* doelronde binnen de quiz: film/liedje naar hun eigen ronde, de rest naar "Eigen vragen". */
+function roundNameFor(it){ return it.bucket==='films'?'Films':it.bucket==='liedjes'?'Liedjes':'Eigen vragen'; }
+
+/* voeg de gekozen vraag toe aan een bestaande of nieuwe quiz en sla op */
+function addToQuiz(i){
+  const it=loadBank()[i]; if(!it) return;
+  const sel=$('#aq-sel'); let name = sel ? sel.value : '';
+  if(!name){ const inp=$('#aq-new'); name=(inp&&inp.value.trim())||''; if(!name){ S.msg='Geef de nieuwe quiz een naam.'; render(); return; } }
+  const quiz = loadSavedQuizzes()[name] || { name, rounds:[] };
+  quiz.name = name; quiz.rounds = quiz.rounds || [];
+  const rn = roundNameFor(it);
+  let round = quiz.rounds.find(r=>r.name===rn);
+  if(!round){ round={ name:rn, intro:'', questions:[] }; quiz.rounds.push(round); }
+  round.questions.push(JSON.parse(JSON.stringify(it.q)));
+  S.msg = saveQuizToDevice(name, quiz) ? `Toegevoegd aan “${name}”.` : 'Toevoegen mislukt (opslag vol?).';
+  S.addFor=null; render();
+}
+
+function pickerHTML(){
+  const names=Object.keys(loadSavedQuizzes());
+  return `<div class="card stack" style="gap:8px;padding:10px">
+    <label class="lbl">Aan welke quiz toevoegen?</label>
+    <select id="aq-sel" class="sinput">${names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="" ${names.length?'':'selected'}>➕ Nieuwe quiz…</option></select>
+    <input id="aq-new" class="sinput" placeholder="Naam van de nieuwe quiz" style="display:none">
+    <div class="row" style="gap:6px"><button class="btn grow sm" id="aq-add">Toevoegen</button><button class="btn ghost sm" id="aq-cancel">Annuleer</button></div>
+  </div>`;
+}
+
 function render(){
   const bank=loadBank();
   const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
       <span class="ellip f14">${rowText(it.q)}</span>
+      <button class="mini" data-addq="${i}" title="aan een quiz toevoegen">+ quiz</button>
       <a class="mini nolink" href="new/?edit=${i}">Wijzig</a>
-      <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')
+      <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>${S.addFor===i?pickerHTML():''}`).join('')
     : `<p class="muted m0">Nog geen losse vragen. Maak er een — je kunt ze daarna in elke quiz hergebruiken.</p>`;
   el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Mijn vragen</h1><p class="muted m0">Je persoonlijke vragenbank op dit apparaat.</p></div>
     <div class="row" style="gap:6px">
@@ -39,9 +70,17 @@ function render(){
       <a class="btn grow center nolink" href="new/?type=song">+ Liedje</a>
     </div>
     <div class="stack edscroll" id="ed-scroll" style="gap:6px">${rows}</div>
-    <p class="muted center hint">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="../quizzes/">je quizzen</a>.</p>`;
+    ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}
+    <p class="muted center hint">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="../quizzes/">je quizzen</a>, of voeg ze hier direct toe met “+ quiz”.</p>`;
   wireScroll($, S);
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
+  el.querySelectorAll('[data-addq]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.addq; S.addFor = S.addFor===i?null:i; S.msg=''; render(); });
+  if(S.addFor!=null){
+    const sel=$('#aq-sel'), inp=$('#aq-new');
+    if(sel && inp){ const upd=()=>{ inp.style.display = sel.value==='' ? '' : 'none'; }; sel.onchange=upd; upd(); }
+    const add=$('#aq-add'); if(add) add.onclick=()=>addToQuiz(S.addFor);
+    const cancel=$('#aq-cancel'); if(cancel) cancel.onclick=()=>{ S.addFor=null; render(); };
+  }
 }
 render();
 </script>
