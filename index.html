@@ -355,7 +355,7 @@ const app = {
   myStage:null, reguess:false, forFun:false,
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
-  openPicker:null, confirmKick:null, confirmSkip:false,
+  openPicker:null, confirmKick:null, confirmSkip:false, confirmStop:false, preview:false,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -607,7 +607,7 @@ async function hostResume(code){
 /* zet de sub-stappen klaar voor een nieuwe vraag */
 function initQuestion(){
   const r = app.quiz[app.round];
-  app.stage=0; app.checked=false; app.answeredCount=0; app.results=null; app.confirmSkip=false;
+  app.stage=0; app.checked=false; app.answeredCount=0; app.results=null; app.confirmSkip=false; app.confirmStop=false;
   app.preRoundScores = {...app.scores};
   app.betStep = (r && r.betting) ? 'bet' : null;
 }
@@ -709,7 +709,10 @@ function hostNext(){
   else app.phase='final';
   pushState(); renderHost();
 }
-async function hostEnd(){ forget(); clearSession(); cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome(); }
+async function hostEnd(){
+  if(app.preview){ previewEnd(); return; }   // in preview: alleen het tijdelijke spel opruimen, niets van de echte app aanraken
+  forget(); clearSession(); cleanup(); await remove(ref(db, `games/${app.code}`)); resetToHome();
+}
 
 /* host vult zelf een antwoord in namens een speler (backup) */
 async function hostSetAnswer(pid, idx){
@@ -1062,6 +1065,7 @@ function playerRowsHTML(mode){
   return `<div class="ptable${betting?'':' noinzet'}">${head}${rows}</div>`;
 }
 function wirePlayerControls(){
+  wireHostStop();
   const sk=$('#b-skip'); if(sk) sk.onclick=()=>{ app.confirmSkip=true; renderHost(); };
   const sy=$('#b-skipyes'); if(sy) sy.onclick=hostSkip;
   const sn=$('#b-skipno'); if(sn) sn.onclick=()=>{ app.confirmSkip=false; renderHost(); };
@@ -1351,7 +1355,7 @@ function hostRoundIntro(){
   const rc = roundCtx(app.round);
   const readyN = app.players.filter(p=> p.ready && p.ready[rc.ri]).length;
   el.innerHTML = `
-    <div class="topbar"><span class="tb-round">Ronde ${rc.ri+1}<small> / ${rc.roundCount}</small></span><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span></div>
+    <div class="topbar"><span class="tb-round">Ronde ${rc.ri+1}<small> / ${rc.roundCount}</small></span><span class="tb-actions"><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span>${stopBtnHTML()}</span></div>
     <div class="center stack" style="gap:14px;flex:1;justify-content:center">
       <div class="qmeta">Nieuwe ronde</div>
       <h1 style="font-size:clamp(34px,8vw,58px)">${esc(rc.name||('Ronde '+(rc.ri+1)))}</h1>
@@ -1361,14 +1365,27 @@ function hostRoundIntro(){
     </div>
     <button class="btn big" id="b-beginround">Begin ronde</button>`;
   $('#b-beginround').onclick = hostBeginRound;
+  wireHostStop();
 }
-/* bovenbalk host: rondenaam + vraag X/Y links, status (+ evt. skip) rechts */
+/* stopknop host: quiz beëindigen en terug naar het startscherm (met bevestiging) */
+function stopBtnHTML(){
+  if(app.preview) return '';   // in de preview-iframe niet tonen (zou het echte host-spel afbreken)
+  return app.confirmStop
+    ? `<span class="tb-skipconfirm">Quiz stoppen? <button class="mini danger" id="b-stopyes">Ja</button> <button class="mini" id="b-stopno">Nee</button></span>`
+    : `<button class="tb-skip" id="b-stop" title="Quiz stoppen en terug naar het startscherm">Stoppen</button>`;
+}
+function wireHostStop(){
+  const sb=$('#b-stop'); if(sb) sb.onclick=()=>{ app.confirmStop=true; renderHost(); };
+  const sy=$('#b-stopyes'); if(sy) sy.onclick=hostEnd;
+  const sn=$('#b-stopno'); if(sn) sn.onclick=()=>{ app.confirmStop=false; renderHost(); };
+}
+/* bovenbalk host: rondenaam + vraag X/Y links, status (+ evt. skip) + stoppen rechts */
 function hostHead(right, skip){
   const rc = roundCtx(app.round);
   const skipBtn = !skip ? '' : (app.confirmSkip
     ? `<span class="tb-skipconfirm">Overslaan? <button class="mini danger" id="b-skipyes">Ja</button> <button class="mini" id="b-skipno">Nee</button></span>`
     : `<button class="tb-skip" id="b-skip" title="Niemand krijgt punten">Vraag overslaan</button>`);
-  return `<div class="topbar"><span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span><span class="tb-actions">${right||''}${skipBtn}</span></div>`;
+  return `<div class="topbar"><span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span><span class="tb-actions">${right||''}${skipBtn}${stopBtnHTML()}</span></div>`;
 }
 function hostQuestion(){
   const r = app.quiz[app.round];
@@ -1501,6 +1518,7 @@ function hostRevealView(){
     <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende vraag'}</button>`;
   el.querySelectorAll('[data-judge]').forEach(b=> b.onclick=()=> hostToggleCorrect(b.dataset.judge));
   $('#b-next').onclick = hostNext;
+  wireHostStop();
 }
 function hostFinal(){
   el.innerHTML = `
@@ -1863,7 +1881,7 @@ function previewEnd(){
   try{ if(app.code) remove(ref(db, `games/${app.code}`)); }catch(e){}
 }
 async function previewHost(){
-  document.body.classList.add('preview');
+  document.body.classList.add('preview'); app.preview=true;
   window.addEventListener('message', e=>{ if(e.data && e.data.t==='qz-preview-close') previewEnd(); });
   window.addEventListener('beforeunload', previewEnd);
   let q=null; try{ q=JSON.parse(localStorage.getItem('quiz:preview')||'null'); }catch(e){}
@@ -1881,7 +1899,7 @@ async function previewHost(){
   try{ localStorage.setItem('quiz:preview-code', app.code); }catch(e){}   // sein voor het speler-iframe
 }
 async function previewPlayer(){
-  document.body.classList.add('preview');
+  document.body.classList.add('preview'); app.preview=true;
   window.addEventListener('beforeunload', ()=>{ try{ cleanup(); }catch(e){} });
   el.innerHTML=`<div class="center stack"><p class="muted">Voorbeeld laden… <span class="waiting-dots"></span></p></div>`;
   let joining=false, joined=false, poll=null;
