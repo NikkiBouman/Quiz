@@ -21,7 +21,7 @@
 <script type="module">
 import * as core from './lib/quiz-core.js';
 import { enableDragSort } from './lib/drag.js';
-const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion, tmdbSearch, movieCast,
+const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion, tmdbSearch, movieCast, popularMoviesHTML,
         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
         flattenQuiz, exportQuizJSON, setActiveQuiz } = core;
 /* lijst-regel: het ANTWOORD eerst (zodat je ziet wélke vraag het is), dan type + vraagtekst */
@@ -302,6 +302,7 @@ function filmFormHTML(){
     <div class="row" style="gap:6px"><input id="film-q" class="sinput" placeholder="Zoek een film…" value="${esc(S.filmQuery||'')}" style="flex:1"><button class="btn" id="b-film-search">Zoek</button></div>
     ${S.filmBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
     <div class="stack" id="ed-scroll" style="gap:4px">${res.map(m=>`<button class="btn ghost" data-film="${esc(m.id)}|${esc(m.label)}" style="justify-content:flex-start;font-size:14px">${m.thumb?`<img src="${esc(m.thumb)}" style="width:28px;height:40px;object-fit:cover;border-radius:4px;margin-right:8px">`:''}${esc(m.label)}</button>`).join('')}</div>
+    ${popularMoviesHTML()}
     <div class="row"><button class="btn ghost" id="b-formback">Terug</button></div>`;
 }
 function render(){
@@ -354,6 +355,7 @@ function wire(){
     const s=$('#b-film-search'); if(s)s.onclick=filmSearch;
     const fq=$('#film-q'); if(fq)fq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); filmSearch(); } };
     el.querySelectorAll('[data-film]').forEach(b=>b.onclick=()=>{ const val=b.dataset.film; const i=val.indexOf('|'); filmPick(val.slice(0,i), val.slice(i+1)); });
+    el.querySelectorAll('.pmovie').forEach(b=>b.onclick=()=>filmPick(b.dataset.pid, b.dataset.plabel));
     el.querySelectorAll('[data-actor]').forEach(cb=>cb.onchange=()=>filmToggle(+cb.dataset.actor));
     if(S.filmPick) enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderCast });
     if(S.filmPick) wireRoundPicker('film');

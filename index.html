@@ -69,74 +69,6 @@ async function tmdbSearch(q){
     thumb:m.poster_path?`https://image.tmdb.org/t/p/w92${m.poster_path}`:null,
   }));
 }
-/* Snelkeuze-rooster bij film-vragen (:tmdb): id's komen overeen met TMDB,
-   zodat een keuze hier exact als juist antwoord meetelt. Alfabetisch getoond. */
-const POPULAR_MOVIES = [
-  { id:530915, title:'1917',                          poster:'/iZf0KyrE25z1sage4SYFLCCrMi9.jpg' },
-  { id:812,    title:'Aladdin',                        poster:'/eLFfl7vS8dkeG1hKp5mwbm37V83.jpg' },
-  { id:19995,  title:'Avatar',                         poster:'/wvn700u83dxVb3mryWKnNyBf7yb.jpg' },
-  { id:24428,  title:'The Avengers',                   poster:'/RYMX2wcKCBAr24UyPD7xwmjaTn.jpg' },
-  { id:105,    title:'Back to the Future',             poster:'/j10G3Wlz8VshXf9aky0OVdhXyvQ.jpg' },
-  { id:346698, title:'Barbie',                         poster:'/tnS9DqsJvFjmg4FK4R2LghvOhs5.jpg' },
-  { id:155,    title:'The Dark Knight',                poster:'/xGSOgu01djJmKGAiWgeqIfpYvs4.jpg' },
-  { id:562,    title:'Die Hard',                       poster:'/26i0i7jzTBDnoX2d8ZfSp4mMaKm.jpg' },
-  { id:438631, title:'Dune',                           poster:'/9FmO8i8HDbGwNJPcxwxjiAe4U4n.jpg' },
-  { id:9799,   title:'Fast & Furious',                 poster:'/gqY0ITBgT7A82poL9jv851qdnIb.jpg' },
-  { id:550,    title:'Fight Club',                     poster:'/kO39IEJ5SSmmBlYscXS9x2c8aXL.jpg' },
-  { id:12,     title:'Finding Nemo',                   poster:'/5lc6nQc0VhWFYFbNv016xze8Jvy.jpg' },
-  { id:13,     title:'Forrest Gump',                   poster:'/Cw4hIUIAmSYfK9QfaUW5igp9La.jpg' },
-  { id:109445, title:'Frozen',                         poster:'/itAKcobTYGpYT8Phwjd8c9hleTo.jpg' },
-  { id:316029, title:'The Greatest Showman',           poster:'/b9CeobiihCx1uG1tpw8hXmpi7nm.jpg' },
-  { id:497,    title:'The Green Mile',                 poster:'/8VG8fDNiy50H4FedGwdSVUPoaJe.jpg' },
-  { id:8871,   title:'The Grinch',                     poster:'/1WZbbPApEivA421gCOluuzMMKCk.jpg' },
-  { id:28178,  title:'Hachi: A Dog\'s Tale',           poster:'/lsy3aEsEfYIHdLRk4dontZ4s85h.jpg' },
-  { id:324786, title:'Hacksaw Ridge',                  poster:'/fTuxNlgEm04PPFkr1xfK94Jn8BW.jpg' },
-  { id:671,    title:'Harry Potter',                   poster:'/8dkJn5VQjrlFesrZas6rvmdzo1C.jpg' },
-  { id:10947,  title:'High School Musical',            poster:'/1DGmWZjUJPeKGFRHGCA6VPFUBML.jpg' },
-  { id:49051,  title:'The Hobbit',                     poster:'/yHA9Fc37VmpUA5UncTxxo3rTGVA.jpg' },
-  { id:27205,  title:'Inception',                      poster:'/xlaY2zyzMfkhk0HSC5VUwzoZPU1.jpg' },
-  { id:150540, title:'Inside Out',                     poster:'/4chZQ7EofvIn5TTSijvGU3xVkJf.jpg' },
-  { id:157336, title:'Interstellar',                   poster:'/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg' },
-  { id:1726,   title:'Iron Man',                       poster:'/78lPtwv72eTNqFW9COBYI0dWDJa.jpg' },
-  { id:578,    title:'Jaws',                           poster:'/o505Zk2OWhfOKkBXJyZOIIPtUz5.jpg' },
-  { id:475557, title:'Joker',                          poster:'/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg' },
-  { id:329,    title:'Jurassic Park',                  poster:'/fjTU1Bgh3KJu4aatZil3sofR2zC.jpg' },
-  { id:9502,   title:'Kung Fu Panda',                  poster:'/wWt4JYXTg5Wr3xBW2phBrMKgp3x.jpg' },
-  { id:313369, title:'La La Land',                     poster:'/1Yat6JfH2yqOhZxTd1PJDMMkao2.jpg' },
-  { id:8587,   title:'The Lion King',                  poster:'/jq3z51D9uXmc5tsFOwpbFwz4F2y.jpg' },
-  { id:263115, title:'Logan',                          poster:'/fnbjcRDYn6YviCcePDnGdyAkYsB.jpg' },
-  { id:120,    title:'The Lord of the Rings',          poster:'/6oom5QYQ2yQTMJIbnvbkBL9cHo6.jpg' },
-  { id:603,    title:'The Matrix',                     poster:'/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg' },
-  { id:585,    title:'Monsters, Inc.',                 poster:'/3mTsvFLXlfplP6aIqwvvkpHV4l.jpg' },
-  { id:762,    title:'Monty Python and the Holy Grail',poster:'/h3rksLHevpCbHfSoaUXm85nt2CH.jpg' },
-  { id:411,    title:'Narnia',                         poster:'/l49yq3ViFcfL4qMrXodhaR9OPy3.jpg' },
-  { id:11036,  title:'The Notebook',                   poster:'/rNzQyW4f8B8cQeg7Dgj3n6eT5k9.jpg' },
-  { id:75656,  title:'Now You See Me',                 poster:'/tWsNYbrqy1p1w6K9zRk0mSchztT.jpg' },
-  { id:22,     title:'Pirates of the Caribbean',       poster:'/poHwCZeWzJCShH7tOjg8RIoyjcw.jpg' },
-  { id:807,    title:'Se7en',                          poster:'/reNURlzywo4yMSXQjcZvirfIEOR.jpg' },
-  { id:278,    title:'The Shawshank Redemption',       poster:'/aAdnwqwkKX5PPcr8EdtaiA8AZVl.jpg' },
-  { id:10528,  title:'Sherlock Holmes',               poster:'/momkKuWburNTqKBF6ez7rvhYVhE.jpg' },
-  { id:694,    title:'The Shining',                    poster:'/NJVFvpLqIQAJ2Olgz8rqb7Cji9.jpg' },
-  { id:808,    title:'Shrek',                          poster:'/iB64vpL3dIObOtMZgX3RqdVdQDc.jpg' },
-  { id:745,    title:'The Sixth Sense',                poster:'/vOyfUXNFSnaTk7Vk5AjpsKTUWsu.jpg' },
-  { id:557,    title:'Spider-Man',                     poster:'/kjdJntyBeEvqm9w97QGBdxPptzj.jpg' },
-  { id:11,     title:'Star Wars',                       poster:'/6FfCtAuVAW8XJjZ7eWeLibRLWTw.jpg' },
-  { id:218,    title:'The Terminator',                 poster:'/qvktm0BHcnmDpul4Hz01GIazWPr.jpg' },
-  { id:862,    title:'Toy Story',                      poster:'/rm7IjJeE9lITBK9Pr7es4nJkDZ9.jpg' },
-  { id:402431, title:'Wicked',                         poster:'/tlwzOOCxcxtE7bXGvs3QlpmM5C0.jpg' },
-  { id:36657,  title:'X-Men',                          poster:'/bRDAc4GogyS9ci3ow7UnInOcriN.jpg' },
-].sort((a,b)=> a.title.replace(/^the /i,'').localeCompare(b.title.replace(/^the /i,'')));
-function popularMoviesHTML(){
-  const cells = POPULAR_MOVIES.map(m=>{
-    const sel = app.searchPick && String(app.searchPick.id)===String(m.id);
-    return `<button type="button" class="pmovie ${sel?'sel':''}" data-id="${m.id}" data-label="${esc(m.title)}">
-        <img src="https://image.tmdb.org/t/p/w185${m.poster}" alt="" loading="lazy">
-        <span>${esc(m.title)}</span></button>`;
-  }).join('');
-  return `<div class="pmovies-wrap">
-    <div class="pmovies-label">of kies uit populaire films:</div>
-    <div class="pmovies">${cells}</div></div>`;
-}
 function deezerSearch(q){
   return new Promise(resolve=>{
     const cb='dz_'+Math.random().toString(36).slice(2,9);
@@ -1465,10 +1397,9 @@ function answerAreaHTML(r){
     </div>`;
   }
   const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : r.optionsMode==='deezer' ? 'Zoek een nummer…' : 'Zoek in de lijst…';
-  const grid = r.optionsMode==='tmdb' ? popularMoviesHTML() : '';
   return `<div class="searchwrap">
     <input id="s-input" class="sinput" type="text" placeholder="${ph}" value="${esc(app.searchText||'')}" autocomplete="off" autocapitalize="off">
-    <div id="sout"></div>${grid}</div>`;
+    <div id="sout"></div></div>`;
 }
 function searchOutHTML(){
   // ingeklapt na een keuze: toon alleen het gekozen antwoord
@@ -1537,15 +1468,7 @@ function wireAnswerArea(r){
     };
     if(app.searchOpen){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
   }
-  if(r.optionsMode==='tmdb') wirePopularMovies();
   refreshSearchOut();
-}
-function wirePopularMovies(){
-  el.querySelectorAll('.pmovie').forEach(b=> b.onclick=()=>{
-    app.searchPick = { id:Number(b.dataset.id), label:b.dataset.label };
-    app.searchOpen = false;            // dropdown inklappen na keuze
-    renderPlayer();
-  });
 }
 function pRoundLbl(){
   const g=app.game; if(!g) return '';
