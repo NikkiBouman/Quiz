@@ -16,7 +16,7 @@
 </div>
 
 <script type="module">
-import { esc, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
+import { esc, icon, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
          navMenuHTML } from '../../lib/quiz-core.js';
 import { rowText, wireScroll, openQuestionPreview } from '../../lib/editor-ui.js';
 
@@ -51,7 +51,7 @@ function modalHTML(){
   return `<div class="modal" id="aq-modal"><div class="modalcard stack" style="gap:12px">
     <b style="font-size:17px">Aan welke quiz toevoegen?</b>
     <p class="muted ellip" style="margin:0;font-size:13px">${rowText(it.q)}</p>
-    <select id="aq-sel" class="sinput">${names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="" ${names.length?'':'selected'}>➕ Nieuwe quiz…</option></select>
+    <select id="aq-sel" class="sinput">${names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}<option value="" ${names.length?'':'selected'}>+ Nieuwe quiz…</option></select>
     <input id="aq-new" class="sinput" placeholder="Naam van de nieuwe quiz" style="display:none">
     <div class="row" style="gap:6px"><button class="btn grow" id="aq-add">Toevoegen</button><button class="btn ghost" id="aq-cancel">Annuleer</button></div>
   </div></div>`;
@@ -61,16 +61,16 @@ function render(){
   const bank=loadBank();
   const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
       <span class="ellip f14">${rowText(it.q)}</span>
-      <button class="mini" data-prev="${i}" title="voorbeeld bekijken">👁</button>
-      <button class="mini" data-addq="${i}" title="aan een quiz toevoegen">+ quiz</button>
-      <a class="mini nolink" href="new/?edit=${i}">Wijzig</a>
-      <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')
+      <button class="mini" data-prev="${i}" title="voorbeeld bekijken" aria-label="voorbeeld bekijken">${icon('eye',15)}</button>
+      <button class="btn ghost xs" data-addq="${i}" title="aan een quiz toevoegen">${icon('plus',14)}quiz</button>
+      <a class="btn ghost xs nolink center" href="new/?edit=${i}">Wijzig</a>
+      <button class="mini danger" data-del="${i}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')
     : `<p class="muted m0">Nog geen losse vragen. Maak er een — je kunt ze daarna in elke quiz hergebruiken.</p>`;
   el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Mijn vragen</h1><p class="muted m0">Je persoonlijke vragenbank op dit apparaat.</p></div>
     <div class="row" style="gap:6px">
-      <a class="btn grow center nolink" href="new/?type=custom">+ Custom</a>
-      <a class="btn grow center nolink" href="new/?type=film">+ Film</a>
-      <a class="btn grow center nolink" href="new/?type=song">+ Liedje</a>
+      <a class="btn grow center nolink" href="new/?type=custom">${icon('plus',16)}Custom</a>
+      <a class="btn grow center nolink" href="new/?type=film">${icon('film',16)}Film</a>
+      <a class="btn grow center nolink" href="new/?type=song">${icon('music',16)}Liedje</a>
     </div>
     <div class="stack edscroll" id="ed-scroll" style="gap:6px">${rows}</div>
     ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}

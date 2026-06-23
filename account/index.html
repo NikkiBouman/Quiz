@@ -16,19 +16,22 @@
     <div class="center stack titleblock"><h1 class="h-lg">Mijn account</h1><p class="muted m0">Beheer je quizzen en losse vragen op dit apparaat.</p></div>
     <div class="stack">
       <a class="card stack nolink linkcard" href="quizzes/">
-        <h2 class="h-sm m0">🎬 Mijn quizzen</h2>
+        <h2 class="h-sm m0 cardhead"><span class="cardicon"></span>Mijn quizzen</h2>
         <p class="muted m0">Quizzen bouwen, bewerken, exporteren en in het spel gebruiken.</p>
       </a>
       <a class="card stack nolink linkcard" href="questions/">
-        <h2 class="h-sm m0">❓ Mijn losse vragen</h2>
+        <h2 class="h-sm m0 cardhead"><span class="cardicon"></span>Mijn losse vragen</h2>
         <p class="muted m0">Je persoonlijke vragenbank — herbruikbaar in elke quiz.</p>
       </a>
     </div>
   </main>
 </div>
 <script type="module">
-import { navMenuHTML } from '../lib/quiz-core.js';
+import { navMenuHTML, icon } from '../lib/quiz-core.js';
 document.getElementById('chrome').innerHTML = navMenuHTML(undefined, '../');
+const cardIcons = document.querySelectorAll('.cardicon');
+if(cardIcons[0]) cardIcons[0].innerHTML = icon('book', 26);
+if(cardIcons[1]) cardIcons[1].innerHTML = icon('help', 26);
 </script>
 </body>
 </html>

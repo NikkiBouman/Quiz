@@ -25,7 +25,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/fireba
 import { getDatabase, ref, get, set, remove, onValue }
   from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 /* gedeelde kern: hier alleen de overdracht van een op de quizzen-pagina gekozen quiz */
-import { takeActiveQuiz, navMenuHTML, ACTIVE_KEY } from "./lib/quiz-core.js";
+import { takeActiveQuiz, navMenuHTML, icon, ACTIVE_KEY } from "./lib/quiz-core.js";
 
 /* ★★★ PLAK HIER JE EIGEN CONFIG ★★★
    Firebase console → tandwiel (Project settings) → tab "General"
@@ -253,7 +253,8 @@ function factsHTML(r, isHost){
       : `<div class="factmain">${videoHTML(resolveMedia(f.video))}</div>`;
     if(f.audio) return isHost                                  // audio speelt alleen op het hostscherm
       ? `<span class="factimg">${audioHTML(resolveMedia(f.audio))}${cap(f)}</span>`
-      : `<span class="pill">🔊 ${f.label?esc(f.label):'audio'}</span>`;
+      : `<span class="pill">${icon('volume',15)} ${f.label?esc(f.label):'audio'}</span>`;
+    if(f.audioPill) return `<span class="pill">${icon('volume',15)} ${esc(f.value||'audio')}</span>`;
     return `<span class="pill">${f.label?esc(f.label)+': ':''}${esc(f.value)}</span>`;
   }).join('')}</div>`;
 }
@@ -401,7 +402,7 @@ function publicCurrent(){
     // Firebase weigert undefined: alleen gezette keys meesturen
     if(f.image){ const o={ image:resolveMedia(f.image)||'' }; if(f.label!=null) o.label=f.label; return o; }
     if(f.video){ const o={ video:resolveMedia(f.video)||'' }; if(f.label!=null) o.label=f.label; return o; }
-    if(f.audio) return { value:'🔊 '+(f.label||'audio') };                // audio host-only: geen bron, alleen een pil
+    if(f.audio) return { value:(f.label||'audio'), audioPill:true };       // audio host-only: geen bron, alleen een pil (icoon volgt in factsHTML)
     const o={ value:f.value!=null?f.value:'' }; if(f.label!=null) o.label=f.label; return o;
   });
   if(!staged){
@@ -1021,7 +1022,7 @@ function playerRowsHTML(mode){
   const r = app.quiz[app.round];
   const kickHTML = p => app.confirmKick===p.id
     ? `<span class="kickconfirm">Verwijderen? <button class="mini danger" data-kickyes="${p.id}">Ja</button> <button class="mini" data-kickno="1">Nee</button></span>`
-    : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">✕</button>`;
+    : `<button class="kick" data-kick="${p.id}" title="Verwijder speler" aria-label="Verwijder ${esc(p.name)}">${icon('close',15)}</button>`;
   if(mode==='lobby')
     return app.players.map(p=>`<div class="prow"><span class="nm">${esc(p.name)}</span>${kickHTML(p)}</div>`).join('');
 
@@ -1332,7 +1333,7 @@ function hostLobby(){
     <div class="card stack" style="gap:10px">
       <div class="statusbar">
         <div><div class="qmeta" style="text-align:left">Spelers vullen deze code in</div><div class="code" style="font-size:clamp(36px,9vw,58px);margin:0">${app.code}</div></div>
-        <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">🔗 Kopieer geheime jurylink</button>
+        <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">${icon('link',15)}Kopieer geheime jurylink</button>
       </div>
       <p class="muted" style="margin:0;font-size:13px">Quiz: ${quizLink} · ${app.quiz.length} ${app.quiz.length===1?'vraag':'vragen'}</p>
     </div>
@@ -1344,7 +1345,7 @@ function hostLobby(){
     </div>`;
   const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
     const txt=ctrlLinkFor(app.code, app.judgeToken||'');
-    const done=()=>{ cc.textContent='✓ Jurylink gekopieerd!'; setTimeout(()=>{ cc.textContent='🔗 Kopieer geheime jurylink'; },1600); };
+    const done=()=>{ cc.innerHTML=icon('check',15)+' Jurylink gekopieerd!'; setTimeout(()=>{ cc.innerHTML=icon('link',15)+'Kopieer geheime jurylink'; },1600); };
     copyText(txt, done);
   };
   $('#b-start').onclick = hostStart;
@@ -1670,7 +1671,7 @@ function playerRoundIntro(){
         ? `<p class="muted">Wachten op de host <span class="waiting-dots"></span></p>`
         : (did
           ? `<p class="muted">Je bent er klaar voor ✓ — wachten op de host <span class="waiting-dots"></span></p>`
-          : `<button class="btn big" id="b-ready">Ik snap het 👍</button>`)}
+          : `<button class="btn big" id="b-ready">${icon('check',18)} Ik snap het</button>`)}
     </div>`;
   const rb=$('#b-ready'); if(rb) rb.onclick=playerReady;
 }

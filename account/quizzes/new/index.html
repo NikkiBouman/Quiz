@@ -16,7 +16,7 @@
 </div>
 
 <script type="module">
-import { esc, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
+import { esc, icon, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
          loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
          flattenQuiz } from '../../../lib/quiz-core.js';
 import { enableDragSort } from '../../../lib/drag.js';
@@ -61,7 +61,7 @@ function roundPickerHTML(pfx, defName){
   const rounds=(S.draft&&S.draft.rounds)||[];
   const opts = rounds.map(r=>`<option value="${esc(r.name)}">${esc(r.name)} (${r.questions.length})</option>`).join('');
   return `<label class="lbl">In welke ronde?</label>
-    <select id="${pfx}-round" class="sinput">${opts}<option value="" selected>➕ Nieuwe ronde…</option></select>
+    <select id="${pfx}-round" class="sinput">${opts}<option value="" selected>+ Nieuwe ronde…</option></select>
     <input id="${pfx}-newround" class="sinput" placeholder="Naam van de nieuwe ronde" value="${esc(defName||'')}">`;
 }
 function wireRoundPicker(pfx){
@@ -169,22 +169,22 @@ function editHTML(){
         ${roundBet}
         <span class="muted f12 nowrap">${rd.questions.length} ${rd.questions.length===1?'vraag':'vragen'}</span>
       </div>
-      <textarea class="r-intro" data-ri="${ri}" rows="2" placeholder="Uitleg voor de spelers (zien ze bij ‘Ik snap het 👍’ aan het begin van de ronde)">${esc(rd.intro||'')}</textarea>
+      <textarea class="r-intro" data-ri="${ri}" rows="2" placeholder="Uitleg voor de spelers (zien ze bij ‘Ik snap het’ aan het begin van de ronde)">${esc(rd.intro||'')}</textarea>
       <div class="stack qlist" data-round="${ri}" style="gap:6px">
       ${rd.questions.map((q,qi)=>`<div class="listrow tight" data-idx="${qi}">
         <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
         <span class="ellip f14">${rowText(q)}</span>
         <span class="ptsfield" title="Punten voor deze vraag (standaard 100)"><input type="number" min="0" step="10" class="q-pts" data-ri="${ri}" data-qi="${qi}" value="${q.points??100}">pt</span>
         ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
-        <button class="mini" data-qprev="${ri}|${qi}" title="voorbeeld bekijken">👁</button>
-        <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')}
+        <button class="mini" data-qprev="${ri}|${qi}" title="voorbeeld bekijken" aria-label="voorbeeld bekijken">${icon('eye',15)}</button>
+        <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>
     </div>`;
   }).join('') : `<p class="muted m0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
   return `<div class="statusbar"><h1 class="h-md">${S.editingName?'Quiz wijzigen':'Nieuwe quiz'}</h1></div>
     <input id="q-name" class="sinput f18" placeholder="Naam van je quiz" value="${esc(d.name||'')}">
     <div class="stack edscroll" id="ed-scroll" style="gap:10px">${rounds}</div>
-    <button class="btn ghost" id="b-goadd">+ Vraag toevoegen</button>`;
+    <button class="btn ghost" id="b-goadd">${icon('plus',16)}Vraag toevoegen</button>`;
 }
 function addHTML(){
   const libN=selCount(), bankN=bankSelCount(), bank=loadBank();
@@ -197,7 +197,7 @@ function addHTML(){
       ${libraryHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
-      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">+ Custom</button><button class="btn ghost" id="b-film">+ Film</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
+      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">${icon('plus',16)}Custom</button><button class="btn ghost" id="b-film">${icon('film',16)}Film</button><button class="btn ghost" id="b-song">${icon('music',16)}Liedje</button></div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
