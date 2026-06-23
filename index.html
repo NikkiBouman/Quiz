@@ -1866,6 +1866,12 @@ async function boot(){
     }
     return;
   }
+  // "Host deze quiz" vanaf de quizzenlijst → meteen als host de gekozen quiz starten
+  if(params.get('host')==='1'){
+    history.replaceState(null,'',location.pathname);   // ?host=1 uit de URL (refresh herpakt via de sessie)
+    let hasActive=false; try{ hasActive=!!localStorage.getItem(ACTIVE_KEY); }catch(e){}
+    if(hasActive){ hostCreate(); return; }
+  }
   // refresh-herstel: zat je in een spel (per-tab sessie), koppel dan terug i.p.v. naar home.
   // Uitzondering: staat er een vers gekozen quiz klaar (handoff vanaf account/quizzes/ in
   // hetzelfde tabblad), dan home tonen zodat je die kunt hosten i.p.v. het oude spel.
