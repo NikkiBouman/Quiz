@@ -270,6 +270,10 @@
   .cchip-ck label{display:inline-flex;align-items:center;gap:3px;cursor:pointer}
   .cchip-ck input{width:15px;height:15px}
   .cchip-role{font-size:11px;color:var(--muted);font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+  .cchip-frag{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;font-size:14px}
+  .cchip-frag audio{height:34px}
+  .fragclip{display:flex;align-items:center;gap:6px;font-size:13px}
+  .fragclip input{width:60px;font-size:13px;padding:5px 7px;text-align:right}
   .cluempty{font-size:12px;text-align:center;padding:8px;border:1px dashed var(--line);border-radius:8px}
   [data-id].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}
   /* builder gebruikt (bijna) de volle breedte */

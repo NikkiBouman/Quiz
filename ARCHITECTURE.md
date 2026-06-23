@@ -708,8 +708,10 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
       plain **facts** (year/genre/rating/runtime; artist/album/year for songs). A person chip has
       **naam / foto / rol** checkboxes — pick what players see (`showName`/`showPhoto`/`showRole`);
       "rol" = the job (Acteur/Regisseur/…), *not* who they played. The editor always shows a small role
-      badge so the maker knows what each chip is. For songs the **fragment is always hint 1** (the clip,
-      with `van…tot…` window); fact-hints follow as stage 2+.
+      badge so the maker knows what each chip is. For songs the **fragment is its own draggable clue**
+      (kind `audio`, with an inline player + `van…tot…` clip window, 0–30s): drop it in Hints at any
+      position, or in Info (plays from the start). Fragment alone → a plain non-staged audio question;
+      fragment + fact hints → staged with the fragment at its chosen spot.
     - **Wat is het antwoord?** — *de titel* (→ `:tmdb`/`:deezer` search, or open `:text`), *een feit*
       (year/genre/rating/… or **regisseur/componist** by name → open `:text`, host-judged), or *eigen
       tekst*. The chosen answer is auto-excluded from the pool/zones so it can't be shown.
