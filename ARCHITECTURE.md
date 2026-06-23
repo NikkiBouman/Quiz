@@ -659,13 +659,16 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
 - **`quizzes.html`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
   `list`/`edit`/`add`/`mc`/`open`/`film`):
   - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
-  - **edit** — quiz name + rounds; **▲▼ reorder rounds and questions**, 🗑 per question,
-    **+ Vraag toevoegen**. Only **Opslaan / Annuleer** (no "use now" inside editing).
+  - **edit** — quiz name + rounds; **drag to reorder rounds and questions** (grip handle, see
+    `lib/drag.js`), 🗑 per question, **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
   - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
-    or make a new **Meerkeuze / Open / Film** question.
+    or make a new **Meerkeuze / Open / Film** question. Each of these (bank picks + every custom
+    form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
+    round in the draft (e.g. add a custom question to **Hondenrassen**) or create a new one — so
+    your own questions can be split across rounds. Library rounds still merge by name on their own.
   - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`), shown
     **reversed and numbered** (1 = top = revealed first = least famous; the lead sits last) → tick +
-    ▲▼ reorder → a betting `:tmdb` question with the actors' TMDB photos as stages.
+    **drag to reorder** → a betting `:tmdb` question with the actors' TMDB photos as stages.
 - **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
   **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film questions; they
   show up under "Vraag toevoegen" in `quizzes.html`.
@@ -673,9 +676,10 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
 Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
 the generic prompt. The home screen (`index.html`) has a hamburger menu linking to both pages.
 
-Custom MC is stored `{options:[correct,…], answer:0, shuffle:true}`; films land in a round named
-**"Films"**, other customs in **"Eigen vragen"**. A saved/edited quiz is a plain questions.json
-object (`{name, rounds:[…]}`); editing reconstructs rounds via `flattenQuiz`.
+Custom MC is stored `{options:[correct,…], answer:0, shuffle:true}`. The target round comes from
+the doelronde-kiezer; its defaults are **"Films"** for films and **"Eigen vragen"** for other
+customs, but you can route them into any existing round. A saved/edited quiz is a plain
+questions.json object (`{name, rounds:[…]}`); editing reconstructs rounds via `flattenQuiz`.
 
 ### Handoff to the game
 
