@@ -869,7 +869,7 @@ function ctrlToggle(pid){
   setJudge(round, pid, !effectiveCorrect(round, pid, auto));
 }
 async function playerSubmit(){
-  if(app.kicked) return;
+  if(app.kicked || app.passed[app.game.round]) return;   // na passen niet meer gokken
   const cur = app.game.current, r = app.game.round;
   let val, label;
   if(cur.optionsMode==='list'){
@@ -894,14 +894,14 @@ async function playerSubmit(){
   renderPlayer();
 }
 async function playerBet(k){
-  if(app.kicked) return;
+  if(app.kicked || app.passed[app.game.round]) return;   // na passen geen inzet meer
   const r = app.game.round;
   app.bet[r] = k;
   await set(ref(db, `games/${app.code}/players/${app.pid}/bet/${r}`), k);
   renderPlayer();
 }
 async function playerPass(){
-  if(app.kicked) return;
+  if(app.kicked || app.passed[app.game.round]) return;
   const r = app.game.round;
   app.confirmPass=false; app.passed[r]=true;
   await set(ref(db, `games/${app.code}/players/${app.pid}/pass/${r}`), true);
@@ -1279,7 +1279,7 @@ const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
 function passModalHTML(){
   return app.confirmPass ? `<div class="modal"><div class="modalcard stack" style="gap:12px">
       <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
-      <p class="muted" style="margin:0;font-size:13px">Je doet dan deze ronde niet mee voor punten.</p>
+      <p class="muted" style="margin:0;font-size:13px">Je doet dan deze vraag niet mee voor punten — ook de volgende hints niet.</p>
       <div class="row"><button class="btn grow" id="b-passno">Nee</button><button class="btn grow danger" id="b-passyes">Ja, passen</button></div>
     </div></div>` : '';
 }
@@ -1757,7 +1757,7 @@ function winNote(r,g){
 function playerPassed(){
   const g=app.game;
   el.innerHTML = `<div class="center stack"><div class="qmeta">${pRoundLbl()}</div>
-    <h1>Je hebt gepast ⤴</h1><p class="muted">Wachten op de volgende ronde <span class="waiting-dots"></span></p></div>`;
+    <h1>Je hebt gepast ⤴</h1><p class="muted">Wachten op de volgende vraag <span class="waiting-dots"></span></p></div>`;
 }
 function playerWaiting(){
   const g=app.game;
