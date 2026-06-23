@@ -1356,7 +1356,7 @@ function hostRoundIntro(){
       <h1 style="font-size:clamp(34px,8vw,58px)">${esc(rc.name||('Ronde '+(rc.ri+1)))}</h1>
       ${rc.intro?`<p class="introtext">${esc(rc.intro)}</p>`:''}
       <p class="muted">${rc.qCount} ${rc.qCount===1?'vraag':'vragen'} in deze ronde</p>
-      <span class="pill" style="align-self:center">${readyN}/${app.players.length} klaar</span>
+      ${rc.intro?`<span class="pill" style="align-self:center">${readyN}/${app.players.length} klaar</span>`:''}
     </div>
     <button class="btn big" id="b-beginround">Begin ronde</button>`;
   $('#b-beginround').onclick = hostBeginRound;
@@ -1647,9 +1647,11 @@ function playerRoundIntro(){
       <div class="qmeta">Nieuwe ronde ${ri+1}${rc.roundCount?' / '+rc.roundCount:''}</div>
       <h1 style="font-size:clamp(30px,8vw,48px)">${esc(rc.name||('Ronde '+(ri+1)))}</h1>
       ${rc.intro?`<p class="introtext">${esc(rc.intro)}</p>`:''}
-      ${did
-        ? `<p class="muted">Je bent er klaar voor ✓ — wachten op de host <span class="waiting-dots"></span></p>`
-        : `<button class="btn big" id="b-ready">Ik snap het 👍</button>`}
+      ${!rc.intro
+        ? `<p class="muted">Wachten op de host <span class="waiting-dots"></span></p>`
+        : (did
+          ? `<p class="muted">Je bent er klaar voor ✓ — wachten op de host <span class="waiting-dots"></span></p>`
+          : `<button class="btn big" id="b-ready">Ik snap het 👍</button>`)}
     </div>`;
   const rb=$('#b-ready'); if(rb) rb.onclick=playerReady;
 }
