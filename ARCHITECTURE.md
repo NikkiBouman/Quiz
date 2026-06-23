@@ -224,7 +224,10 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | array                     | `list`        | Tappable shape tiles (▲◆●■). `answer` = index. |
 | array + `"search": true`  | `listsearch`  | Autocomplete text field over the list. `answer` = index. |
 | `":tmdb"`                  | `tmdb`        | Live TMDB movie search. `answer` = TMDB movie id (or array). |
-| `":deezer"`               | `deezer`      | Live Deezer song search. `answer` = Deezer track id (or array). |
+| `":deezer"`               | `deezer`      | Live Deezer **track** search ("Artist – Title"). `answer` = Deezer track id. (Title **+** artist answer = exact song.) |
+| `":deezer-title"`         | `deezertitle` | Deezer track search showing **only titles** (deduped). **Text-matched** (`answer` = title string, like `:text`). (Title-only answer.) |
+| `":deezer-album"`         | `deezeralbum` | Live Deezer **album** search. `answer` = Deezer album id. (Album-as-answer.) |
+| `":deezer-artist"`        | `deezerartist`| Live Deezer **artist** search. `answer` = Deezer artist id. (Artist-as-answer.) |
 | `":text"`                 | `text`        | Free text; **manually judged**. `answer` = string; `accept[]` for variants. |
 
 ### Stages (`stages[]`) — progressive hints
@@ -491,7 +494,10 @@ Because all shared state is in Firebase, a host can move to another device.
   host-only `audio` (optionally clipped via `clipStart`/`clipEnd`); the player answer side
   (`:deezer` search, or `:text`) is unchanged. `deezerSearch` lives in both `index.html` (game
   answer search) and `lib/quiz-core.js` (editor song builder). `deezerTrack(id)` (JSONP
-  `/track/{id}`) additionally fetches artist/album/year for the song builder's info-facts. Note:
+  `/track/{id}`) additionally fetches title/artist(+id)/album(+id)/year for the song builder. The game
+  also has `deezerSearchTitles(q)` (track search → deduped titles, for `:deezer-title`) and
+  `deezerSearchKind('album'|'artist', q)` (`/search/album`, `/search/artist`) for the
+  `:deezer-album` / `:deezer-artist` answer modes (when the album/artist is the answer). Note:
   you only get Deezer's one fixed 30s snippet, not an arbitrary range of the full track.
 - `searchOptions(mode, q)` dispatches to the right provider; the answer UI debounces input
   (`_sTimer`) and renders results via `searchOutHTML` / `wireSearchResults`.
@@ -697,24 +703,30 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     Pick a source (TMDB film via `movieDetails`, or Deezer track via `deezerSearch`+`deezerTrack`)
     → it yields a **clue pool**: the actors (film) plus the info-facts (year/genre/director/
     composer/rating/runtime for film; artist/album/year for song). Then four choices:
-    - **Two columns** (`mb-grid`, stacks on mobile): **left** = the question (prompt + the **Info**
-      and **Hints** drop-zones + answer); **right** = the source (poster/cover + title + the
-      draggable **pool**). The pool is drag-zone `'off'`; there is no separate "Niet gebruiken" box.
+    - **Two columns** (`mb-grid`, stacks on mobile): **left** = the question (prompt + the **Info**,
+      **Hints** and **Antwoord** drop-zones); **right** = the source (poster/cover + title + the
+      draggable **pool** + a **"+ eigen stukje"** button). The pool is drag-zone `'off'`.
     - **De vraag** — free prompt (`mb-prompt`), default "Welke film?" / "Welk nummer is dit?".
-    - **Drag** (`enableDragGroup`, cross-container over `info`/`hint`/`off`): drag a clue from the
-      right pool to **Info** (always-visible subkop, `q.facts`) or **Hints** (revealed one at a time,
-      `q.stages`, order = reveal order); drag back to unuse. **Everything starts in the pool** (right).
-      Clues are **persons** (cast + director + composer, each with a TMDB photo when available) or
-      plain **facts** (year/genre/rating/runtime; artist/album/year for songs). A person chip has
+    - **Drag** (`enableDragGroup`, cross-container over `info`/`hint`/`answer`/`off`): drag a clue to
+      **Info** (always-visible subkop, `q.facts`), **Hints** (revealed one at a time, `q.stages`,
+      order = reveal order), or **Antwoord** (what they must guess); drag back to unuse. The **title** is
+      a draggable clue too (defaults to the Antwoord zone). Clue kinds: `title` (searchable, film/track
+      id), `fact` (year/genre/rating/runtime; for songs `artist`/`album` are *searchable* facts with a
+      Deezer id, `year` plain), `person` (cast + director + composer, TMDB photo when available),
+      `audio` (the song fragment), `custom` (typed via "+ eigen stukje"). A person chip has
       **naam / foto / rol** checkboxes — pick what players see (`showName`/`showPhoto`/`showRole`);
       "rol" = the job (Acteur/Regisseur/…), *not* who they played. The editor always shows a small role
-      badge so the maker knows what each chip is. For songs the **fragment is its own draggable clue**
-      (kind `audio`, with an inline player + `van…tot…` clip window, 0–30s): drop it in Hints at any
-      position, or in Info (plays from the start). Fragment alone → a plain non-staged audio question;
-      fragment + fact hints → staged with the fragment at its chosen spot.
-    - **Wat is het antwoord?** — *de titel* (→ `:tmdb`/`:deezer` search, or open `:text`), *een feit*
-      (year/genre/rating/… or **regisseur/componist** by name → open `:text`, host-judged), or *eigen
-      tekst*. The chosen answer is auto-excluded from the pool/zones so it can't be shown.
+      badge. For songs the **fragment is its own draggable clue** (inline player + `van…tot…` clip,
+      0–30s): drop it in Hints at any position, or in Info (plays from the start). Fragment alone →
+      non-staged audio question; fragment + fact hints → staged with the fragment at its chosen spot.
+    - **Antwoord** — drag what they must guess into the Antwoord zone (one or more). The **search
+      mode follows the combination** (`answerSearchMode`), so the player's results show exactly the
+      answer: film **title** → `:tmdb`; song **title** alone → `:deezer-title` (only titles, deduped,
+      text-matched); **artist** → `:deezer-artist`; **album** → `:deezer-album`; **title + artist** →
+      `:deezer` (the exact track). A **"Spelers zoeken …"** checkbox (`p.answerSearch`) toggles search
+      off → players type. Any other combination (year/genre/person/custom, or e.g. title+year) → open
+      `:text`, host-judged (all dragged values count). A clue in Antwoord is automatically out of
+      Info/Hints/pool, so the answer is never shown.
     Hints (`q.stages`) get `betMultiplier`s → a betting question by default (toggle per round/question
     with the **inzet** checkbox). The poster becomes `answerImage`. `q.source` stores the full clue
     pool so the question bank can re-open the builder losslessly. Default rounds: **"Films"** / **"Liedjes"**.
@@ -760,8 +772,8 @@ Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `
 `defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`, `factsHTML`. Catalog/TMDB/Deezer:
 `TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `movieDetails`,
 `deezerSearch`, `deezerTrack`, `popularMoviesHTML`. Media builder: `movieFacts`, `songFacts`,
-`newFilmPick`, `newSongPick`, `pickFromQuestion`, `buildMediaQuestion`, `mediaBuilderHTML`,
-`wireMediaBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
+`newFilmPick`, `newSongPick`, `newCustomClue`, `pickFromQuestion`, `buildMediaQuestion`,
+`mediaBuilderHTML`, `wireMediaBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
 `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
 `addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
 (The old `actorImage` helper and committed actor JPEGs in `img/` were removed — film/song questions

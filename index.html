@@ -84,7 +84,41 @@ function deezerSearch(q){
     document.body.appendChild(s);
   });
 }
-async function searchOptions(mode,q){ try{ return mode==='tmdb'?await tmdbSearch(q):mode==='deezer'?await deezerSearch(q):[]; }catch(e){ return []; } }
+/* Deezer album-/artiest-zoeken (JSONP) — voor antwoorden waarbij het album/de artiest geraden wordt */
+function deezerSearchKind(kind, q){
+  return new Promise(resolve=>{
+    const cb='dz_'+Math.random().toString(36).slice(2,9);
+    const s=document.createElement('script');
+    const done=items=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(items); };
+    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,8).map(x=> kind==='album'
+      ? { id:x.id, label:`${x.artist?x.artist.name+' – ':''}${x.title}`, thumb:x.cover_small||null }
+      : { id:x.id, label:x.name, thumb:x.picture_small||null }));
+    s.onerror=()=>done([]);
+    s.src=`https://api.deezer.com/search/${kind}?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=8`;
+    document.body.appendChild(s);
+  });
+}
+/* alleen titels (ontdubbeld) — voor antwoord "alleen titel"; de gekozen titel is de waarde (tekst-match) */
+function deezerSearchTitles(q){
+  return new Promise(resolve=>{
+    const cb='dz_'+Math.random().toString(36).slice(2,9);
+    const s=document.createElement('script');
+    const done=items=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(items); };
+    window[cb]=data=>{
+      const seen=new Set(), out=[];
+      (data&&data.data?data.data:[]).forEach(t=>{
+        const title=(t.title||'').trim(), k=title.toLowerCase();
+        if(!title||seen.has(k)) return; seen.add(k);
+        out.push({ id:title, label:title, thumb:(t.album&&t.album.cover_small)||null });   // id = titel → tekst-match
+      });
+      done(out.slice(0,8));
+    };
+    s.onerror=()=>done([]);
+    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=25`;
+    document.body.appendChild(s);
+  });
+}
+async function searchOptions(mode,q){ try{ return mode==='tmdb'?await tmdbSearch(q):mode==='deezer'?await deezerSearch(q):mode==='deezertitle'?await deezerSearchTitles(q):mode==='deezeralbum'?await deezerSearchKind('album',q):mode==='deezerartist'?await deezerSearchKind('artist',q):[]; }catch(e){ return []; } }
 
 /* ============================================================
    INGEBOUWDE VOORBEELDSET — gebruikt tot je een JSON laadt.
@@ -135,9 +169,9 @@ function normalizeQuiz(arr){
   return arr.map(q=>{
     const out = Object.assign({}, q);
     if(Array.isArray(q.stages)) out.stages = q.stages.map(normStage);
-    if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':q.options===':text'?'text':'list';
+    if(typeof q.options==='string')        out.optionsMode = q.options===':tmdb'?'tmdb':q.options===':deezer'?'deezer':q.options===':deezer-title'?'deezertitle':q.options===':deezer-album'?'deezeralbum':q.options===':deezer-artist'?'deezerartist':q.options===':text'?'text':'list';
     else if(Array.isArray(q.options))      out.optionsMode = q.search ? 'listsearch' : 'list';   // search:true → autocomplete-veld
-    else if(['tmdb','deezer','text','listsearch'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
+    else if(['tmdb','deezer','deezertitle','deezeralbum','deezerartist','text','listsearch'].includes(q.optionsMode)) out.optionsMode = q.optionsMode;   // al genormaliseerd (resume)
     else { out.optionsMode='list'; out.options = out.options||[]; }
     if(!['list','listsearch'].includes(out.optionsMode)) delete out.options;
     if(out.answer==null && q.correctIndex!=null) out.answer = q.correctIndex;
@@ -183,7 +217,7 @@ function normTxt(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').
 /* is dit antwoord goed? ondersteunt lijst/zoek (id of index), tekst, én meerdere juiste antwoorden (array) */
 function isCorrectAns(r, a){
   if(a==null) return false;
-  if(r.optionsMode==='text'){
+  if(r.optionsMode==='text' || r.optionsMode==='deezertitle'){   // deezertitle: speler koos een titel → tekst-match
     const ok = [r.answerLabel, r.answer, ...((r.accept)||[])].filter(x=>x!=null).map(normTxt);
     return ok.includes(normTxt(a));
   }
@@ -235,8 +269,8 @@ function validateQuestions(data){
   for(let i=0;i<data.length;i++){
     const q=data[i], n=i+1;
     if(!q || typeof q!=='object') return `Vraag ${n} is ongeldig.`;
-    const apiOpts = typeof q.options==='string' && [':tmdb',':deezer'].includes(q.options);
-    const textOpts = q.options===':text';
+    const apiOpts = typeof q.options==='string' && [':tmdb',':deezer',':deezer-album',':deezer-artist'].includes(q.options);
+    const textOpts = q.options===':text' || q.options===':deezer-title';   // titel-zoek matcht op tekst
     const listOpts = Array.isArray(q.options);
     if(!apiOpts && !textOpts && !listOpts) return `Vraag ${n}: 'options' moet een lijst zijn of ":tmdb"/":deezer"/":text".`;
     if(listOpts && q.options.length<2) return `Vraag ${n}: minstens 2 opties nodig.`;
@@ -1293,7 +1327,7 @@ function hostQuestion(){
   const revealCls = everyoneCorrect ? 'btn big' : 'btn ghost big';
   const opts = r.optionsMode==='list'
     ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
-    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
+    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':r.optionsMode==='deezertitle'?'Zoek een titel via de zoekbalk':r.optionsMode==='deezeralbum'?'Zoek een album via de zoekbalk':r.optionsMode==='deezerartist'?'Zoek een artiest via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
   let spot, controls;
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
@@ -1430,7 +1464,7 @@ function answerAreaHTML(r){
       <input id="t-input" class="sinput" type="text" placeholder="Typ je antwoord…" value="${esc(app.textAns||'')}" maxlength="60" autocomplete="off">
     </div>`;
   }
-  const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : r.optionsMode==='deezer' ? 'Zoek een nummer…' : 'Zoek in de lijst…';
+  const ph = r.optionsMode==='tmdb' ? 'Zoek een film…' : r.optionsMode==='deezer' ? 'Zoek een nummer…' : r.optionsMode==='deezertitle' ? 'Zoek een titel…' : r.optionsMode==='deezeralbum' ? 'Zoek een album…' : r.optionsMode==='deezerartist' ? 'Zoek een artiest…' : 'Zoek in de lijst…';
   return `<div class="searchwrap">
     <input id="s-input" class="sinput" type="text" placeholder="${ph}" value="${esc(app.searchText||'')}" autocomplete="off" autocapitalize="off">
     <div id="sout"></div></div>`;

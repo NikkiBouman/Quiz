@@ -270,6 +270,9 @@
   .cchip-ck label{display:inline-flex;align-items:center;gap:3px;cursor:pointer}
   .cchip-ck input{width:15px;height:15px}
   .cchip-role{font-size:11px;color:var(--muted);font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+  .cchip-input{flex:1;min-width:0;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--ink)}
+  .answersearch{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);cursor:pointer}
+  .answersearch input{width:16px;height:16px}
   .cchip-frag{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;font-size:14px}
   .cchip-frag audio{height:34px}
   .fragclip{display:flex;align-items:center;gap:6px;font-size:13px}
