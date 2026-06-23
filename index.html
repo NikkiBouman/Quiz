@@ -123,6 +123,12 @@ function normStage(s){
   if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
   return o;
 }
+/* standaard inzet-multipliers per stage-aantal (mirror van lib/quiz-core.js) */
+function defaultBetMults(n){
+  const t = {1:[1], 2:[2,1], 3:[3,2,1], 4:[3,2,1.5,1], 5:[3,2,1.5,1.25,1], 6:[3,2.5,2,1.5,1.25,1]};
+  if(t[n]) return t[n];
+  return Array.from({length:n}, (_,i)=> n<=1 ? 1 : Math.round((3 - 2*i/(n-1))*100)/100);
+}
 function normalizeQuiz(arr){
   return arr.map(q=>{
     const out = Object.assign({}, q);
@@ -134,8 +140,10 @@ function normalizeQuiz(arr){
     if(!['list','listsearch'].includes(out.optionsMode)) delete out.options;
     if(out.answer==null && q.correctIndex!=null) out.answer = q.correctIndex;
     if(Array.isArray(out.stages)){
-      const muls = out.stages.map(s=>s.betMultiplier);
-      if(muls.some(m=>m!=null)){ out.betting=true; out.betMultipliers = out.stages.map(s=>s.betMultiplier!=null?s.betMultiplier:1); }
+      // inzetten is optioneel: expliciete q.bet wint; anders afleiden uit aanwezige betMultipliers
+      const hasMul = out.stages.some(s=>s.betMultiplier!=null);
+      const betOn = q.bet!=null ? !!q.bet : hasMul;
+      if(betOn){ const dm=defaultBetMults(out.stages.length); out.betting=true; out.betMultipliers = out.stages.map((s,i)=>s.betMultiplier!=null?s.betMultiplier:dm[i]); }
       // bandle-metadata uit de mapnaam halen, bv "..._(1974_143M_par-2)/1" → jaar 1974, 143M views, par 2
       const ap = out.stages.find(s=>s.audio);
       if(ap){

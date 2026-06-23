@@ -57,6 +57,8 @@ function pushToDraft(round, bucket, label, q){
   addToBank({ bucket, label, q: JSON.parse(JSON.stringify(q)) });
 }
 function applyMediaToQ(q, url, type){ url=(url||'').trim(); if(!url) return; if(type==='video') q.video=url; else if(type==='audio') q.audio=url; else q.image=url; }
+/* mag je op deze vraag inzetten? expliciete q.bet wint, anders afgeleid uit de stages */
+function betOf(q){ return q.bet!=null ? !!q.bet : (Array.isArray(q.stages) && q.stages.some(s=>s.betMultiplier!=null)); }
 
 /* doelronde-kiezer: kies een bestaande ronde van de quiz of maak een nieuwe.
    Zo kun je je eigen vragen in elke ronde zetten (splitsen) of aan een bestaande
@@ -142,6 +144,9 @@ async function addSelections(){
 function reorderRounds(order){ syncEdit(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
 function reorderQ(ri,order){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
 function delQ(ri,qi){ const d=S.draft, r=d&&d.rounds[ri]; if(!r)return; r.questions.splice(qi,1); if(!r.questions.length) d.rounds.splice(ri,1); render(); }
+/* inzetten aan/uit: per vraag, of voor de hele ronde (alle onderliggende hint-vragen) */
+function toggleQBet(ri,qi){ syncEdit(); const q=S.draft&&S.draft.rounds[ri]&&S.draft.rounds[ri].questions[qi]; if(!q)return; q.bet=!betOf(q); render(); }
+function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions.forEach(q=>{ if(Array.isArray(q.stages)) q.bet=on; }); render(); }
 
 /* meerkeuze */
 function readMc(){ const d=S.mcDraft||(S.mcDraft={}); const g=id=>{const e=$('#'+id);return e?e.value:undefined;}; if($('#mc-q')!=null){ d.question=g('mc-q'); d.media=g('mc-media'); d.mediaType=g('mc-mtype'); d.correct=g('mc-correct'); d.distractors=[0,1,2,3,4].map(i=>g('mc-d'+i)).map(x=>x==null?'':x);} return d; }
@@ -217,11 +222,16 @@ function listHTML(){
 }
 function editHTML(){
   const d=S.draft||{name:'',rounds:[]};
-  const rounds = d.rounds.length ? d.rounds.map((rd,ri)=>`
+  const rounds = d.rounds.length ? d.rounds.map((rd,ri)=>{
+    const staged=rd.questions.filter(q=>Array.isArray(q.stages)), betN=staged.filter(betOf).length;
+    const allBet=staged.length>0&&betN===staged.length, someBet=betN>0&&!allBet;
+    const roundBet = staged.length ? `<label class="betlbl" title="Inzetten aan/uit voor alle hint-vragen in deze ronde"><input type="checkbox" class="r-bet" data-ri="${ri}" data-some="${someBet?1:0}" ${allBet?'checked':''}>inzet</label>` : '';
+    return `
     <div class="card stack" data-idx="${ri}" style="gap:6px;padding:12px">
       <div class="row" style="gap:6px;align-items:center;flex-wrap:nowrap">
         <span class="grip" title="Sleep om de ronde te verplaatsen">${ICON_GRIP}</span>
         <input class="sinput r-name" data-ri="${ri}" value="${esc(rd.name)}" placeholder="Rondenaam" style="flex:1;min-width:0;font-size:15px;font-weight:600;padding:9px 11px;margin:0">
+        ${roundBet}
         <span class="muted" style="font-size:12px;white-space:nowrap">${rd.questions.length} ${rd.questions.length===1?'vraag':'vragen'}</span>
       </div>
       <textarea class="r-intro" data-ri="${ri}" rows="2" placeholder="Uitleg voor de spelers (zien ze bij ‘Ik snap het 👍’ aan het begin van de ronde)">${esc(rd.intro||'')}</textarea>
@@ -229,9 +239,11 @@ function editHTML(){
       ${rd.questions.map((q,qi)=>`<div class="row" data-idx="${qi}" style="gap:6px;align-items:center;background:var(--surface-2);border-radius:10px;padding:7px 9px">
         <span class="grip" title="Sleep om de vraag te verplaatsen">${ICON_GRIP}</span>
         <span style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rowText(q)}</span>
+        ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>
-    </div>`).join('') : `<p class="muted" style="margin:0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
+    </div>`;
+  }).join('') : `<p class="muted" style="margin:0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
   return `<div class="statusbar"><h1 style="font-size:clamp(22px,5vw,32px)">${S.editingName?'Quiz wijzigen':'Nieuwe quiz'}</h1></div>
     <input id="q-name" class="sinput" placeholder="Naam van je quiz" value="${esc(d.name||'')}" style="font-size:18px">
     <div class="stack" id="ed-scroll" style="gap:10px">${rounds}</div>
@@ -314,6 +326,8 @@ function wire(){
     enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderRounds });
     el.querySelectorAll('.qlist').forEach(ql=> enableDragSort(ql, { handle:'.grip', onDrop:order=>reorderQ(+ql.dataset.round, order) }));
     el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
+    el.querySelectorAll('[data-qbet]').forEach(cb=>cb.onchange=()=>{ const a=cb.dataset.qbet.split('|'); toggleQBet(+a[0],+a[1]); });
+    el.querySelectorAll('.r-bet').forEach(cb=>{ cb.indeterminate = cb.dataset.some==='1'; cb.onchange=()=>toggleRoundBet(+cb.dataset.ri, cb.checked); });
     const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
     const sv=$('#b-save'); if(sv)sv.onclick=saveDraft;
     const cn=$('#b-cancel'); if(cn)cn.onclick=()=>{ S.draft=null; S.editingName=null; S.view='list'; S.err=''; S.msg=''; render(); };

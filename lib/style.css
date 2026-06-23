@@ -238,3 +238,8 @@
   .grip:hover{background:var(--surface);color:var(--ink)}
   .grip:active{cursor:grabbing}
   [data-idx].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}
+  /* compacte vinkjes + puntenveld in de quiz-editor */
+  .betlbl{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}
+  .betlbl input{width:16px;height:16px}
+  .ptsfield{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+  .ptsfield input{width:62px;font-size:13px;padding:6px 8px;text-align:right}

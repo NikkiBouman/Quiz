@@ -208,6 +208,7 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `image`       | Single-shot image path (non-staged questions). |
 | `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
+| `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
 | `points`      | Base points (default 100). |
 | `pointsByStage` | Non-betting staged questions: points per stage (decreasing reward for later reveals). |
 | `year`, `views`, `par` | Bandle metadata; auto-parsed from the audio folder name if absent. |
@@ -227,12 +228,15 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 Each stage object: `{ text?, image?, audio?, label?, betMultiplier? }`. The presence of a
 field decides the stage kind (`audio` > `image` > `text`). `label` is an optional caption.
 
-- If **any** stage has `betMultiplier` → the question is a **betting** question. The host
-  reveals hints one at a time; players wager on which hint they'll know the answer by, with
-  higher multipliers for earlier (riskier) bets. `out.betMultipliers` is the per-stage
-  multiplier array (missing → 1).
-- If stages exist **without** betMultiplier but the question has `pointsByStage` → reward
-  decreases with each revealed hint (no betting).
+- **Betting is optional.** A staged question is a **betting** question when `bet` is explicitly
+  `true`, or — if `bet` is unset — when any stage has a `betMultiplier`. Setting `bet:false`
+  turns betting off even if multipliers are present. On a betting question the host reveals hints
+  one at a time and players wager on which hint they'll know the answer by, with higher
+  multipliers for earlier (riskier) bets. `out.betMultipliers` is the per-stage multiplier array
+  (any missing entry is filled from `defaultBetMults`). The quiz editor exposes this as a per-round
+  and per-question **"inzet"** checkbox (the round box toggles all its staged questions).
+- If a staged question is **not** betting but has `pointsByStage` → reward decreases with each
+  revealed hint; otherwise it scores flat `points`.
 - **Audio stages are host-only**: audio paths are never sent to players (`publicCurrent`
   omits them); only the host machine plays sound. Images *are* sent to players as data-URIs.
 
