@@ -16,18 +16,38 @@
 </div>
 
 <script type="module">
-import { esc, ICON_TRASH, loadSavedQuizzes, deleteSavedQuiz, loadBank,
-         flattenQuiz, exportQuizJSON, setActiveQuiz, navMenuHTML } from '../../lib/quiz-core.js';
+import { esc, ICON_TRASH, loadSavedQuizzes, deleteSavedQuiz, saveQuizToDevice, loadBank,
+         flattenQuiz, exportQuizJSON, parseImportedQuiz, uniqueQuizName, setActiveQuiz,
+         navMenuHTML } from '../../lib/quiz-core.js';
 import { wireScroll } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
-const S = { scroll:0, msg:'' };
+const S = { scroll:0, msg:'', err:'' };
 document.getElementById('chrome').innerHTML = navMenuHTML('quizzes', '../../');
 
 function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q) return; setActiveQuiz(name, q); location.href='../../index.html#host=1'; }
-function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.msg=`"${name}" geëxporteerd.`; render(); } }
-function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQuiz(name); S.msg=''; render(); } }
+function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.err=''; S.msg=`"${name}" geëxporteerd.`; render(); } }
+function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQuiz(name); S.msg=''; S.err=''; render(); } }
+
+/* een eerder geëxporteerde (of zelfgemaakte) quiz-JSON importeren naar dit apparaat */
+function importFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onerror = ()=>{ S.msg=''; S.err='Bestand lezen mislukt.'; render(); };
+  reader.onload = ()=>{
+    const { quiz, name, error } = parseImportedQuiz(String(reader.result), file.name.replace(/\.json$/i,''));
+    if(error){ S.msg=''; S.err='Import mislukt: '+error; render(); return; }
+    let target = name;
+    if(loadSavedQuizzes()[name] && !confirm(`Er bestaat al een quiz "${name}". Overschrijven?\n(Annuleer = importeren onder een nieuwe naam.)`))
+      target = uniqueQuizName(name);
+    quiz.name = target;
+    if(saveQuizToDevice(target, quiz)){ S.err=''; S.msg=`Quiz "${target}" geïmporteerd (${flattenQuiz(quiz).questions.length} vragen).`; }
+    else { S.msg=''; S.err='Opslaan mislukt (opslag vol?).'; }
+    render();
+  };
+  reader.readAsText(file);
+}
 
 function render(){
   const saved=loadSavedQuizzes(), names=Object.keys(saved), bankN=loadBank().length;
@@ -42,14 +62,21 @@ function render(){
       </div></div>`; }).join('')
     : `<p class="muted m0">Nog geen quizzen. Maak er een met “+ Nieuwe quiz”.</p>`;
   el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Jouw quizzen</h1><p class="muted m0">Op dit apparaat opgeslagen.</p></div>
-    <a class="btn big nolink center" href="new/">+ Nieuwe quiz</a>
+    <div class="row" style="gap:6px">
+      <a class="btn grow nolink center" href="new/">+ Nieuwe quiz</a>
+      <button class="btn ghost grow" id="b-import">⬆ Importeer JSON</button>
+    </div>
+    <input type="file" id="import-file" accept="application/json,.json" hidden>
     <div class="stack edscroll" id="ed-scroll" style="gap:10px">${rows}</div>
     ${bankN?`<p class="muted center hint">Je hebt ${bankN} losse vraag/vragen in je <a href="../questions/">vragenbank</a>.</p>`:''}
+    ${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}
     ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}`;
   wireScroll($, S);
   el.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>useQuiz(b.dataset.use));
   el.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportSaved(b.dataset.export));
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delQuiz(b.dataset.del));
+  const imp=$('#b-import'), fi=$('#import-file');
+  if(imp&&fi){ imp.onclick=()=>{ fi.value=''; fi.click(); }; fi.onchange=()=>importFile(fi.files&&fi.files[0]); }
 }
 render();
 </script>
