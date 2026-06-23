@@ -16,38 +16,39 @@
 </div>
 
 <script type="module">
-import { esc, loadBank, addToBank, saveBank, pickFromQuestion } from '../../../lib/quiz-core.js';
-import { readMc, mcDraftToQuestion, mcFormHTML, readOpen, openDraftToQuestion, openFormHTML,
+import { esc, loadBank, addToBank, saveBank, pickFromQuestion, customPickFromQuestion } from '../../../lib/quiz-core.js';
+import { customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
          editorTopbarHTML } from '../../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
 
-/* welk type / welke bewerk-index? komt uit de URL (/new/?type=film of ?edit=3) */
+/* welk type / welke bewerk-index? komt uit de URL (/new/?type=custom|film|song of ?edit=3) */
 const params = new URLSearchParams(location.search);
 const editIndex = params.has('edit') ? +params.get('edit') : null;
 const typeParam = params.get('type');
 const editing = editIndex!=null;
 const toList = ()=>{ location.href = '../'; };
 
-const S = { view:'mc', err:'', scroll:0, editIndex, mcDraft:null, openDraft:null,
+const S = { view:'custom', err:'', scroll:0, editIndex, customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null };
 const actions = makeMediaActions(S, render);
-let mbSync = null;   // sync van de media-bouwer (voor de top-bar Opslaan)
+let mbSync = null;   // sync van de bouwer (voor de top-bar Opslaan)
 
-/* beginstand: een bestaande vraag bewerken, of een vers formulier van het gevraagde type */
+/* beginstand: een bestaande vraag bewerken, of een vers formulier van het gevraagde type.
+   Alle niet-film/liedje-vragen (ook oude meerkeuze/open) openen in de custom-bouwer. */
 function initForm(){
   if(editing){
     const it=loadBank()[editIndex]; if(!it){ toList(); return; }
-    const q=it.q, mt=q.video?'video':q.audio?'audio':'image', media=(q.image||q.video||q.audio||'');
+    const q=it.q;
     if(it.bucket==='films'){ S.filmPick=pickFromQuestion(q); S.view='film'; }
     else if(it.bucket==='liedjes'){ S.songPick=pickFromQuestion(q); S.view='song'; }
-    else if(q.options===':text'){ S.openDraft={ question:q.question||'', media, mediaType:mt, answer:q.answer||'', accept:(q.accept||[]).join(', ') }; S.view='open'; }
-    else { const ai=q.answer!=null?q.answer:0; S.mcDraft={ question:q.question||'', media, mediaType:mt, correct:(q.options||[])[ai]||'', distractors:(q.options||[]).filter((_,idx)=>idx!==ai) }; S.view='mc'; }
+    else { S.customPick=customPickFromQuestion(q); S.view='custom'; }
   } else {
-    S.view = ['mc','open','film','song'].includes(typeParam) ? typeParam : 'mc';
+    const t = typeParam==='film'||typeParam==='song' ? typeParam : 'custom';   // oude ?type=mc/open → custom
+    S.view = t;
   }
 }
 
@@ -58,25 +59,22 @@ function bankAdd(bucket, label, q){
   else addToBank(item);
   toList();
 }
-function addMc(){ const d=readMc(S.mcDraft||(S.mcDraft={}), $); const {q,error,label}=mcDraftToQuestion(d); if(error){ S.err=error; render(); return; } bankAdd('eigen', label, q); }
-function addOpen(){ const d=readOpen(S.openDraft||(S.openDraft={}), $); const {q,error,label}=openDraftToQuestion(d); if(error){ S.err=error; render(); return; } bankAdd('eigen', label, q); }
+function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd('custom', r.label, r.q); }
 function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd(r.isFilm?'films':'liedjes', r.label, r.q); }
-/* de top-bar 'Opslaan' kiest de juiste actie; bij de media-bouwer eerst de DOM terug-syncen */
+/* de top-bar 'Opslaan' kiest de juiste actie; bij de bouwer eerst de DOM terug-syncen */
 function saveCurrent(){
-  if(S.view==='mc') addMc();
-  else if(S.view==='open') addOpen();
-  else { if(mbSync) mbSync(); addMedia(); }
+  if(mbSync) mbSync();
+  if(S.view==='custom') addCustom();
+  else addMedia();
 }
 
 function render(){
-  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);
+  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);   // brede twee-koloms-bouwer (film/liedje)
   const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner =
-    S.view==='mc'   ? mcFormHTML(S.mcDraft||{},    { title:editing?'Meerkeuze wijzigen':'Meerkeuzevraag', showActions:false }) :
-    S.view==='open' ? openFormHTML(S.openDraft||{},{ title:editing?'Open vraag wijzigen':'Open vraag',     showActions:false }) :
     S.view==='film' ? filmFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
     S.view==='song' ? songFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
-                      '';
+                      customFormHTML(S, { editing, hideAdd:true });
   el.innerHTML = `${inner}${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}`;
   wire();
 }
@@ -84,6 +82,8 @@ function wire(){
   wireScroll($, S);
   if(S.view==='film' || S.view==='song'){
     mbSync = wireMediaForms(el, S, render, actions, { onAdd:addMedia, onBack:toList, backId:'b-formback' });
+  } else {
+    mbSync = wireCustomForm(el, S, render, {});
   }
 }
 

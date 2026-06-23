@@ -20,7 +20,7 @@ import { esc, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
          loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
          flattenQuiz } from '../../../lib/quiz-core.js';
 import { enableDragSort } from '../../../lib/drag.js';
-import { rowText, readMc, mcDraftToQuestion, mcFormHTML, readOpen, openDraftToQuestion, openFormHTML,
+import { rowText, customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
          editorTopbarHTML } from '../../../lib/editor-ui.js';
 
@@ -30,7 +30,7 @@ const toList = ()=>{ location.href = '../'; };
 const S = {
   view:'edit', catalog:null, busy:false, err:'', msg:'', scroll:0,
   draft:null, editingName:null, sel:{}, bankSel:{},
-  mcDraft:null, openDraft:null,
+  customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null,
 };
@@ -138,8 +138,7 @@ function toggleQBet(ri,qi){ syncEdit(); const q=S.draft&&S.draft.rounds[ri]&&S.d
 function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions.forEach(q=>{ if(Array.isArray(q.stages)) q.bet=on; }); render(); }
 
 /* maken → aan de gekozen ronde toevoegen (validatie + opbouw zit in editor-ui.js) */
-function addMc(){ const d=readMc(S.mcDraft||(S.mcDraft={}), $); const {q,error,label}=mcDraftToQuestion(d); if(error){ S.err=error; render(); return; } const round=targetRoundFor('mc','Eigen vragen',''); pushToDraft(round,'eigen',label,q); S.mcDraft=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
-function addOpen(){ const d=readOpen(S.openDraft||(S.openDraft={}), $); const {q,error,label}=openDraftToQuestion(d); if(error){ S.err=error; render(); return; } const round=targetRoundFor('op','Eigen vragen',''); pushToDraft(round,'eigen',label,q); S.openDraft=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
+function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('cb','Eigen vragen',''); pushToDraft(round,'custom',r.label,r.q); S.customPick=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
 function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('mb', r.isFilm?'Films':'Liedjes', r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.'); pushToDraft(round, r.isFilm?'films':'liedjes', r.label, r.q); if(r.isFilm) S.filmPick=null; else S.songPick=null; S.err=''; S.view='edit'; S.msg=`${r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
 
 /* ---------- HTML ---------- */
@@ -197,7 +196,7 @@ function addHTML(){
       ${libraryHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
-      <div class="row" style="gap:6px"><button class="btn ghost" id="b-mc">+ Meerkeuze</button><button class="btn ghost" id="b-open">+ Open vraag</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
+      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">+ Custom</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
@@ -206,8 +205,7 @@ function render(){
   const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner =
     S.view==='add'  ? addHTML() :
-    S.view==='mc'   ? mcFormHTML(S.mcDraft||{},    { title:'Meerkeuzevraag', addLabel:'Toevoegen', backId:'b-formback', roundPickerHTML:roundPickerHTML('mc','Eigen vragen') }) :
-    S.view==='open' ? openFormHTML(S.openDraft||{},{ title:'Open vraag',     addLabel:'Toevoegen', backId:'b-formback', roundPickerHTML:roundPickerHTML('op','Eigen vragen') }) :
+    S.view==='custom' ? customFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('cb','Eigen vragen') }) :
     S.view==='film' ? filmFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
     S.view==='song' ? songFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
                       editHTML();
@@ -234,8 +232,7 @@ function wire(){
     el.querySelectorAll('[data-round]').forEach(cb=>cb.onchange=()=>toggleRound(cb.dataset.round));
     el.querySelectorAll('[data-bank]').forEach(cb=>cb.onchange=()=>toggleBank(+cb.dataset.bank));
     const go=v2=>()=>{ S.view=v2; S.err=''; S.msg=''; render(); };
-    const m=$('#b-mc'); if(m)m.onclick=go('mc');
-    const o=$('#b-open'); if(o)o.onclick=go('open');
+    const cu=$('#b-custom'); if(cu)cu.onclick=()=>{ S.customPick=null; go('custom')(); };
     const f=$('#b-film'); if(f)f.onclick=go('film');
     const sg=$('#b-song'); if(sg)sg.onclick=go('song');
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
@@ -243,8 +240,15 @@ function wire(){
     wireRoundPicker('bank');
     return;
   }
-  if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-formback'); if(b)b.onclick=()=>{ readMc(S.mcDraft||(S.mcDraft={}), $); S.view='add'; S.err=''; render(); }; wireRoundPicker('mc'); return; }
-  if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-formback'); if(b)b.onclick=()=>{ readOpen(S.openDraft||(S.openDraft={}), $); S.view='add'; S.err=''; render(); }; wireRoundPicker('op'); return; }
+  if(v==='custom'){
+    wireCustomForm(el, S, render, {
+      onAdd:addCustom,
+      onBack:()=>{ S.customPick=null; S.view='add'; S.err=''; render(); },
+      backId:'b-formback',
+      afterBuilderWire:()=>wireRoundPicker('cb'),
+    });
+    return;
+  }
   if(v==='film' || v==='song'){
     wireMediaForms(el, S, render, actions, {
       onAdd:addMedia,

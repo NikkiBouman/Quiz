@@ -63,7 +63,7 @@ account/index.html              # account landing — links to the two managers
 account/quizzes/index.html      # quiz LIST (saved quizzes; use/edit/export/delete) — see §22
 account/quizzes/new/index.html  # quiz EDITOR (new, or ?edit=<name>); top-bar opslaan/terug
 account/questions/index.html    # question bank LIST (edit/delete) — see §22
-account/questions/new/index.html# question CREATOR/EDITOR (?type=mc|open|film|song, or ?edit=<i>)
+account/questions/new/index.html# question CREATOR/EDITOR (?type=custom|film|song, or ?edit=<i>)
 quizzes.html, questions.html    # thin redirect stubs → account/quizzes/ , account/questions/ (old URLs)
 lib/quiz-core.js  # shared ES module: quiz pipeline + catalog + TMDB + localStorage + navMenuHTML
 lib/editor-ui.js  # shared ES module: the manager-page UI (forms, media search, wiring) — see §22
@@ -221,7 +221,7 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `audio`       | Host-only audio for a non-staged question (e.g. a Deezer `preview` URL). **Never sent to players** (`publicCurrent` omits it); only the host machine plays it. |
 | `clipStart` / `clipEnd` | Optional seconds — play only this window of the `audio`. Works on a top-level `audio` *or* a stage's `audio`. Enforced host-side by `wireClips()` (seek to start, pause at end). Used by song questions (Deezer previews are a fixed ~30s, so this clips *within* that snippet). |
 | `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. Film questions set this to the poster. |
-| `facts`       | **Info-subkop** (always-visible context): array of `{label, value}` (text pill) or `{label, image}` (small photo). Rendered by `factsHTML` on host + player; forwarded by `publicCurrent` in **all** phases (it's context, never the answer — the builder excludes the answer). Produced by the media builder's **Info** zone (§22). |
+| `facts`       | **Info-subkop** (always-visible context): array of `{label, value}` (text pill), `{label, image}` (small photo), `{label, video}` (inline clip, sent to players), or `{label, audio}` (**host-only** — `publicCurrent` strips the src, players see a "🔊" pill). Rendered by `factsHTML(r, isHost)` on host + player; forwarded by `publicCurrent` in **all** phases (it's context, never the answer — the builder excludes the answer). Produced by the **Info** zone of the media builder *and* the custom builder (§22). |
 | `source`      | Host-only builder metadata for film/song questions: `{kind:'tmdb'\|'deezer', id, label, clues:[…], preview?}`. Lets the question bank re-open the builder **losslessly** (zones + per-actor naam/foto toggles). Ignored by the game and **not** sent to players (`publicCurrent` omits it). Also makes `qTypeLabel` report film/lied even when the answer is a fact. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
@@ -697,11 +697,15 @@ The quiz builder is **not** in `index.html` anymore — it's under `account/`, a
 **split into a LIST page and a `new/` CREATOR/EDITOR page** so every screen is a real, bookmarkable,
 refresh-safe URL on GitHub Pages (no SPA-fallback hack needed):
 
-- `account/questions/` (list) → `account/questions/new/?type=mc|open|film|song` (create) or
+There are **three question types**: **custom** (zelf samengesteld), **film**, and **liedje** (song).
+The old separate *meerkeuze*/*open* forms are gone — both are now just answer-modes of the custom
+builder, which losslessly re-opens any old `:text`/`options[]` bank question (§custom builder below).
+
+- `account/questions/` (list) → `account/questions/new/?type=custom|film|song` (create) or
   `…/new/?edit=<index>` (edit). Each question is independent → the form is its own page; **Opslaan**
-  saves to the bank and navigates back to the list.
+  saves to the bank and navigates back to the list. (Old `?type=mc|open` links route to `custom`.)
 - `account/quizzes/` (list) → `account/quizzes/new/` (new) or `…/new/?edit=<name>` (edit). The quiz
-  draft spans many sub-steps (edit→add→mc/film…) and must persist, so those sub-views stay **in-page**
+  draft spans many sub-steps (edit→add→custom/film…) and must persist, so those sub-views stay **in-page**
   (`S.view`, draft in memory); only list↔editor is a real navigation.
 
 **Top bar (`editorTopbarHTML`)**: on a creator/editor page the top-left shows **← Terug zonder opslaan**
@@ -711,25 +715,38 @@ Home · Mijn quizzen · Mijn vragen, with the current page marked `aria-current`
 
 The **shared editor UI lives in `lib/editor-ui.js`** — both managers differ only in where a built
 question goes (the bank vs. a round in a quiz), so the common parts are factored out: `rowText`,
-the **meerkeuze/open** forms (`mcFormHTML`/`readMc`/`mcDraftToQuestion`, idem `open`), the
-**film/liedje** search + forms (`makeMediaActions`/`filmFormHTML`/`songFormHTML`/`readMediaPick`),
+the **custom** form (`customFormHTML`/`readCustomPick`/`wireCustomForm`, wrapping the custom builder),
+the **film/liedje** search + forms (`makeMediaActions`/`filmFormHTML`/`songFormHTML`/`readMediaPick`),
 and the wiring (`wireMediaForms`/`wireScroll`/`editorTopbarHTML`). The form builders take
-`opts.showActions` (hide the bottom Toevoegen/Terug row when save is in the top bar) and
-`opts.hideAdd`; `wireMediaForms` returns the builder `sync` so a top-bar Opslaan can sync first.
+`opts.hideAdd` (hide the bottom Toevoegen/Terug row when save is in the top bar); `wireMediaForms`/
+`wireCustomForm` return the builder `sync` so a top-bar Opslaan can sync first.
 Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14`/`.btn.sm`).
 
 - **`account/quizzes/`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
-  `list`/`edit`/`add`/`mc`/`open`/`film`):
+  `list`/`edit`/`add`/`custom`/`film`/`song`):
   - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
   - **edit** — quiz name + rounds; each round has an **editable name and intro** (the intro is the
     "Ik snap het 👍" explanation players see at the round start; synced via `syncEdit`),
     **drag to reorder rounds and questions** (grip handle, see `lib/drag.js`), 🗑 per question,
     **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
   - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
-    or make a new **Meerkeuze / Open / Film / Liedje** question. Each of these (bank picks + every custom
+    or make a new **Custom / Film / Liedje** question. Each of these (bank picks + every custom
     form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
     round in the draft (e.g. add a custom question to **Hondenrassen**) or create a new one — so
     your own questions can be split across rounds. Library rounds still merge by name on their own.
+  - **Custom builder ("+ Custom")** — a single-column builder (`customBuilderHTML`/`wireCustomBuilder`/
+    `buildCustomQuestion` in `lib/quiz-core.js`) for self-made questions, **no API source**. A prompt
+    plus two drag-zones — **Info** (`q.facts`, always visible) and **Hints** (`q.stages`, revealed one
+    by one with bet-multipliers) — each fed by a **"+ toevoegen"** button. A clue is a `custom` clue:
+    plain text *or* a **directe medialink** with a render type (afbeelding/video/audio; only direct
+    files, no YouTube/Spotify embeds). Drag clues between Info and Hints (`enableDragGroup`). The
+    **Antwoord** block is typed text (not dragged): an **open/meerkeuze** toggle. *Open* → `:text`
+    (host-judged; every juist antwoord accepted via `answer`+`accept[]`). *Meerkeuze* → `options[]`
+    with the juiste antwoord(en) first + separate foute opties; **>6 options → searchable** (`search:true`,
+    dog-breed style), else tiles (`shuffle:true`). Multiple correct → `answer` is an index array
+    (shuffle is array-aware). `q.source={kind:'custom', clues, answerMode, correct, distractors}` makes
+    it re-open losslessly; `customPickFromQuestion` also reconstructs **old meerkeuze/open** bank
+    questions (no `source`) into the builder.
   - **Media builder (Film "+ Film" / Liedje "+ Liedje")** — one shared builder for both
     (`mediaBuilderHTML` + `wireMediaBuilder` + `buildMediaQuestion` in `lib/quiz-core.js`).
     Pick a source (TMDB film via `movieDetails`, or Deezer track via `deezerSearch`+`deezerTrack`)
@@ -769,17 +786,19 @@ Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14
     Spoiler-safety: `hintLabelsHTML` shows only the category (Foto/Fragment/Hint N) before reveal, and
     `publicCurrent` withholds non-audio stage labels until a stage is revealed.
 - **`account/questions/`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
-  **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film/Liedje questions;
-  they show up under "Vraag toevoegen" in the quiz manager. (Edit routing is by stored `bucket`, so a
-  `:text` song still loads the song form, not the open-question form.)
+  **edit** (in place) and delete reusable Custom/Film/Liedje questions; they show up under "Vraag
+  toevoegen" in the quiz manager. (Edit routing is by stored `bucket`: `films`→film, `liedjes`→song,
+  everything else → custom builder, so a `:text` song still loads the song form, and old
+  meerkeuze/open bank items re-open in the custom builder.)
 
 Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
 the generic prompt. The home screen (`index.html`) has a hamburger menu linking to both pages.
 
-Custom MC is stored `{options:[correct,…], answer:0, shuffle:true}`. The target round comes from
-the doelronde-kiezer; its defaults are **"Films"** for films and **"Eigen vragen"** for other
-customs, but you can route them into any existing round. A saved/edited quiz is a plain
-questions.json object (`{name, rounds:[…]}`); editing reconstructs rounds via `flattenQuiz`.
+A custom meerkeuze is stored `{options:[correct,…], answer:0, shuffle:true}` (or `search:true`
+when >6 options). The target round comes from the doelronde-kiezer; its defaults are **"Films"** for
+films, **"Liedjes"** for songs and **"Eigen vragen"** for custom, but you can route them into any
+existing round. A saved/edited quiz is a plain questions.json object (`{name, rounds:[…]}`); editing
+reconstructs rounds via `flattenQuiz`.
 
 ### Handoff to the game
 
@@ -811,7 +830,8 @@ hamburger with active state). Catalog/TMDB/Deezer:
 `TMDB_PROXY`, `loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `movieDetails`,
 `deezerSearch`, `deezerTrack`, `popularMoviesHTML`. Media builder: `movieFacts`, `songFacts`,
 `newFilmPick`, `newSongPick`, `newCustomClue`, `pickFromQuestion`, `buildMediaQuestion`,
-`mediaBuilderHTML`, `wireMediaBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
+`mediaBuilderHTML`, `wireMediaBuilder`. Custom builder: `newCustomPick`, `customPickFromQuestion`,
+`buildCustomQuestion`, `customBuilderHTML`, `wireCustomBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
 `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
 `addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
 Catalog base: `ROOT` (`new URL('../', import.meta.url)`) — the repo root used by `loadCatalog`.
@@ -822,15 +842,16 @@ when `type=details` isn't deployed. Drag lives in `lib/drag.js`: `enableDragSort
 
 ### `lib/editor-ui.js` exports
 
-Shared manager-page UI (imports from `quiz-core.js` + `drag.js`). List helpers: `rowText`,
-`mediaRowHTML`, `applyMediaToQ`. Meerkeuze/open: `readMc`/`mcDraftToQuestion`/`mcFormHTML`,
-`readOpen`/`openDraftToQuestion`/`openFormHTML`. Film/liedje: `makeMediaActions` (returns
+Shared manager-page UI (imports from `quiz-core.js` + `drag.js`). List helpers: `rowText`.
+Custom: `customFormHTML`/`readCustomPick`/`wireCustomForm` (wrap the custom builder; `wireCustomForm`
+returns the builder `sync`). Film/liedje: `makeMediaActions` (returns
 `filmSearch`/`filmPick`/`songSearch`/`songPickTrack` bound to the page's `S`+`render`),
 `filmFormHTML`, `songFormHTML`, `readMediaPick`. Wiring/chrome: `wireMediaForms` (returns the
 builder `sync`), `wireScroll`, `editorTopbarHTML` (the ← Terug zonder opslaan / Opslaan bar). The
-forms take an `opts` object (`title`/`addLabel`/`backId`/`roundPickerHTML`/`editing`/`showActions`/
-`hideAdd`) so the list/creator pages can vary labels, hide the bottom action row when save is in the
-top bar, and toggle the round-picker.
+forms take an `opts` object (`addLabel`/`backId`/`roundPickerHTML`/`editing`/`hideAdd`) so the
+list/creator pages can vary labels, hide the bottom action row when save is in the top bar, and
+toggle the round-picker. (The old standalone `mcFormHTML`/`openFormHTML`/`mediaRowHTML` helpers were
+removed — meerkeuze/open are now answer-modes of the custom builder.)
 
 ---
 
