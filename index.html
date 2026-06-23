@@ -77,6 +77,7 @@ function deezerSearch(q){
     window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,8).map(t=>({
       id:t.id, label:`${t.artist?t.artist.name+' – ':''}${t.title}`,
       thumb:t.album&&t.album.cover_small?t.album.cover_small:null,
+      preview:t.preview||'',   // ~30s MP3-fragment (host-only afspeelbaar)
     })));
     s.onerror=()=>done([]);
     s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=8`;
@@ -121,6 +122,7 @@ function normStage(s){
   if(s.text!=null)o.text=s.text; if(s.image!=null)o.image=s.image; if(s.audio!=null)o.audio=s.audio; if(s.video!=null)o.video=s.video;
   if(s.label!=null)o.label=s.label;
   if(s.betMultiplier!=null)o.betMultiplier=s.betMultiplier;
+  if(s.clipStart!=null)o.clipStart=s.clipStart; if(s.clipEnd!=null)o.clipEnd=s.clipEnd;  // audio-fragment afspelen van … tot …
   return o;
 }
 /* standaard inzet-multipliers per stage-aantal (mirror van lib/quiz-core.js) */
@@ -1045,23 +1047,38 @@ function quizMediaReport(){
 }
 
 const imgHTML = src => src ? `<img class="qimg" src="${esc(src)}" alt="">` : '';
-const audioHTML = src => src ? `<audio class="qaudio" controls preload="none" src="${esc(src)}"></audio>` : '';
+/* audio met optioneel clip-venster: start/end (sec) komen als data-attrs mee en
+   worden na het renderen afgedwongen door wireClips() (spoel naar start, stop bij end) */
+const audioHTML = (src, start, end) => src ? `<audio class="qaudio" controls preload="none" src="${esc(src)}"${start!=null?` data-clip-start="${+start||0}"`:''}${end!=null?` data-clip-end="${+end}"`:''}></audio>` : '';
 const videoHTML = src => src ? `<video class="qimg" controls preload="metadata" playsinline src="${esc(src)}"></video>` : '';
 /* media van een niet-gestage vraag (host krijgt audio, speler niet) */
 function qMediaHTML(r, isHost){
-  return `${imgHTML(resolveMedia(r.image))}${videoHTML(resolveMedia(r.video))}${isHost?audioHTML(resolveMedia(r.audio)):''}`;
+  return `${imgHTML(resolveMedia(r.image))}${videoHTML(resolveMedia(r.video))}${isHost?audioHTML(resolveMedia(r.audio), r.clipStart, r.clipEnd):''}`;
+}
+/* dwingt het clip-venster af op alle geclipte <audio> in de huidige render:
+   bij play naar de start spoelen, en bij het bereiken van end pauzeren + terug naar start
+   (zodat opnieuw afspelen weer bij de start begint). Alleen op het hostscherm. */
+function wireClips(root){
+  (root||el).querySelectorAll('audio.qaudio').forEach(a=>{
+    const ds=a.dataset;
+    if(ds.clipStart==null && ds.clipEnd==null) return;
+    const start=Math.max(0, parseFloat(ds.clipStart)||0);
+    const end=(ds.clipEnd!=null && ds.clipEnd!=='') ? parseFloat(ds.clipEnd) : null;
+    a.addEventListener('play', ()=>{ if(a.currentTime<start || (end!=null && a.currentTime>=end)){ try{ a.currentTime=start; }catch(e){} } });
+    a.addEventListener('timeupdate', ()=>{ if(end!=null && a.currentTime>=end){ a.pause(); try{ a.currentTime=start; }catch(e){} } });
+  });
 }
 function clueListHTML(stages){
   return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
-    <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
+    <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio, s.clipStart, s.clipEnd)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
 }
 /* één stage-rij; isHost bepaalt of audio afspeelbaar is */
-function stageRowHTML(kind, label, idx, cur, revealed, media, isHost){
+function stageRowHTML(kind, label, idx, cur, revealed, media, isHost, clipStart, clipEnd){
   const isCur = idx===cur;
   let body;
   if(kind==='audio'){
     body = `<span class="slabel">${esc(label||('Fragment '+(idx+1)))}</span>${isCur?'<span class="nowtag">▶ nu</span>':''}`;
-    if(isHost && revealed) body += audioHTML(media);
+    if(isHost && revealed) body += audioHTML(media, clipStart, clipEnd);
   } else if(kind==='image'){
     body = revealed ? imgHTML(media) : `<span class="slocked">nog niet getoond</span>`;
   } else if(kind==='video'){
@@ -1078,7 +1095,7 @@ function hostStagesHTML(r, cur){
     const kind = s.audio?'audio':s.video?'video':s.image?'image':'text';
     const revealed = idx<=cur;
     const media = kind==='audio'?resolveMedia(s.audio):kind==='video'?resolveMedia(s.video):kind==='image'?resolveMedia(s.image):s.text;
-    return stageRowHTML(kind, s.label, idx, cur, revealed, media, true);
+    return stageRowHTML(kind, s.label, idx, cur, revealed, media, true, s.clipStart, s.clipEnd);
   }).join('')}</div>`;
 }
 /* speler: stage-meta uit state (geen audio-paden) */
@@ -1295,6 +1312,7 @@ function hostQuestion(){
   const hb=$('#b-hint'); if(hb) hb.onclick=hostNextHint;
   const rb=$('#b-reveal'); if(rb) rb.onclick=hostReveal;
   wirePlayerControls();
+  wireClips();
 }
 function hostRevealView(){
   const r = app.quiz[app.round];

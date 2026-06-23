@@ -206,6 +206,8 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `answerLabel` | Human-readable correct answer (auto-derived for list/listsearch/text). |
 | `accept`      | For `:text`: array of additional acceptable strings (spelling variants). |
 | `image`       | Single-shot image path (non-staged questions). |
+| `audio`       | Host-only audio for a non-staged question (e.g. a Deezer `preview` URL). **Never sent to players** (`publicCurrent` omits it); only the host machine plays it. |
+| `clipStart` / `clipEnd` | Optional seconds — play only this window of the `audio`. Works on a top-level `audio` *or* a stage's `audio`. Enforced host-side by `wireClips()` (seek to start, pause at end). Used by song questions (Deezer previews are a fixed ~30s, so this clips *within* that snippet). |
 | `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
@@ -225,8 +227,9 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 
 ### Stages (`stages[]`) — progressive hints
 
-Each stage object: `{ text?, image?, audio?, label?, betMultiplier? }`. The presence of a
-field decides the stage kind (`audio` > `image` > `text`). `label` is an optional caption.
+Each stage object: `{ text?, image?, audio?, label?, betMultiplier?, clipStart?, clipEnd? }`. The
+presence of a field decides the stage kind (`audio` > `image` > `text`). `label` is an optional
+caption. `clipStart`/`clipEnd` (seconds) clip an `audio` stage host-side (see `wireClips`).
 
 - **Betting is optional.** A staged question is a **betting** question when `bet` is explicitly
   `true`, or — if `bet` is unset — when any stage has a `betMultiplier`. Setting `bet:false`
@@ -477,7 +480,12 @@ Because all shared state is in Firebase, a host can move to another device.
     (`tmdb-proxy/worker.js`); until redeployed, movie search still works but the cast lookup returns
     empty (graceful: the builder finds no cast). The old `type=person` lookup is no longer used.
 - **Deezer** (`deezerSearch`): JSONP (`GET /search?q=…&output=jsonp&callback=…`) to avoid
-  CORS. `answer` for `:deezer` questions is the Deezer track id.
+  CORS. `answer` for `:deezer` questions is the Deezer track id. Each result also carries
+  **`preview`** — a ~30s MP3 on Deezer's CDN, free and key-less. **Song questions** use it as
+  host-only `audio` (optionally clipped via `clipStart`/`clipEnd`); the player answer side
+  (`:deezer` search, or `:text`) is unchanged. `deezerSearch` lives in both `index.html` (game
+  answer search) and `lib/quiz-core.js` (editor song builder). Note: you only get Deezer's one
+  fixed 30s snippet, not an arbitrary range of the full track.
 - `searchOptions(mode, q)` dispatches to the right provider; the answer UI debounces input
   (`_sTimer`) and renders results via `searchOutHTML` / `wireSearchResults`.
 
@@ -595,8 +603,13 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
   Saved quizzes/questions, however, live in **localStorage per device** (export to move them).
 - **Open RTDB rules** — fine for a party game, not for sensitive data.
 - **Single host writer** — never run two host tabs simultaneously (§15).
-- **Audio never reaches players** by design (host-only playback).
-- **Deezer via JSONP** — depends on the public Deezer endpoint; no key, can rate-limit.
+- **Audio never reaches players** by design (host-only playback). Clipped song audio
+  (`clipStart`/`clipEnd`, see `wireClips`) is enforced only on the host screen. Because the host
+  re-renders on every player update, playback restarts if someone answers mid-clip — fine for a
+  short clip, but don't expect uninterrupted long playback (same limitation as Bandle stems).
+- **Deezer via JSONP** — depends on the public Deezer endpoint; no key, can rate-limit. The
+  `preview` is a fixed ~30s snippet Deezer chooses; you cannot request an arbitrary range of the
+  full track (clip windows apply *within* that 30s).
 - **No build step** — plain static files with native ES module imports. Shared logic goes in
   `lib/quiz-core.js`; shared CSS in `lib/style.css` (`:root` variables, light blue/white theme).
   Must be served over http (not `file://`).
@@ -668,16 +681,22 @@ The quiz builder is **not** in `index.html` anymore — it's two standalone page
     **drag to reorder rounds and questions** (grip handle, see `lib/drag.js`), 🗑 per question,
     **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
   - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
-    or make a new **Meerkeuze / Open / Film** question. Each of these (bank picks + every custom
+    or make a new **Meerkeuze / Open / Film / Liedje** question. Each of these (bank picks + every custom
     form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
     round in the draft (e.g. add a custom question to **Hondenrassen**) or create a new one — so
     your own questions can be split across rounds. Library rounds still merge by name on their own.
   - **Film builder** — search a movie (TMDB) → top-5 cast (`movieCast`, `type=credits`), shown
     **reversed and numbered** (1 = top = revealed first = least famous; the lead sits last) → tick +
     **drag to reorder** → a betting `:tmdb` question with the actors' TMDB photos as stages.
+  - **Song builder ("+ Liedje")** — search a track (`deezerSearch`) → pick one → its `preview`
+    (~30s MP3) becomes host-only `audio`; set a clip window (**van … tot …** seconds) and the
+    answer mode (`:deezer` = players find the track, or `:text` = host judges). Produces a plain
+    non-staged question `{question, options, answer/answerLabel, audio, clipStart, clipEnd}`.
+    Default target round: **"Liedjes"**.
 - **`questions.html`** — "Mijn vragen": the personal **question bank** (`BANK_KEY`). Create,
-  **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film questions; they
-  show up under "Vraag toevoegen" in `quizzes.html`.
+  **edit** (in place, via `S.editIndex`) and delete reusable Meerkeuze/Open/Film/Liedje questions;
+  they show up under "Vraag toevoegen" in `quizzes.html`. (Edit routing is by stored `bucket`, so a
+  `:text` song still loads the song form, not the open-question form.)
 
 Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
 the generic prompt. The home screen (`index.html`) has a hamburger menu linking to both pages.
@@ -711,8 +730,8 @@ links).
 
 Pipeline: `flattenQuiz`, `validateQuiz`, `validateQuestions`, `normalizeQuiz`, `normStage`,
 `applyShuffles`, `labelFromFile`. Helpers: `esc`, `qLabel`, `qTypeLabel`, `answerText`,
-`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`. Catalog/TMDB: `TMDB_PROXY`,
-`loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`. Store: `SAVED_KEY`/`BANK_KEY`/
+`defaultBetMults`, `itemLabel`, `ICON_TRASH`, `ICON_GRIP`. Catalog/TMDB/Deezer: `TMDB_PROXY`,
+`loadCatalog`, `buildQuestion`, `tmdbSearch`, `movieCast`, `deezerSearch`. Store: `SAVED_KEY`/`BANK_KEY`/
 `ACTIVE_KEY`, `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
 `addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
 (The old `actorImage` helper and the committed actor JPEGs in `img/` were removed — film/actor

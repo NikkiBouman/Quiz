@@ -21,11 +21,11 @@
 <script type="module">
 import * as core from './lib/quiz-core.js';
 import { enableDragSort } from './lib/drag.js';
-const { esc, qLabel, qTypeLabel, answerText, ICON_TRASH, ICON_GRIP, loadBank, addToBank, saveBank, deleteBankItem, tmdbSearch, movieCast, popularMoviesHTML, defaultBetMults } = core;
+const { esc, qLabel, qTypeLabel, answerText, ICON_TRASH, ICON_GRIP, loadBank, addToBank, saveBank, deleteBankItem, tmdbSearch, movieCast, deezerSearch, popularMoviesHTML, defaultBetMults } = core;
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
-const S = { view:'list', err:'', msg:'', scroll:0, editIndex:null, mcDraft:null, openDraft:null, filmQuery:'', filmResults:[], filmBusy:false, filmPick:null };
+const S = { view:'list', err:'', msg:'', scroll:0, editIndex:null, mcDraft:null, openDraft:null, filmQuery:'', filmResults:[], filmBusy:false, filmPick:null, songQuery:'', songResults:[], songBusy:false, songPick:null };
 /* lijst-regel: antwoord eerst, dan type + vraagtekst */
 function rowText(q){
   const ans=answerText(q), title=ans||qLabel(q), extra=(ans&&q.question)?' · '+q.question:'';
@@ -48,6 +48,11 @@ function editItem(i){
   if(it.bucket==='films'){
     S.filmPick={ tmdbId:q.answer, label:q.answerLabel||'', cast:(q.stages||[]).map(s=>({img:s.image, name:'', checked:true})) };
     S.view='film';
+  } else if(it.bucket==='liedjes'){
+    const mode=q.options===':deezer'?':deezer':':text';
+    const label = mode===':deezer' ? (q.answerLabel||'') : (q.answer||'');
+    S.songPick={ deezerId:mode===':deezer'?q.answer:null, label, preview:q.audio||'', prompt:q.question||'Welk nummer is dit?', start:q.clipStart??0, end:q.clipEnd??'', mode };
+    S.view='song';
   } else if(q.options===':text'){
     S.openDraft={ question:q.question||'', media, mediaType:mt, answer:q.answer||'', accept:(q.accept||[]).join(', ') };
     S.view='open';
@@ -93,6 +98,23 @@ function addFilm(){
   const q={ question:'In welke film spelen deze acteurs?', options:':tmdb', answer:Number(p.tmdbId)||p.tmdbId, answerLabel:p.label, points:100, stages: sel.map((c,i)=>({ image:c.img, betMultiplier:mults[i] })) };
   S.filmPick=null; S.err=''; bankAdd('films', p.label, q);
 }
+/* liedje: zoek via Deezer → preview-fragment (~30s) → kies een clip-venster */
+async function songSearch(){ const e=$('#song-q'); const q=e?e.value.trim():''; S.songQuery=q; if(!q){ S.songResults=[]; render(); return; } S.songBusy=true; render(); try{ S.songResults=await deezerSearch(q); }catch(err){ S.songResults=[]; S.err='Zoeken mislukt: '+err.message; } S.songBusy=false; render(); }
+function songPickTrack(i){ const t=S.songResults[i]; if(!t)return; if(!t.preview){ S.err='Geen fragment beschikbaar voor dit nummer.'; render(); return; } S.songPick={ deezerId:t.id, label:t.label, preview:t.preview, prompt:'Welk nummer is dit?', start:0, end:15, mode:':deezer' }; S.songResults=[]; S.songQuery=''; S.err=''; render(); }
+function addSong(){
+  const p=S.songPick; if(!p){ S.err='Kies eerst een nummer.'; render(); return; }
+  const g=id=>{ const e=$('#'+id); return e?e.value:''; };
+  const start=Math.max(0, parseFloat(g('song-start'))||0);
+  let end=parseFloat(g('song-end')); if(isNaN(end)) end=null;
+  if(end!=null && end<=start){ S.err='“tot” moet ná “van” liggen.'; render(); return; }
+  const mode=g('song-mode')||':deezer';
+  const prompt=(g('song-prompt')||'').trim() || 'Welk nummer is dit?';
+  const q = mode===':text'
+    ? { question:prompt, options:':text', answer:p.label, audio:p.preview, clipStart:start }
+    : { question:prompt, options:':deezer', answer:Number(p.deezerId)||p.deezerId, answerLabel:p.label, audio:p.preview, clipStart:start };
+  if(end!=null) q.clipEnd=end;
+  S.songPick=null; S.err=''; bankAdd('liedjes', p.label, q);
+}
 function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); render(); } }
 
 /* ---------- HTML ---------- */
@@ -106,7 +128,7 @@ function listHTML(){
       <button class="mini danger" data-del="${i}" title="verwijderen">${ICON_TRASH}</button></div>`).join('')
     : `<p class="muted" style="margin:0">Nog geen losse vragen. Maak er een — je kunt ze daarna in elke quiz hergebruiken.</p>`;
   return `<div class="center stack" style="gap:2px;margin-bottom:6px"><h1 style="font-size:clamp(28px,7vw,44px)">Mijn vragen</h1><p class="muted" style="margin:0">Je persoonlijke vragenbank op dit apparaat.</p></div>
-    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn grow" id="b-mc">+ Meerkeuze</button><button class="btn grow" id="b-open">+ Open vraag</button><button class="btn grow" id="b-film">+ Film (acteurs)</button></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn grow" id="b-mc">+ Meerkeuze</button><button class="btn grow" id="b-open">+ Open vraag</button><button class="btn grow" id="b-film">+ Film (acteurs)</button><button class="btn grow" id="b-song">+ Liedje</button></div>
     <div class="stack" id="ed-scroll" style="gap:6px">${rows}</div>
     <p class="muted center" style="font-size:12px">Gebruik deze vragen via “+ Vraag toevoegen” bij <a href="quizzes.html">je quizzen</a>.</p>`;
 }
@@ -144,9 +166,37 @@ function filmFormHTML(){
     ${popularMoviesHTML()}
     <div class="row"><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
+function songFormHTML(){
+  if(S.songPick){ const p=S.songPick;
+    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">${S.editIndex!=null?'Liedje wijzigen':'Liedje'}: ${esc(p.label)}</h1></div>
+      <p class="muted" style="font-size:13px;margin:0">Luister het ~30s-fragment en kies welk stukje de spelers horen. Het fragment speelt <b>alleen op het hostscherm</b>.</p>
+      <audio controls preload="none" src="${esc(p.preview)}" style="width:100%"></audio>
+      <div class="stack" id="ed-scroll" style="gap:8px">
+        <input id="song-prompt" class="sinput" placeholder="De vraag" value="${esc(p.prompt||'Welk nummer is dit?')}">
+        <label class="lbl">Welk stukje van het fragment spelen?</label>
+        <div class="row" style="gap:8px;align-items:center">
+          <span class="muted">van</span><input type="number" id="song-start" class="sinput" min="0" max="30" step="1" value="${p.start??0}" style="width:80px">
+          <span class="muted">tot</span><input type="number" id="song-end" class="sinput" min="0" max="30" step="1" value="${p.end??''}" style="width:80px">
+          <span class="muted">seconde (leeg = einde)</span>
+        </div>
+        <label class="lbl">Hoe antwoorden de spelers?</label>
+        <select id="song-mode" class="sinput">
+          <option value=":deezer" ${p.mode!==':text'?'selected':''}>Spelers zoeken het nummer in Deezer</option>
+          <option value=":text" ${p.mode===':text'?'selected':''}>Open antwoord (jij beoordeelt)</option>
+        </select>
+      </div>
+      <div class="row"><button class="btn grow" id="b-song-add">${S.editIndex!=null?'Bijwerken':'Opslaan'}</button><button class="btn ghost" id="b-song-reset">Ander nummer</button></div>`;
+  }
+  const res=S.songResults||[];
+  return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Liedje (fragment afspelen)</h1></div>
+    <div class="row" style="gap:6px"><input id="song-q" class="sinput" placeholder="Zoek een nummer…" value="${esc(S.songQuery||'')}" style="flex:1"><button class="btn" id="b-song-search">Zoek</button></div>
+    ${S.songBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
+    <div class="stack" id="ed-scroll" style="gap:4px">${res.map((t,i)=>`<button class="btn ghost" data-song="${i}" style="justify-content:flex-start;font-size:14px">${t.thumb?`<img src="${esc(t.thumb)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;margin-right:8px">`:''}${esc(t.label)}${t.preview?'':' — <span class="muted">geen fragment</span>'}</button>`).join('')}</div>
+    <div class="row"><button class="btn ghost" id="b-back">Terug</button></div>`;
+}
 function render(){
   const v=S.view;
-  const inner = v==='mc'?mcFormHTML() : v==='open'?openFormHTML() : v==='film'?filmFormHTML() : listHTML();
+  const inner = v==='mc'?mcFormHTML() : v==='open'?openFormHTML() : v==='film'?filmFormHTML() : v==='song'?songFormHTML() : listHTML();
   el.innerHTML = `${inner}
     ${S.err?`<p class="err" style="margin:4px 0 0">${esc(S.err)}</p>`:''}
     ${S.msg?`<p class="muted" style="margin:4px 0 0;color:var(--groen)">${esc(S.msg)}</p>`:''}`;
@@ -157,15 +207,16 @@ function wire(){
   const v=S.view;
   if(v==='list'){
     // verse vraag maken: drafts + editIndex wissen
-    const go=v2=>()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.editIndex=null; S.view=v2; S.err=''; S.msg=''; render(); };
+    const go=v2=>()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.songPick=null; S.editIndex=null; S.view=v2; S.err=''; S.msg=''; render(); };
     const m=$('#b-mc'); if(m)m.onclick=go('mc');
     const o=$('#b-open'); if(o)o.onclick=go('open');
     const f=$('#b-film'); if(f)f.onclick=go('film');
+    const sg=$('#b-song'); if(sg)sg.onclick=go('song');
     el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editItem(+b.dataset.edit));
     el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
     return;
   }
-  const cancel=()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.editIndex=null; S.view='list'; S.err=''; render(); };
+  const cancel=()=>{ S.mcDraft=null; S.openDraft=null; S.filmPick=null; S.songPick=null; S.editIndex=null; S.view='list'; S.err=''; render(); };
   if(v==='mc'){ const a=$('#b-mc-add'); if(a)a.onclick=addMc; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
   if(v==='open'){ const a=$('#b-op-add'); if(a)a.onclick=addOpen; const b=$('#b-back'); if(b)b.onclick=cancel; return; }
   if(v==='film'){
@@ -177,6 +228,15 @@ function wire(){
     if(S.filmPick) enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderCast });
     const add=$('#b-film-add'); if(add)add.onclick=addFilm;
     const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ S.filmPick=null; S.err=''; render(); };
+    const b=$('#b-back'); if(b)b.onclick=cancel;
+    return;
+  }
+  if(v==='song'){
+    const s=$('#b-song-search'); if(s)s.onclick=songSearch;
+    const sq=$('#song-q'); if(sq)sq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); songSearch(); } };
+    el.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>songPickTrack(+b.dataset.song));
+    const add=$('#b-song-add'); if(add)add.onclick=addSong;
+    const rs=$('#b-song-reset'); if(rs)rs.onclick=()=>{ S.songPick=null; S.err=''; render(); };
     const b=$('#b-back'); if(b)b.onclick=cancel;
     return;
   }

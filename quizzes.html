@@ -21,7 +21,7 @@
 <script type="module">
 import * as core from './lib/quiz-core.js';
 import { enableDragSort } from './lib/drag.js';
-const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion, tmdbSearch, movieCast, popularMoviesHTML,
+const { esc, qLabel, qTypeLabel, answerText, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion, tmdbSearch, movieCast, deezerSearch, popularMoviesHTML,
         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
         flattenQuiz, exportQuizJSON, setActiveQuiz } = core;
 /* lijst-regel: het ANTWOORD eerst (zodat je ziet wélke vraag het is), dan type + vraagtekst */
@@ -37,6 +37,7 @@ const S = {
   draft:null, editingName:null, sel:{}, bankSel:{},
   mcDraft:null, openDraft:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
+  songQuery:'', songResults:[], songBusy:false, songPick:null,
 };
 
 /* ---------- helpers ---------- */
@@ -187,6 +188,24 @@ function addFilm(){
   const round=targetRoundFor('film','Films','Raad de film aan de acteurs.');
   pushToDraft(round, 'films', p.label, q); S.filmPick=null; S.err=''; S.view='edit'; S.msg=`Film toegevoegd aan "${round.name}".`; render();
 }
+/* liedje: zoek via Deezer → preview-fragment (~30s) → kies een clip-venster (van … tot …) */
+async function songSearch(){ const e=$('#song-q'); const q=e?e.value.trim():''; S.songQuery=q; if(!q){ S.songResults=[]; render(); return; } S.songBusy=true; render(); try{ S.songResults=await deezerSearch(q); }catch(err){ S.songResults=[]; S.err='Zoeken mislukt: '+err.message; } S.songBusy=false; render(); }
+function songPickTrack(i){ const t=S.songResults[i]; if(!t)return; if(!t.preview){ S.err='Geen fragment beschikbaar voor dit nummer.'; render(); return; } S.songPick={ deezerId:t.id, label:t.label, preview:t.preview }; S.songResults=[]; S.songQuery=''; S.err=''; render(); }
+function addSong(){
+  const p=S.songPick; if(!p){ S.err='Kies eerst een nummer.'; render(); return; }
+  const g=id=>{ const e=$('#'+id); return e?e.value:''; };
+  const start=Math.max(0, parseFloat(g('song-start'))||0);
+  let end=parseFloat(g('song-end')); if(isNaN(end)) end=null;
+  if(end!=null && end<=start){ S.err='“tot” moet ná “van” liggen.'; render(); return; }
+  const mode=g('song-mode')||':deezer';
+  const prompt=(g('song-prompt')||'').trim() || 'Welk nummer is dit?';
+  const q = mode===':text'
+    ? { question:prompt, options:':text', answer:p.label, audio:p.preview, clipStart:start }
+    : { question:prompt, options:':deezer', answer:Number(p.deezerId)||p.deezerId, answerLabel:p.label, audio:p.preview, clipStart:start };
+  if(end!=null) q.clipEnd=end;
+  const round=targetRoundFor('song','Liedjes','Raad het nummer aan het fragment.');
+  pushToDraft(round, 'liedjes', p.label, q); S.songPick=null; S.err=''; S.view='edit'; S.msg=`Liedje toegevoegd aan "${round.name}".`; render();
+}
 
 /* ---------- HTML ---------- */
 function mediaRowHTML(pfx,d){ d=d||{}; return `<input id="${pfx}-media" class="sinput" placeholder="Medialink (optioneel): https://…" value="${esc(d.media||'')}">
@@ -263,7 +282,7 @@ function addHTML(){
       ${libraryHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
-      <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn ghost" id="b-mc">+ Meerkeuze</button><button class="btn ghost" id="b-open">+ Open vraag</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button></div>
+      <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn ghost" id="b-mc">+ Meerkeuze</button><button class="btn ghost" id="b-open">+ Open vraag</button><button class="btn ghost" id="b-film">+ Film (acteurs)</button><button class="btn ghost" id="b-song">+ Liedje</button></div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
@@ -305,9 +324,38 @@ function filmFormHTML(){
     ${popularMoviesHTML()}
     <div class="row"><button class="btn ghost" id="b-formback">Terug</button></div>`;
 }
+function songFormHTML(){
+  if(S.songPick){ const p=S.songPick;
+    return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Liedje: ${esc(p.label)}</h1></div>
+      <p class="muted" style="font-size:13px;margin:0">Luister het ~30s-fragment en kies welk stukje de spelers horen. Het fragment speelt <b>alleen op het hostscherm</b>.</p>
+      <audio controls preload="none" src="${esc(p.preview)}" style="width:100%"></audio>
+      <div class="stack" id="ed-scroll" style="gap:8px">
+        <input id="song-prompt" class="sinput" placeholder="De vraag" value="Welk nummer is dit?">
+        <label class="lbl">Welk stukje van het fragment spelen?</label>
+        <div class="row" style="gap:8px;align-items:center">
+          <span class="muted">van</span><input type="number" id="song-start" class="sinput" min="0" max="30" step="1" value="0" style="width:80px">
+          <span class="muted">tot</span><input type="number" id="song-end" class="sinput" min="0" max="30" step="1" value="15" style="width:80px">
+          <span class="muted">seconde (leeg = einde)</span>
+        </div>
+        <label class="lbl">Hoe antwoorden de spelers?</label>
+        <select id="song-mode" class="sinput">
+          <option value=":deezer">Spelers zoeken het nummer in Deezer</option>
+          <option value=":text">Open antwoord (jij beoordeelt)</option>
+        </select>
+        ${roundPickerHTML('song','Liedjes')}
+      </div>
+      <div class="row"><button class="btn grow" id="b-song-add">Toevoegen aan quiz</button><button class="btn ghost" id="b-song-reset">Ander nummer</button></div>`;
+  }
+  const res=S.songResults||[];
+  return `<div class="statusbar"><h1 style="font-size:clamp(20px,5vw,28px)">Liedje (fragment afspelen)</h1></div>
+    <div class="row" style="gap:6px"><input id="song-q" class="sinput" placeholder="Zoek een nummer…" value="${esc(S.songQuery||'')}" style="flex:1"><button class="btn" id="b-song-search">Zoek</button></div>
+    ${S.songBusy?'<p class="muted center" style="margin:0">Bezig…</p>':''}
+    <div class="stack" id="ed-scroll" style="gap:4px">${res.map((t,i)=>`<button class="btn ghost" data-song="${i}" style="justify-content:flex-start;font-size:14px">${t.thumb?`<img src="${esc(t.thumb)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;margin-right:8px">`:''}${esc(t.label)}${t.preview?'':' — <span class="muted">geen fragment</span>'}</button>`).join('')}</div>
+    <div class="row"><button class="btn ghost" id="b-formback">Terug</button></div>`;
+}
 function render(){
   const v=S.view;
-  const inner = v==='edit'?editHTML() : v==='add'?addHTML() : v==='mc'?mcFormHTML() : v==='open'?openFormHTML() : v==='film'?filmFormHTML() : listHTML();
+  const inner = v==='edit'?editHTML() : v==='add'?addHTML() : v==='mc'?mcFormHTML() : v==='open'?openFormHTML() : v==='film'?filmFormHTML() : v==='song'?songFormHTML() : listHTML();
   el.innerHTML = `${inner}
     ${S.err?`<p class="err" style="margin:4px 0 0">${esc(S.err)}</p>`:''}
     ${S.msg?`<p class="muted" style="margin:4px 0 0;color:var(--groen)">${esc(S.msg)}</p>`:''}
@@ -344,6 +392,7 @@ function wire(){
     const m=$('#b-mc'); if(m)m.onclick=go('mc');
     const o=$('#b-open'); if(o)o.onclick=go('open');
     const f=$('#b-film'); if(f)f.onclick=go('film');
+    const sg=$('#b-song'); if(sg)sg.onclick=go('song');
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
     const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.err=''; S.msg=''; render(); };
     wireRoundPicker('bank');
@@ -362,6 +411,16 @@ function wire(){
     const add=$('#b-film-add'); if(add)add.onclick=addFilm;
     const rs=$('#b-film-reset'); if(rs)rs.onclick=()=>{ S.filmPick=null; S.err=''; render(); };
     const b=$('#b-formback'); if(b)b.onclick=()=>{ S.filmPick=null; S.view='add'; S.err=''; render(); };
+    return;
+  }
+  if(v==='song'){
+    const s=$('#b-song-search'); if(s)s.onclick=songSearch;
+    const sq=$('#song-q'); if(sq)sq.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); songSearch(); } };
+    el.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>songPickTrack(+b.dataset.song));
+    if(S.songPick) wireRoundPicker('song');
+    const add=$('#b-song-add'); if(add)add.onclick=addSong;
+    const rs=$('#b-song-reset'); if(rs)rs.onclick=()=>{ S.songPick=null; S.err=''; render(); };
+    const b=$('#b-formback'); if(b)b.onclick=()=>{ S.songPick=null; S.view='add'; S.err=''; render(); };
     return;
   }
 }
