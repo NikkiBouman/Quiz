@@ -161,7 +161,7 @@ const SAMPLE = [
   { question:'In welk land beklim je de berg Fuji?', points:100,
     options:['China','Japan','Zuid-Korea','Nepal'], answer:1 },
 ];
-const SHAPES = ['▲','◆','●','■'];
+const SHAPES = ['▲','◆','●','■','★','⬢'];   // tot 6 tegels (>6 opties wordt een zoekveld), dus 6 markers nodig
 
 /* normaliseer een vraag naar het interne model (accepteert ook {type,display}-stages en correctIndex) */
 function normStage(s){
@@ -284,6 +284,8 @@ function isCorrectAns(r, a){
   const ans = r.answer;
   return Array.isArray(ans) ? ans.map(String).includes(String(a)) : String(a)===String(ans);
 }
+/* is optie-index i een juist antwoord? answer is een index, óf een lijst van indexen bij meerdere juiste opties */
+function isCorrectIdx(answer, i){ return Array.isArray(answer) ? answer.includes(i) : i===answer; }
 
 /* ---- deel-juistheid voor artiest+titel (':deezer') ----
    Een ':deezer'-gok is pas goed als het hele liedje (de track-id) klopt, maar bij
@@ -374,7 +376,11 @@ function validateQuestions(data){
     } else {
       const ans = q.answer!=null ? q.answer : q.correctIndex;
       if(ans==null) return `Vraag ${n}: 'answer' ontbreekt.`;
-      if(listOpts && (typeof ans!=='number' || ans<0 || ans>=q.options.length)) return `Vraag ${n}: 'answer' moet een geldige index zijn.`;
+      if(listOpts){
+        const idxs = Array.isArray(ans) ? ans : [ans];   // meerdere juiste opties → lijst van indexen
+        if(!idxs.length || idxs.some(x=> typeof x!=='number' || x<0 || x>=q.options.length))
+          return `Vraag ${n}: 'answer' moet een geldige index zijn.`;
+      }
       if(apiOpts && !q.answerLabel) return `Vraag ${n}: bij ":tmdb"/":deezer" is 'answerLabel' nodig.`;
     }
     if(q.stages!=null){
@@ -1597,7 +1603,7 @@ function hostRevealView(){
     const namesFor = i => Object.keys(res).filter(pid=> String(res[pid].answer)===String(i)).map(pid=> app.names[pid]).filter(Boolean);
     grouping = `<div class="stack">${r.options.map((o,i)=>{
       const who = namesFor(i).map(n=>`<span class="who">${esc(n)}</span>`).join('');
-      const correct = i===r.answer;
+      const correct = isCorrectIdx(r.answer, i);
       return `<div class="ansline ${correct?'correct':'dim'}" data-c="${i}">
           <div class="ans-head"><span class="shape">${SHAPES[i]}</span><span class="otxt">${esc(o)}</span>${correct?'<span class="tag">goed</span>':''}</div>
           ${who ? `<div class="whos">${who}</div>` : ''}
@@ -1949,7 +1955,7 @@ function playerReveal(){
   let body;
   if(c.optionsMode==='list'){
     const myAns = res ? res.answer : null;
-    body = `<div class="answers">${(c.options||[]).map((o,i)=>{ let cls='dim'; if(i===c.answer)cls='correct'; else if(i===myAns)cls='wrong';
+    body = `<div class="answers">${(c.options||[]).map((o,i)=>{ let cls='dim'; if(isCorrectIdx(c.answer,i))cls='correct'; else if(i===myAns)cls='wrong';
       return `<div class="ans ${cls}" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`;}).join('')}</div>`;
   } else {
     body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${c.answerImage?imgHTML(c.answerImage):''}${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>${allGuessesHTML()}`;
