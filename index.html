@@ -1394,12 +1394,14 @@ function stageHintLabels(stages){
       : s.video ? 'Video'
       : ('Hint '+(i+1))));
 }
-function hintLabelsHTML(labels){
+function hintLabelsHTML(labels, points){
   if(!labels || !labels.length) return '';
   return `<div class="hintlist">${labels.map((lbl,i)=>
-    `<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(lbl)}</span></div>`
+    `<div class="hintlabel"><span class="cnum">${i+1}</span><span>${esc(lbl)}</span>${points&&points[i]!=null?`<span class="hintpts">${points[i]} pt</span>`:''}</div>`
   ).join('')}</div>`;
 }
+/* berekende punten per hint (vóór inzet-multiplier): hint 1 = volle base … laatste = 25% */
+function stagePointList(r){ return (r.stages||[]).map((_,i)=> stagePoints(r, i)); }
 function playerStagesHTML(c){
   const cur = c.stage||0;
   return `<div class="stagelist">${(c.stages||[]).map((s,idx)=>{
@@ -1549,7 +1551,7 @@ function hostQuestion(){
       <div class="hostgrid">
         <div class="hostmain">
           ${hostHead('<span class="pill">inzetten</span>', true)}
-          ${questionIntroHTML(r, `<div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages))}</div>`)}
+          ${questionIntroHTML(r, `<div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages), stagePointList(r))}</div>`)}
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
         </div>
@@ -1852,7 +1854,7 @@ function playerQuestion(){
         <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
         <div class="card stack" style="gap:8px">
           <b>Hints die je gaat krijgen</b>
-          ${hintLabelsHTML(r.hintLabels)}
+          ${hintLabelsHTML(r.hintLabels, stagePointList(r))}
         </div>
         <div class="card stack" style="gap:10px">
           <b>Bij welke hint denk je het uiterlijk te weten?</b>

@@ -191,6 +191,7 @@
   .slocked{font-size:13px;color:var(--muted);font-style:italic}
   .hintlist{display:flex;flex-wrap:wrap;gap:6px}
   .hintlabel{display:flex;align-items:center;gap:7px;background:var(--surface-2);border-radius:9px;padding:5px 10px;font-size:14px;font-weight:600}
+  .hintpts{margin-left:2px;padding-left:8px;border-left:1px solid var(--line);color:var(--gold);font-weight:700;font-size:13px}
   .metarow{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:-2px}
   .pointsbig{text-align:center;background:linear-gradient(180deg,rgba(43,127,255,.10),rgba(43,127,255,.04));border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:16px;color:var(--ink)}
   .pointsbig b{font-family:var(--display);font-size:30px;color:var(--blauw);vertical-align:-2px;margin:0 2px}
