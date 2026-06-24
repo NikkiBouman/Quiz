@@ -118,6 +118,20 @@ function deezerSearchTitles(q){
     document.body.appendChild(s);
   });
 }
+/* verse preview-URL voor één Deezer-track (JSONP). De preview-URL die bij het máken van
+   de vraag is opgeslagen kan verlopen of regio-geblokkeerd raken; bij het spelen halen we
+   'm opnieuw op via de track-id. Leeg ('') = niet beschikbaar → opgeslagen URL blijft staan. */
+function deezerPreview(id){
+  return new Promise(resolve=>{
+    const cb='dz_'+Math.random().toString(36).slice(2,9);
+    const s=document.createElement('script');
+    const done=v=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(v); };
+    window[cb]=t=>done((t && !t.error && t.preview) ? t.preview : '');
+    s.onerror=()=>done('');
+    s.src=`https://api.deezer.com/track/${encodeURIComponent(id)}?output=jsonp&callback=${cb}`;
+    document.body.appendChild(s);
+  });
+}
 async function searchOptions(mode,q){ try{ return mode==='tmdb'?await tmdbSearch(q):mode==='deezer'?await deezerSearch(q):mode==='deezertitle'?await deezerSearchTitles(q):mode==='deezeralbum'?await deezerSearchKind('album',q):mode==='deezerartist'?await deezerSearchKind('artist',q):[]; }catch(e){ return []; } }
 
 /* ============================================================
@@ -1271,6 +1285,36 @@ function wireClips(root){
     a.addEventListener('timeupdate', ()=>{ if(end!=null && a.currentTime>=end){ a.pause(); try{ a.currentTime=start; }catch(e){} } });
   });
 }
+/* Een liedjesvraag bewaart de Deezer-preview-URL die bij het máken is opgepikt, maar zulke
+   CDN-URL's verlopen / kunnen regio-geblokkeerd raken. Bij het spelen halen we per track-id
+   één keer een verse preview op en vervangen we de opgeslagen URL in de vraag. Lukt dat niet,
+   dan blijft de opgeslagen URL als terugval staan. Een mislukte <audio>-load gooit geen
+   console-error, dus zonder dit faalt een verlopen fragment stil. */
+const _freshPreview = {};        // trackId -> verse URL (aanwezig = afgehandeld; '' = niet beschikbaar)
+const _previewBusy = {};         // trackId -> true zolang het ophalen loopt
+function isDeezerPreview(u){ return typeof u==='string' && u.indexOf('dzcdn.net')>=0; }
+function songTrackId(r){
+  if(r.source && r.source.kind==='deezer' && r.source.id!=null) return r.source.id;
+  if(r.options===':deezer' && r.answer!=null) return r.answer;   // legacy: answer = track-id
+  return null;
+}
+function refreshSongPreview(r){
+  if(!r) return;
+  const hasDz = isDeezerPreview(r.audio) || (Array.isArray(r.stages) && r.stages.some(s=>isDeezerPreview(s.audio)));
+  if(!hasDz) return;                                             // lokale stems (Bandle) e.d. → niets te verversen
+  const id = songTrackId(r); if(id==null) return;
+  if(_freshPreview[id]!==undefined || _previewBusy[id]) return;  // al opgehaald of bezig
+  _previewBusy[id]=true;
+  deezerPreview(id).then(url=>{
+    delete _previewBusy[id];
+    _freshPreview[id]=url||'';
+    if(!url) return;                                             // mislukt → opgeslagen URL blijft (terugval)
+    if(isDeezerPreview(r.audio)) r.audio=url;
+    if(Array.isArray(r.stages)) r.stages.forEach(s=>{ if(isDeezerPreview(s.audio)) s.audio=url; });
+    if(app.quiz && app.quiz[app.round]===r && (app.phase==='question' || app.phase==='reveal'))
+      renderHost();              // nog dezelfde vraag in beeld → verse URL inladen door opnieuw te tekenen
+  });
+}
 function clueListHTML(stages){
   return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
     <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio, s.clipStart, s.clipEnd)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
@@ -1438,6 +1482,7 @@ function hostHead(right, skip){
 }
 function hostQuestion(){
   const r = app.quiz[app.round];
+  refreshSongPreview(r);          // verlopen Deezer-preview-URL bijwerken (host-only fragment)
   const staged = Array.isArray(r.stages);
   const betting = !!r.betting;
 
