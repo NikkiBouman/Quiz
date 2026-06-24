@@ -33,7 +33,7 @@ sync with `index.html` when behaviour changes.
   self-describing media library, §22), loads a JSON file, or falls back to the built-in
   `SAMPLE`. `questions.json` is a legacy loadable set.
 - **Media** is **link-based** (URLs / repo-relative paths). The committed library media
-  (`bandle/`, `puzzle/`, `dog-breeds/`) resolves repo-served; actor photos come live from TMDB.
+  (`bandle/`, `puzzle/`) resolves repo-served; actor photos come live from TMDB.
   The old "load a local folder" path is gone. See §9.
 
 ---
@@ -81,7 +81,7 @@ to it); it imports only `takeActiveQuiz` from `lib/quiz-core.js`. The two manage
 `../../lib/…`. **Path resolution:** `loadCatalog()` fetches `library.json` + each `<folder>/round.json`
 relative to the repo root via `new URL('…', import.meta.url)` (exported as `ROOT`), so the catalog
 loads correctly from `account/quizzes/` *and* the root, and stays base-path-safe on GitHub Pages
-(`/Quiz/…`). Media folders (`bandle/`, `puzzle/`, `dog-breeds/`) live at the repo root.
+(`/Quiz/…`). Media folders (`bandle/`, `puzzle/`) live at the repo root.
 
 **Note:** the quiz pipeline (`flattenQuiz`/`normalizeQuiz`/`applyShuffles`/…) still exists both
 inline in `index.html` (the game's own copy) and in `lib/quiz-core.js` (for the pages); the two
@@ -192,8 +192,8 @@ Both are accepted; `flattenQuiz()` collapses them.
 {
   "rounds": [
     {
-      "name": "Hondenrassen",
-      "intro": "Raad het hondenras op de foto…",
+      "name": "Wie of wat is dit?",
+      "intro": "Raad de figuur uit de stukjes…",
       "questions": [ /* question objects */ ]
     },
     { "name": "Bandle", "intro": "Raad het liedje…", "questions": [ … ] }
@@ -307,7 +307,7 @@ raw JSON ──flattenQuiz──▶ { questions[], rounds[] }
 > referenced by URL or repo-relative path and resolves as a plain URL. `loadFolder`/`mediaMap`/
 > the fuzzy `resolveMediaKey` matching below still exist in `index.html` but are **dead code**
 > (no UI triggers them) — kept for now, safe to delete. The committed library (`bandle/`,
-> `puzzle/`, `dog-breeds/`) is repo-served; custom content uses absolute URLs; actor photos come
+> `puzzle/`) is repo-served; custom content uses absolute URLs; actor photos come
 > from TMDB's image CDN.
 
 Media is referenced in the JSON by **relative path** (e.g. `puzzle/Simba/1`,
@@ -586,7 +586,7 @@ node --check /tmp/page.mjs && echo "page JS OK"
 
 **Validate JSON** (manifests + any saved set):
 ```bash
-for f in library.json bandle/round.json puzzle/round.json dog-breeds/round.json; do
+for f in library.json bandle/round.json puzzle/round.json; do
   python3 -c "import json;json.load(open('$f'));print('OK $f')"; done
 ```
 
@@ -700,7 +700,7 @@ a set of repo folders, each with a `round.json` manifest holding the answers the
 
 ### Library layout
 
-- **`library.json`** (repo root) — tiny index: `{ "rounds": ["bandle","actors","puzzle","dog-breeds"] }`.
+- **`library.json`** (repo root) — tiny index: `{ "rounds": ["bandle","puzzle"] }`.
   There is no directory listing on GitHub Pages, so the app reads this short, known list rather
   than discovering folders. Adding a round = new folder + `round.json` + add the name here.
 - **`<folder>/round.json`** — one manifest per round, holding the **answers + metadata** that
@@ -711,9 +711,12 @@ a set of repo folders, each with a `round.json` manifest holding the answers the
   |-------|--------|-----------------|-------------------|
   | bandle | `:deezer` | `deezerId`, `label`, `tracks[]` | audio tracks (host-only); folder name → year/views/par; track filename → instrument label |
   | puzzle | `:text` | `answer`, `accept[]`, `parts[]`, `full` | part images; `full` → `answerImage` (reveal) |
-  | dog-breeds | `listsearch` | `breed` (+ shared `breeds[]` options list) | single image, no stages |
 
-  `library.json` lists these folders (currently `bandle`, `puzzle`, `dog-breeds`). There is **no
+  (The `listsearch` mode — single image + a shared `breeds[]`-style options list — has no built-in
+  round anymore; the old `dog-breeds` round was removed. The mode still lives on for **custom**
+  questions with >6 options, which become searchable; see §below.)
+
+  `library.json` lists these folders (currently `bandle`, `puzzle`). There is **no
   prepared `:tmdb` actors round** — `actors/round.json` and the committed `img/` actor photos were
   removed. Movie-by-actors is built per-quiz with the **film builder** (§below), which pulls cast
   live from TMDB. Betting rounds set `betting:true`; `betMultipliers` derive from stage count
@@ -751,17 +754,22 @@ and the wiring (`wireMediaForms`/`wireScroll`/`editorTopbarHTML`). The form buil
 Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14`/`.btn.sm`).
 
 - **`account/quizzes/`** — "Jouw quizzen". A view-routed full-screen UI (`S.view`:
-  `list`/`edit`/`add`/`custom`/`film`/`song`):
+  `list`/`edit`/`add`/`lib`/`custom`/`film`/`song`):
   - **list** — saved quizzes with **Gebruik** (→ host), **Wijzig**, **Export**, 🗑, plus **+ Nieuwe quiz**.
   - **edit** — quiz name + rounds; each round has an **editable name and intro** (the intro is the
     "Ik snap het 👍" explanation players see at the round start; synced via `syncEdit`),
     **drag to reorder rounds and questions** (grip handle, see `lib/drag.js`), 🗑 per question,
     **+ Vraag toevoegen**. Only **Opslaan / Annuleer**.
-  - **add** — tick **kant-en-klare rondes** (library) and **Mijn opgeslagen vragen** (the bank),
-    or make a new **Custom / Film / Liedje** question. Each of these (bank picks + every custom
-    form) carries a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`): pick an existing
-    round in the draft (e.g. add a custom question to **Hondenrassen**) or create a new one — so
-    your own questions can be split across rounds. Library rounds still merge by name on their own.
+  - **add** — two button groups, mirroring each other: **Kant-en-klare vragen** (one button per
+    library round, e.g. **Bandle** / **Puzzel**, built from `library.json` via `libButtonsHTML`)
+    and **Nieuw maken** (**Custom / Film / Liedje**). Plus **Mijn opgeslagen vragen** (the bank).
+    A library button opens the **lib** view (its own picker); Custom/Film/Liedje open their builders.
+    Bank picks + every custom form carry a **doelronde-kiezer** (`roundPickerHTML`/`targetRoundFor`):
+    pick an existing round in the draft (e.g. add a custom question to **Bandle**) or create a new
+    one — so your own questions can be split across rounds. Library rounds still merge by name.
+  - **lib** — the per-round picker for one **kant-en-klare** round (`libHTML`, set via `S.libFolder`):
+    tick the questions you want (an **Alles** select-all on top), then **Toevoegen**. Items build via
+    `buildQuestion` and merge into a round named after the round's `round.json` `name`.
   - **Custom builder ("+ Custom")** — a single-column builder (`customBuilderHTML`/`wireCustomBuilder`/
     `buildCustomQuestion` in `lib/quiz-core.js`) for self-made questions, **no API source**. A prompt
     plus two drag-zones — **Info** (`q.facts`, always visible) and **Hints** (`q.stages`, revealed one
@@ -771,7 +779,7 @@ Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14
     **Antwoord** block is typed text (not dragged): an **open/meerkeuze** toggle. *Open* → `:text`
     (host-judged; every juist antwoord accepted via `answer`+`accept[]`). *Meerkeuze* → `options[]`
     with the juiste antwoord(en) first + separate foute opties; **>6 options → searchable** (`search:true`,
-    dog-breed style), else tiles (`shuffle:true`). Multiple correct → `answer` is an index array
+    list-search style), else tiles (`shuffle:true`). Multiple correct → `answer` is an index array
     (shuffle is array-aware). `q.source={kind:'custom', clues, answerMode, correct, distractors}` makes
     it re-open losslessly; `customPickFromQuestion` also reconstructs **old meerkeuze/open** bank
     questions (no `source`) into the builder.

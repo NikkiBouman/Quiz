@@ -29,12 +29,16 @@ const $ = s => document.querySelector(s);
 const toList = ()=>{ location.href = '../'; };
 const S = {
   view:'edit', catalog:null, busy:false, err:'', msg:'', scroll:0,
-  draft:null, editingName:null, sel:{}, bankSel:{},
+  draft:null, editingName:null, sel:{}, bankSel:{}, libFolder:null,
   customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null,
 };
 const actions = makeMediaActions(S, render);
+
+/* knop-label + icoon per kant-en-klare ronde-map (anders valt de round.json-naam terug). */
+const LIB_META = { bandle:{label:'Bandle', icon:'music'}, puzzle:{label:'Puzzel', icon:'puzzle'} };
+const libMeta = rd => LIB_META[rd.folder] || { label:rd.name, icon:'help' };
 
 /* ---------- helpers ---------- */
 function syncName(){ const e=$('#q-name'); if(e && S.draft) S.draft.name=e.value; }
@@ -47,7 +51,7 @@ function syncEdit(){
   el.querySelectorAll('.q-pts').forEach(inp=>{ const r=S.draft.rounds[+inp.dataset.ri], q=r&&r.questions[+inp.dataset.qi]; if(q){ const v=parseInt(inp.value,10); q.points = (isNaN(v)||v<0) ? 100 : v; } });
 }
 function ensureRound(d, name, intro){ let r=d.rounds.find(x=>x.name===name); if(!r){ r={name,intro:intro||'',questions:[]}; d.rounds.push(r); } return r; }
-function selCount(){ return Object.keys(S.sel).reduce((n,f)=> n+Object.keys(S.sel[f]||{}).filter(k=>S.sel[f][k]).length, 0); }
+function libSelCount(folder){ const s=S.sel[folder]||{}; return Object.keys(s).filter(k=>s[k]).length; }
 function bankSelCount(){ return Object.keys(S.bankSel).filter(k=>S.bankSel[k]).length; }
 function qCount(d){ return ((d&&d.rounds)||[]).reduce((n,r)=>n+(r.questions?r.questions.length:0),0); }
 function pushToDraft(round, bucket, label, q){
@@ -142,18 +146,30 @@ function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; ren
 function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('mb', r.isFilm?'Films':'Liedjes', r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.'); pushToDraft(round, r.isFilm?'films':'liedjes', r.label, r.q); if(r.isFilm) S.filmPick=null; else S.songPick=null; S.err=''; S.view='edit'; S.msg=`${r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
 
 /* ---------- HTML ---------- */
-function libraryHTML(){
+/* knoppenrij voor de kant-en-klare rondes (elke ronde opent zijn eigen kies-scherm). */
+function libButtonsHTML(){
   const cat=S.catalog||[];
-  if(S.busy && !cat.length) return `<p class="muted center m0">Bibliotheek laden…</p>`;
-  if(!cat.length) return `<p class="muted m0 f12">Geen bibliotheek gevonden.</p>`;
-  return cat.map(rd=>{
-    const keys=Object.keys(rd.items), on=keys.filter(k=>S.sel[rd.folder]&&S.sel[rd.folder][k]).length, all=keys.length>0&&on===keys.length;
-    const modeLbl=rd.mode===':deezer'?'Deezer':rd.mode===':tmdb'?'TMDB':rd.mode===':text'?'tekst':rd.mode==='listsearch'?'lijst':rd.mode;
-    return `<div class="card stack" style="gap:4px">
-      <div class="statusbar"><label class="picklabel"><input type="checkbox" data-round="${esc(rd.folder)}" ${all?'checked':''}><b>${esc(rd.name)}</b></label><span class="muted f12">${on}/${keys.length}${rd.betting?' · inzet':''} · ${esc(modeLbl)}</span></div>
-      ${keys.map(k=>`<label class="picklabel"><input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(S.sel[rd.folder]&&S.sel[rd.folder][k])?'checked':''}><span>${esc(itemLabel(rd,rd.items[k])||k)}</span></label>`).join('')}
-    </div>`;
-  }).join('');
+  if(S.busy && !cat.length) return `<p class="muted center m0 f12">Bibliotheek laden…</p>`;
+  if(!cat.length) return `<p class="muted m0 f12">Geen kant-en-klare vragen gevonden.</p>`;
+  return `<div class="row" style="gap:6px">${cat.map(rd=>{ const m=libMeta(rd);
+    return `<button class="btn ghost" data-lib="${esc(rd.folder)}">${icon(m.icon,16)}${esc(m.label)}</button>`;
+  }).join('')}</div>`;
+}
+/* kies-scherm voor één kant-en-klare ronde: vink de vragen aan die je wilt toevoegen. */
+function libHTML(){
+  const rd=(S.catalog||[]).find(r=>r.folder===S.libFolder);
+  if(!rd) return `<div class="statusbar"><h1 class="h-md">Niet gevonden</h1></div>
+    <div class="row"><button class="btn ghost grow" id="b-back">Terug</button></div>`;
+  const m=libMeta(rd), keys=Object.keys(rd.items), on=libSelCount(rd.folder), all=keys.length>0&&on===keys.length;
+  return `<div class="statusbar"><h1 class="h-md">${esc(m.label)}</h1><span class="muted f12">${on} gekozen</span></div>
+    <div class="stack edscroll" id="ed-scroll" style="gap:10px">
+      ${rd.intro?`<p class="muted m0 f12">${esc(rd.intro)}</p>`:''}
+      <div class="card stack" style="gap:4px">
+        <div class="statusbar"><label class="picklabel"><input type="checkbox" data-round="${esc(rd.folder)}" ${all?'checked':''}><b>Alles</b></label><span class="muted f12">${on}/${keys.length}</span></div>
+        ${keys.map(k=>`<label class="picklabel"><input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(S.sel[rd.folder]&&S.sel[rd.folder][k])?'checked':''}><span>${esc(itemLabel(rd,rd.items[k])||k)}</span></label>`).join('')}
+      </div>
+    </div>
+    <div class="row"><button class="btn grow" id="b-apply" ${on&&!S.busy?'':'disabled'}>Toevoegen${on?` (${on})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
 function editHTML(){
   const d=S.draft||{name:'',rounds:[]};
@@ -187,25 +203,26 @@ function editHTML(){
     <button class="btn ghost" id="b-goadd">${icon('plus',16)}Vraag toevoegen</button>`;
 }
 function addHTML(){
-  const libN=selCount(), bankN=bankSelCount(), bank=loadBank();
+  const bankN=bankSelCount(), bank=loadBank();
   const bankHTML = bank.length ? `<div class="card stack" style="gap:4px"><div class="statusbar"><b>Mijn opgeslagen vragen</b><span class="muted f12">${bankN} gekozen</span></div>
     ${bank.map((it,i)=>`<label class="picklabel"><input type="checkbox" data-bank="${i}" ${S.bankSel[i]?'checked':''}><span class="ellip f14">${rowText(it.q)}</span></label>`).join('')}
     ${bankN?`<div class="stack" style="gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)">${roundPickerHTML('bank','Eigen vragen')}</div>`:''}</div>` : '';
   return `<div class="statusbar"><h1 class="h-md">Vraag toevoegen</h1></div>
     <div class="stack edscroll" id="ed-scroll" style="gap:10px">
-      <div class="statusbar"><b>Kant-en-klare rondes</b><span class="muted f12">${libN} gekozen</span></div>
-      ${libraryHTML()}
+      <div class="statusbar"><b>Kant-en-klare vragen</b></div>
+      ${libButtonsHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
       <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">${icon('plus',16)}Custom</button><button class="btn ghost" id="b-film">${icon('film',16)}Film</button><button class="btn ghost" id="b-song">${icon('music',16)}Liedje</button></div>
     </div>
-    <div class="row"><button class="btn grow" id="b-apply" ${(libN||bankN)&&!S.busy?'':'disabled'}>Toevoegen${(libN+bankN)?` (${libN+bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
+    <div class="row"><button class="btn grow" id="b-apply" ${bankN&&!S.busy?'':'disabled'}>Toevoegen${bankN?` (${bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
 function render(){
   const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);   // brede twee-koloms-bouwer
   const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner =
     S.view==='add'  ? addHTML() :
+    S.view==='lib'  ? libHTML() :
     S.view==='custom' ? customFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('cb','Eigen vragen') }) :
     S.view==='film' ? filmFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
     S.view==='song' ? songFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
@@ -230,8 +247,7 @@ function wire(){
     return;
   }
   if(v==='add'){
-    el.querySelectorAll('[data-key]').forEach(cb=>cb.onchange=()=>toggleItem(cb.dataset.folder,cb.dataset.key));
-    el.querySelectorAll('[data-round]').forEach(cb=>cb.onchange=()=>toggleRound(cb.dataset.round));
+    el.querySelectorAll('[data-lib]').forEach(b=>b.onclick=()=>{ S.libFolder=b.dataset.lib; S.sel={}; S.view='lib'; S.err=''; S.msg=''; render(); });
     el.querySelectorAll('[data-bank]').forEach(cb=>cb.onchange=()=>toggleBank(+cb.dataset.bank));
     const go=v2=>()=>{ S.view=v2; S.err=''; S.msg=''; render(); };
     const cu=$('#b-custom'); if(cu)cu.onclick=()=>{ S.customPick=null; go('custom')(); };
@@ -240,6 +256,13 @@ function wire(){
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
     const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.err=''; S.msg=''; render(); };
     wireRoundPicker('bank');
+    return;
+  }
+  if(v==='lib'){
+    el.querySelectorAll('[data-key]').forEach(cb=>cb.onchange=()=>toggleItem(cb.dataset.folder,cb.dataset.key));
+    el.querySelectorAll('[data-round]').forEach(cb=>cb.onchange=()=>toggleRound(cb.dataset.round));
+    const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
+    const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.sel={}; S.view='add'; S.err=''; S.msg=''; render(); };
     return;
   }
   if(v==='custom'){
