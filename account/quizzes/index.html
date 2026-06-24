@@ -18,7 +18,7 @@
 <script type="module">
 import { esc, icon, ICON_TRASH, loadSavedQuizzes, deleteSavedQuiz, saveQuizToDevice, loadBank,
          flattenQuiz, exportQuizJSON, parseImportedQuiz, uniqueQuizName, setActiveQuiz,
-         navMenuHTML } from '../../lib/quiz-core.js';
+         navMenuHTML, resolvePoolQuestions } from '../../lib/quiz-core.js';
 import { wireScroll } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
@@ -27,7 +27,7 @@ const S = { scroll:0, msg:'', err:'' };
 document.getElementById('chrome').innerHTML = navMenuHTML('quizzes', '../../');
 
 function useQuiz(name){ const q=loadSavedQuizzes()[name]; if(!q) return; setActiveQuiz(name, q); location.href='../../index.html#host=1'; }
-function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, q); S.err=''; S.msg=`"${name}" geëxporteerd.`; render(); } }
+function exportSaved(name){ const q=loadSavedQuizzes()[name]; if(q){ exportQuizJSON(name, resolvePoolQuestions(JSON.parse(JSON.stringify(q)))); S.err=''; S.msg=`"${name}" geëxporteerd.`; render(); } }
 function delQuiz(name){ if(confirm(`Quiz "${name}" verwijderen?`)){ deleteSavedQuiz(name); S.msg=''; S.err=''; render(); } }
 
 /* een eerder geëxporteerde (of zelfgemaakte) quiz-JSON importeren naar dit apparaat */

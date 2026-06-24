@@ -59,11 +59,12 @@ pages use native ES module imports, they must be served over http (GitHub Pages,
 
 ```
 index.html                      # the GAME: host/player/controller, Firebase sync, gameplay (repo root)
-account/index.html              # account landing — links to the two managers
+account/index.html              # account landing — links to the three managers
 account/quizzes/index.html      # quiz LIST (saved quizzes; use/edit/export/delete) — see §22
 account/quizzes/new/index.html  # quiz EDITOR (new, or ?edit=<name>); top-bar opslaan/terug
 account/questions/index.html    # question bank LIST (edit/delete) — see §22
 account/questions/new/index.html# question CREATOR/EDITOR (?type=custom|film|song, or ?edit=<i>)
+account/lists/index.html        # shared answer pools (Antwoordlijsten) — see §22
 quizzes.html, questions.html    # thin redirect stubs → account/quizzes/ , account/questions/ (old URLs)
 lib/quiz-core.js  # shared ES module: quiz pipeline + catalog + TMDB + localStorage + navMenuHTML
 lib/editor-ui.js  # shared ES module: the manager-page UI (forms, media search, wiring) — see §22
@@ -742,7 +743,7 @@ builder, which losslessly re-opens any old `:text`/`options[]` bank question (§
 **Top bar (`editorTopbarHTML`)**: on a creator/editor page the top-left shows **← Terug zonder opslaan**
 (discard → list) and **Opslaan** (save → list) — replacing the old "← Spel". On the list pages and the
 home screen the top-right shows the shared **hamburger** (`navMenuHTML(active, base)` in `quiz-core.js`):
-Home · Mijn quizzen · Mijn vragen, with the current page marked `aria-current` + `.active`.
+Home · Mijn quizzen · Mijn vragen · Mijn lijsten, with the current page marked `aria-current` + `.active`.
 
 The **shared editor UI lives in `lib/editor-ui.js`** — both managers differ only in where a built
 question goes (the bank vs. a round in a quiz), so the common parts are factored out: `rowText`,
@@ -776,11 +777,16 @@ Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14
     by one with bet-multipliers) — each fed by a **"+ toevoegen"** button. A clue is a `custom` clue:
     plain text *or* a **directe medialink** with a render type (afbeelding/video/audio; only direct
     files, no YouTube/Spotify embeds). Drag clues between Info and Hints (`enableDragGroup`). The
-    **Antwoord** block is typed text (not dragged): an **open/meerkeuze** toggle. *Open* → `:text`
-    (host-judged; every juist antwoord accepted via `answer`+`accept[]`). *Meerkeuze* → `options[]`
-    with the juiste antwoord(en) first + separate foute opties; **>6 options → searchable** (`search:true`,
-    list-search style), else tiles (`shuffle:true`). Multiple correct → `answer` is an index array
-    (shuffle is array-aware). `q.source={kind:'custom', clues, answerMode, correct, distractors}` makes
+    **Antwoord** block is typed text (not dragged): a top-level **open / meerkeuze** toggle, and within
+    meerkeuze a sub-choice **zelf invullen / uit een lijst** (a shared pool is just multiple-choice with
+    pooled options). *Open* → `:text` (host-judged; every juist antwoord accepted via `answer`+`accept[]`).
+    *Meerkeuze · zelf invullen* → `options[]` with the juiste antwoord(en) first + separate foute opties;
+    **>6 options → searchable** (`search:true`, list-search style), else tiles (`shuffle:true`).
+    *Meerkeuze · uit een lijst* → a **shared answer pool** (§Gedeelde antwoordlijsten): pick a pool, tick
+    the correct value(s) — the options come from the pool, not typed per question. Multiple correct →
+    `answer` is an index array (shuffle is array-aware). The three internal `answerMode`s stay `open`/`mc`/
+    `list` (the GUI's two radio groups `cb-ans` + `cb-mcsource` map onto them).
+    `q.source={kind:'custom', clues, answerMode, correct, distractors}` (plus `poolId` for list mode) makes
     it re-open losslessly; `customPickFromQuestion` also reconstructs **old meerkeuze/open** bank
     questions (no `source`) into the builder.
   - **Media builder (Film "+ Film" / Liedje "+ Liedje")** — one shared builder for both
@@ -835,6 +841,41 @@ Styling is class-based in `lib/style.css` (utilities like `.ellip`/`.hint`/`.f14
   toevoegen" in the quiz manager. (Edit routing is by stored `bucket`: `films`→film, `liedjes`→song,
   everything else → custom builder, so a `:text` song still loads the song form, and old
   meerkeuze/open bank items re-open in the custom builder.)
+- **`account/lists/`** — "Mijn lijsten": **shared answer pools** (`POOLS_KEY`). A pool is just
+  `{id, name, items:[…]}` edited as a name + a one-per-line textarea (trimmed + deduped on save).
+  Accepts **`?edit=<poolId>`** to open one pool straight in edit mode — the builder's pool picker
+  deep-links here (so you jump to *the actual list* instead of hunting in the index). See
+  §Gedeelde antwoordlijsten.
+
+### Gedeelde antwoordlijsten (answer pools)
+
+A re-usable answer list (e.g. "Hondenrassen") that **multiple questions reference** instead of
+each repeating the same `options[]`. Edit the pool once → every question that uses it updates.
+This is the generalized, editor-managed comeback of the removed `dog-breeds` library round.
+
+- **Store:** `POOLS_KEY` (`quiz:pools:v1`) → `{ id: {id, name, items:[…]} }`, localStorage per
+  device — same model as `BANK_KEY`/`SAVED_KEY`. Helpers: `loadPools`/`savePool`/`deletePool`/
+  `newPoolId`/`poolItems`. The list may be a **superset**: extra distractors that are nobody's
+  answer (harder for players). Pools are created on **`account/lists/`** *or* promoted from a
+  self-built meerkeuze: the custom builder's **"Maak hier een gedeelde lijst van"** button
+  (`cb-tolist`) `savePool`s the typed correct+foute options as a new pool and flips the question to
+  `list` mode referencing it — so an ad-hoc list becomes reusable + auto-updating after the fact.
+- **Reference, not inline.** A custom question in **list mode** stores `q.source.answerMode==='list'`
+  + `poolId` + `correct` as **string value(s)** — *never* an index. (An index into a shared, editable
+  list is fragile: reorder/insert/delete would silently corrupt every referencing question. The old
+  `dog-breeds` round already did value→index at build time; same idea.)
+- **Resolve = bake-in.** `applyPoolToQuestion(q)` rewrites a list question's `options` (= pool items),
+  `answer` (= index/indices of the correct value(s)), `search`/`shuffle` (>6 → searchable) and
+  `answerLabel` from the **live** pool, leaving points/bet/hints untouched. `resolvePoolQuestions(quiz)`
+  walks a whole quiz. This runs (a) in the quiz editor on load, (b) when displaying/previewing bank
+  questions, and (c) in **`setActiveQuiz`** — so the quiz shipped to Firebase/players is **self-contained
+  concrete `options[]`** and the game stays pool-unaware (zero `index.html` changes; the pipeline,
+  players and resume are untouched). The baked `options` are a cache; the pool is the source of truth.
+- **Graceful degradation.** If the pool is gone (deleted, or another device — pools are per-device like
+  the bank) or no correct value still exists, `applyPoolToQuestion` returns `false` and **keeps the last
+  baked `options`** — so a saved/hosted quiz never breaks. `account/lists/` warns on delete how many
+  questions (and which quizzes) reference the pool. Move pools between devices by rebuilding them (the
+  baked copy travels inside the exported quiz, the reference does not).
 
 Edit/bank list rows show the **answer first** (`answerText`) so each question is identifiable, not
 the generic prompt. The home screen (`index.html`) has a hamburger menu linking to both pages.
@@ -876,9 +917,12 @@ hamburger with active state). Catalog/TMDB/Deezer:
 `deezerSearch`, `deezerTrack`, `popularMoviesHTML`. Media builder: `movieFacts`, `songFacts`,
 `newFilmPick`, `newSongPick`, `newCustomClue`, `pickFromQuestion`, `buildMediaQuestion`,
 `mediaBuilderHTML`, `wireMediaBuilder`. Custom builder: `newCustomPick`, `customPickFromQuestion`,
-`buildCustomQuestion`, `customBuilderHTML`, `wireCustomBuilder`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
+`buildCustomQuestion`, `customBuilderHTML`, `wireCustomBuilder`. Answer pools (§Gedeelde
+antwoordlijsten): `POOLS_KEY`, `loadPools`/`savePool`/`deletePool`/`newPoolId`/`poolItems`,
+`applyPoolToQuestion`/`resolvePoolQuestions`. Store: `SAVED_KEY`/`BANK_KEY`/`ACTIVE_KEY`,
 `loadSavedQuizzes`/`saveQuizToDevice`/`deleteSavedQuiz`, `loadBank`/`saveBank`/
-`addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz`, `exportQuizJSON`, `copyText`.
+`addToBank`/`deleteBankItem`, `setActiveQuiz`/`takeActiveQuiz` (resolves pools before handoff),
+`exportQuizJSON`, `copyText`.
 Catalog base: `ROOT` (`new URL('../', import.meta.url)`) — the repo root used by `loadCatalog`.
 (The old `actorImage` helper and committed actor JPEGs in `img/` were removed — film/song questions
 come from the media builder via `movieDetails`/`deezerTrack`; `movieCast` is the cast-only fallback

@@ -18,7 +18,7 @@
 <script type="module">
 import { esc, icon, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
          loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
-         flattenQuiz } from '../../../lib/quiz-core.js';
+         flattenQuiz, resolvePoolQuestions } from '../../../lib/quiz-core.js';
 import { enableDragSort } from '../../../lib/drag.js';
 import { rowText, customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
@@ -91,6 +91,7 @@ async function boot(){
     const q=loadSavedQuizzes()[editName];
     if(q){ const f=flattenQuiz(q);
       S.draft={ name:q.name||editName, rounds: f.rounds.map(rr=>({ name:rr.name||'Ronde', intro:rr.intro||'', questions: f.questions.slice(rr.start,rr.end).map(x=>JSON.parse(JSON.stringify(x))) })) };
+      resolvePoolQuestions(S.draft);   // lijst-vragen verversen tegen de live pools (auto-update)
       S.editingName=editName;
     } else { S.err='Quiz niet gevonden.'; S.draft={name:'',rounds:[]}; }
   } else { S.draft={name:'',rounds:[]}; S.editingName=null; }

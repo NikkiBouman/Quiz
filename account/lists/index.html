@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mijn lijsten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../lib/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="chrome"></div>
+  <main id="app" class="screen" aria-live="polite"></main>
+</div>
+
+<script type="module">
+import { esc, icon, ICON_TRASH, navMenuHTML,
+         loadPools, savePool, deletePool, newPoolId,
+         loadSavedQuizzes, loadBank } from '../../lib/quiz-core.js';
+
+const el = document.getElementById('app');
+const $ = s => document.querySelector(s);
+const S = { editing:null, draft:null, scroll:0, msg:'', err:'' };   // editing: null | 'new' | <poolId>; draft houdt de in-bewerking-zijnde invoer vast
+document.getElementById('chrome').innerHTML = navMenuHTML('lists', '../../');
+
+/* hoeveel (en welke) vragen verwijzen naar deze lijst? — over quizzen + losse vragen heen */
+function poolUsage(id){
+  let count=0; const quizzes=new Set();
+  const hit=q=> q && q.source && q.source.answerMode==='list' && q.source.poolId===id;
+  const quizMap=loadSavedQuizzes();
+  Object.keys(quizMap).forEach(name=>{ (quizMap[name].rounds||[]).forEach(rd=>(rd.questions||[]).forEach(q=>{ if(hit(q)){ count++; quizzes.add(name); } })); });
+  loadBank().forEach(it=>{ if(hit(it.q)) count++; });
+  return { count, quizzes:[...quizzes] };
+}
+
+function del(id){
+  const u=poolUsage(id);
+  const warn = u.count
+    ? `Deze lijst wordt door ${u.count} vraag/vragen gebruikt${u.quizzes.length?` (o.a. in: ${u.quizzes.join(', ')})`:''}.\n\nDie vragen houden hun huidige opties, maar updaten niet meer mee. Toch verwijderen?`
+    : 'Lijst verwijderen?';
+  if(confirm(warn)){ deletePool(id); if(S.editing===id){ S.editing=null; S.draft=null; } S.msg='Lijst verwijderd.'; render(); }
+}
+
+/* de getypte velden in state vastleggen, zodat een re-render ze niet wist */
+function captureDraft(){
+  if(S.editing==null) return;
+  const n=$('#pool-name'), t=$('#pool-items');
+  if(n||t) S.draft = { name: n?n.value:'', items: t ? t.value.split('\n') : [] };
+}
+
+function save(){
+  captureDraft();
+  const name=((S.draft&&S.draft.name)||'').trim();
+  if(!name){ S.err='Geef de lijst een naam.'; render(); return; }
+  const id = S.editing==='new' ? newPoolId() : S.editing;
+  savePool({ id, name, items:(S.draft&&S.draft.items)||[] });
+  S.editing=null; S.draft=null; S.err=''; S.msg=`Lijst “${name}” opgeslagen.`; render();
+}
+
+function editorHTML(){
+  const d = S.draft || { name:'', items:[] };
+  return `<div class="card stack" id="pool-card" style="gap:10px">
+    <b style="font-size:16px">${S.editing==='new'?'Nieuwe lijst':'Lijst wijzigen'}</b>
+    <label class="lbl">Naam</label>
+    <input id="pool-name" class="sinput m0" value="${esc(d.name||'')}" placeholder="Bv. Hondenrassen">
+    <label class="lbl">Antwoorden <span class="czone-sub">— één per regel</span></label>
+    <textarea id="pool-items" class="sinput m0" rows="10" placeholder="Beagle&#10;Bulldog&#10;Golden Retriever&#10;…">${esc((d.items||[]).join('\n'))}</textarea>
+    <p class="muted hint m0">Dit zijn de keuzes die spelers krijgen. Zet er gerust afleiders bij die in geen enkele vraag het antwoord zijn — dat maakt het lastiger. Meer dan 6 → spelers krijgen een zoekveld.</p>
+    ${S.err?`<p class="feedback err">${esc(S.err)}</p>`:''}
+    <div class="row" style="gap:6px"><button class="btn grow" id="pool-save">Opslaan</button><button class="btn ghost" id="pool-cancel">Annuleer</button></div>
+  </div>`;
+}
+
+function render(){
+  const pools = Object.values(loadPools()).sort((a,b)=>(a.name||'').localeCompare(b.name||'','nl'));
+  const rows = pools.length ? pools.map(pl=>{
+      const u=poolUsage(pl.id);
+      return `<div class="listrow">
+        <span class="ellip f14">${esc(pl.name)} <span class="muted">· ${(pl.items||[]).length} antwoorden${u.count?` · ${u.count} vraag/vragen`:''}</span></span>
+        <button class="btn ghost xs" data-edit="${esc(pl.id)}">Wijzig</button>
+        <button class="mini danger" data-del="${esc(pl.id)}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`;
+    }).join('')
+    : `<p class="muted m0">Nog geen antwoordlijsten. Maak er een — daarna kun je 'm bij een Custom-vraag (antwoord “Uit een lijst”) hergebruiken in elke quiz.</p>`;
+  el.innerHTML = `<div class="center stack titleblock"><h1 class="h-lg">Mijn lijsten</h1><p class="muted m0">Gedeelde antwoordlijsten op dit apparaat — bewerk er één en alle vragen die ernaar verwijzen updaten mee.</p></div>
+    ${S.editing!=null ? editorHTML() : `<div class="row"><button class="btn grow center" id="pool-new">${icon('plus',16)}Nieuwe lijst</button></div>`}
+    <div class="stack edscroll" id="ed-scroll" style="gap:6px">${rows}</div>
+    ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}
+    <p class="muted center hint">Gebruik een lijst via een Custom-vraag bij <a href="../quizzes/">je quizzen</a> of de <a href="../questions/">vragenbank</a> — kies bij Antwoord voor “Uit een lijst”.</p>`;
+  const sc=$('#ed-scroll'); if(sc){ sc.scrollTop=S.scroll; sc.onscroll=()=>{ S.scroll=sc.scrollTop; }; }
+  const nw=$('#pool-new'); if(nw)nw.onclick=()=>{ S.editing='new'; S.draft={name:'',items:[]}; S.err=''; S.msg=''; render(); };
+  el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{ const pl=loadPools()[b.dataset.edit]; S.editing=b.dataset.edit; S.draft={ name:pl?pl.name:'', items:pl?[...(pl.items||[])]:[] }; S.err=''; S.msg=''; render(); });
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>del(b.dataset.del));
+  const sv=$('#pool-save'); if(sv)sv.onclick=save;
+  const cx=$('#pool-cancel'); if(cx)cx.onclick=()=>{ S.editing=null; S.draft=null; S.err=''; S.msg=''; render(); };
+}
+
+// diep-link vanuit de vraag-bouwer: ?edit=<poolId> opent die lijst meteen in bewerkmodus
+const editParam=new URLSearchParams(location.search).get('edit');
+if(editParam){ const pl=loadPools()[editParam]; if(pl){ S.editing=editParam; S.draft={ name:pl.name, items:[...(pl.items||[])] }; } }
+render();
+</script>
+</body>
+</html>

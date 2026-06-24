@@ -300,7 +300,22 @@
   .cb-modes{display:flex;flex-wrap:wrap;gap:16px;margin:2px 0 6px;font-size:14px}
   .cb-modes label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
   .cb-modes input{width:16px;height:16px}
-  .cb-row{display:flex;gap:6px;align-items:center;margin-bottom:5px}
+  .cb-submodes{gap:14px;margin:0 0 8px;padding-left:10px;border-left:2px solid var(--line);font-size:13px}   /* meerkeuze-subkeuze: zelf invullen / uit een lijst */
+  /* Antwoord-inhoud netjes stapelen: labels/rijen onder elkaar, +knoppen op contentbreedte */
+  .cb-answer{display:flex;flex-direction:column;gap:14px}
+  .cb-grp{display:flex;flex-direction:column;gap:7px}
+  .cb-answer .btn.ghost{align-self:flex-start}
+  .cb-share{margin-top:6px;color:var(--gold);border-color:rgba(43,127,255,.35)}
+  .cb-share:hover{background:rgba(43,127,255,.10)}
+  .cb-row{display:flex;gap:8px;align-items:stretch;margin-bottom:0}
+  .cb-row .cchip-input{padding:11px 12px;font-size:15px;border-radius:10px}
+  .cb-row .mini.danger{background:transparent;border:1px solid var(--line);color:var(--muted);padding:0 12px;border-radius:10px}
+  .cb-row .mini.danger:hover{background:var(--rood);border-color:var(--rood);color:#fff}
+  .cb-row .mini.danger svg{width:16px;height:16px}
+  /* antwoord = uit een gedeelde lijst: aanvinkbare keuzes */
+  .cb-poolopts{display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--bg2)}
+  .cb-poolopt{display:flex;align-items:center;gap:8px;font-size:14px;padding:3px 2px;cursor:pointer}
+  .cb-poolopt input{width:16px;height:16px}
   [data-id].dragging{opacity:.6;background:#dce9fb;outline:2px solid var(--gold);cursor:grabbing}
   /* ============================================================
      EDITOR-PAGINA'S — herbruikbare klassen i.p.v. inline styles

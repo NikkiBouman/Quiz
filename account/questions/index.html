@@ -17,7 +17,7 @@
 
 <script type="module">
 import { esc, icon, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
-         navMenuHTML } from '../../lib/quiz-core.js';
+         navMenuHTML, applyPoolToQuestion } from '../../lib/quiz-core.js';
 import { rowText, wireScroll, openQuestionSimulate, openQuestionReveal } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
@@ -59,6 +59,7 @@ function modalHTML(){
 
 function render(){
   const bank=loadBank();
+  bank.forEach(it=>applyPoolToQuestion(it.q));   // lijst-vragen tonen de live pool (display only; opslag verandert pas bij opnieuw opslaan)
   const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
       <span class="ellip f14">${rowText(it.q)}</span>
       <button class="mini" data-reveal="${i}" title="voorvertoning — volledige vraag met alle hints" aria-label="voorvertoning">${icon('eye',15)}</button>
@@ -79,8 +80,8 @@ function render(){
     ${S.addFor!=null?modalHTML():''}`;
   wireScroll($, S);
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
-  el.querySelectorAll('[data-reveal]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.reveal]; if(it) openQuestionReveal(it.q, '../../'); });
-  el.querySelectorAll('[data-sim]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.sim]; if(it) openQuestionSimulate(it.q, '../../'); });
+  el.querySelectorAll('[data-reveal]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.reveal]; if(it){ applyPoolToQuestion(it.q); openQuestionReveal(it.q, '../../'); } });
+  el.querySelectorAll('[data-sim]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.sim]; if(it){ applyPoolToQuestion(it.q); openQuestionSimulate(it.q, '../../'); } });
   el.querySelectorAll('[data-addq]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.addq; S.addFor = S.addFor===i?null:i; S.msg=''; render(); });
   if(S.addFor!=null){
     const sel=$('#aq-sel'), inp=$('#aq-new');
