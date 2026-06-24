@@ -22,7 +22,7 @@ import { esc, icon, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion
 import { enableDragSort } from '../../../lib/drag.js';
 import { rowText, customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
-         editorTopbarHTML, openQuestionPreview } from '../../../lib/editor-ui.js';
+         editorTopbarHTML, openQuestionSimulate, openQuestionReveal } from '../../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
@@ -192,7 +192,8 @@ function editHTML(){
         <span class="ellip f14">${rowText(q)}</span>
         <span class="ptsfield" title="Punten voor deze vraag (standaard 100)"><input type="number" min="0" step="10" class="q-pts" data-ri="${ri}" data-qi="${qi}" value="${q.points??100}">pt</span>
         ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
-        <button class="mini" data-qprev="${ri}|${qi}" title="voorbeeld bekijken" aria-label="voorbeeld bekijken">${icon('eye',15)}</button>
+        <button class="mini" data-qreveal="${ri}|${qi}" title="voorvertoning — volledige vraag met alle hints" aria-label="voorvertoning">${icon('eye',15)}</button>
+        <button class="mini" data-qsim="${ri}|${qi}" title="simuleren — speel de vraag na" aria-label="simuleren">${icon('play',15)}</button>
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>
     </div>`;
@@ -240,7 +241,8 @@ function wire(){
     enableDragSort($('#ed-scroll'), { handle:'.grip', onDrop:reorderRounds });
     el.querySelectorAll('.qlist').forEach(ql=> enableDragSort(ql, { handle:'.grip', onDrop:order=>reorderQ(+ql.dataset.round, order) }));
     el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
-    el.querySelectorAll('[data-qprev]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qprev.split('|'); const q=S.draft&&S.draft.rounds[+a[0]]&&S.draft.rounds[+a[0]].questions[+a[1]]; if(q) openQuestionPreview(q, '../../../'); });
+    el.querySelectorAll('[data-qreveal]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qreveal.split('|'); const q=S.draft&&S.draft.rounds[+a[0]]&&S.draft.rounds[+a[0]].questions[+a[1]]; if(q) openQuestionReveal(q, '../../../'); });
+    el.querySelectorAll('[data-qsim]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qsim.split('|'); const q=S.draft&&S.draft.rounds[+a[0]]&&S.draft.rounds[+a[0]].questions[+a[1]]; if(q) openQuestionSimulate(q, '../../../'); });
     el.querySelectorAll('[data-qbet]').forEach(cb=>cb.onchange=()=>{ const a=cb.dataset.qbet.split('|'); toggleQBet(+a[0],+a[1]); });
     el.querySelectorAll('.r-bet').forEach(cb=>{ cb.indeterminate = cb.dataset.some==='1'; cb.onchange=()=>toggleRoundBet(+cb.dataset.ri, cb.checked); });
     const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;

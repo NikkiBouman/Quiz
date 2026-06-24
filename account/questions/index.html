@@ -18,7 +18,7 @@
 <script type="module">
 import { esc, icon, ICON_TRASH, loadBank, deleteBankItem, loadSavedQuizzes, saveQuizToDevice,
          navMenuHTML } from '../../lib/quiz-core.js';
-import { rowText, wireScroll, openQuestionPreview } from '../../lib/editor-ui.js';
+import { rowText, wireScroll, openQuestionSimulate, openQuestionReveal } from '../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
 const $ = s => document.querySelector(s);
@@ -61,7 +61,8 @@ function render(){
   const bank=loadBank();
   const rows = bank.length ? bank.map((it,i)=>`<div class="listrow">
       <span class="ellip f14">${rowText(it.q)}</span>
-      <button class="mini" data-prev="${i}" title="voorbeeld bekijken" aria-label="voorbeeld bekijken">${icon('eye',15)}</button>
+      <button class="mini" data-reveal="${i}" title="voorvertoning — volledige vraag met alle hints" aria-label="voorvertoning">${icon('eye',15)}</button>
+      <button class="mini" data-sim="${i}" title="simuleren — speel de vraag na" aria-label="simuleren">${icon('play',15)}</button>
       <button class="btn ghost xs" data-addq="${i}" title="aan een quiz toevoegen">${icon('plus',14)}quiz</button>
       <a class="btn ghost xs nolink center" href="new/?edit=${i}">Wijzig</a>
       <button class="mini danger" data-del="${i}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')
@@ -78,7 +79,8 @@ function render(){
     ${S.addFor!=null?modalHTML():''}`;
   wireScroll($, S);
   el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delItem(+b.dataset.del));
-  el.querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.prev]; if(it) openQuestionPreview(it.q, '../../'); });
+  el.querySelectorAll('[data-reveal]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.reveal]; if(it) openQuestionReveal(it.q, '../../'); });
+  el.querySelectorAll('[data-sim]').forEach(b=>b.onclick=()=>{ const it=loadBank()[+b.dataset.sim]; if(it) openQuestionSimulate(it.q, '../../'); });
   el.querySelectorAll('[data-addq]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.addq; S.addFor = S.addFor===i?null:i; S.msg=''; render(); });
   if(S.addFor!=null){
     const sel=$('#aq-sel'), inp=$('#aq-new');

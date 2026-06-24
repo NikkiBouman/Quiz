@@ -1480,6 +1480,26 @@ function hostHead(right, skip){
     : `<button class="tb-skip" id="b-skip" title="Niemand krijgt punten">Vraag overslaan</button>`);
   return `<div class="topbar"><span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span><span class="tb-actions">${right||''}${skipBtn}${stopBtnHTML()}</span></div>`;
 }
+/* antwoord-opties zoals de host ze toont: de keuzelijst met vormpjes, of een hint hoe spelers
+   antwoorden bij een open/zoek-vraag. Eén bron van waarheid — gedeeld door het live host-scherm
+   en de voorvertoning. */
+function answersHTML(r){
+  return r.optionsMode==='list'
+    ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
+    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':r.optionsMode==='deezertitle'?'Zoek een titel via de zoekbalk':r.optionsMode==='deezeralbum'?'Zoek een album via de zoekbalk':r.optionsMode==='deezerartist'?'Zoek een artiest via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
+}
+/* de "intro" van een vraag zoals de host die toont vóór het spelen: de vraag prominent in beeld,
+   dan de info-subkop (jaar/genre/acteurfoto…) en — bij een inzetvraag — de puntenregel. `hintsHTML`
+   is de hints-sectie eronder, want die verschilt per gebruiker: de inzet-stap geeft de categorieën
+   door ("Hints die je gaat krijgen"), de voorvertoning de écht onthulde hints. ÉÉN bron van waarheid
+   — gedeeld door de inzet-stap (hostQuestion) en de voorvertoning (previewReveal), zodat wijzigingen
+   aan de intro automatisch op allebei doorwerken. */
+function questionIntroHTML(r, hintsHTML){
+  return `<div class="spotlight"><div class="qmeta">${r.betting?'inzetronde':'voorvertoning'}</div><div class="qtext">${esc(r.question||'')}</div></div>
+      ${metaHTML(r)}${factsHTML(r, true)}
+      ${r.betting?`<div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>`:''}
+      ${hintsHTML}`;
+}
 function hostQuestion(){
   const r = app.quiz[app.round];
   refreshSongPreview(r);          // verlopen Deezer-preview-URL bijwerken (host-only fragment)
@@ -1494,10 +1514,7 @@ function hostQuestion(){
       <div class="hostgrid">
         <div class="hostmain">
           ${hostHead('<span class="pill">inzetten</span>', true)}
-          <div class="spotlight"><div class="qmeta">inzetronde</div><div class="qtext">${esc(r.question||'')}</div></div>
-          ${metaHTML(r)}${factsHTML(r, true)}
-          <div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>
-          <div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages))}</div>
+          ${questionIntroHTML(r, `<div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages))}</div>`)}
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
         </div>
@@ -1533,9 +1550,7 @@ function hostQuestion(){
     && activeP.every(p=> p.ans && p.ans[app.round]!=null)
     && activeP.every(p=> effectiveCorrect(app.round, p.id, isCorrectAns(r, p.ans[app.round])));
   const revealCls = everyoneCorrect ? 'btn big' : 'btn ghost big';
-  const opts = r.optionsMode==='list'
-    ? `<div class="answers">${r.options.map((o,i)=>`<div class="ans dim" data-c="${i}" aria-hidden="true"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></div>`).join('')}</div>`
-    : `<p class="muted center" style="font-size:13px">${r.optionsMode==='text'?'Spelers typen zelf het antwoord':r.optionsMode==='listsearch'?'Spelers zoeken in de lijst via de zoekbalk':r.optionsMode==='tmdb'?'Zoek een film via de zoekbalk':r.optionsMode==='deezertitle'?'Zoek een titel via de zoekbalk':r.optionsMode==='deezeralbum'?'Zoek een album via de zoekbalk':r.optionsMode==='deezerartist'?'Zoek een artiest via de zoekbalk':'Zoek een nummer via de zoekbalk'}.</p>`;
+  const opts = answersHTML(r);
   let spot, controls;
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
@@ -2022,12 +2037,38 @@ async function previewPlayer(){
   poll=setInterval(async()=>{ if(++tries>40){ clearInterval(poll); return; } if(await tryJoin()){ clearInterval(poll); window.removeEventListener('storage', onStore); } }, 250);
 }
 
+/* VOORVERTONING — de vraag zoals de host hem in beeld krijgt (zelfde intro als de inzet-/startstap:
+   vraag prominent, info eronder), maar met ÁLLE hints onthuld en statisch: geen spel, geen Firebase,
+   geen speler, geen knoppen/zijbalk. De intro komt uit questionIntroHTML — dezelfde functie als de
+   live inzet-stap — alleen krijgt de hints-sectie hier de écht onthulde hints (hostStagesHTML) i.p.v.
+   de categorie-labels. Zo zie je precies wat een speler uiteindelijk te zien krijgt, en werken
+   wijzigingen aan de intro automatisch op allebei door.
+   Bewust géén refreshSongPreview: die roept async renderHost() aan en zou deze statische weergave
+   overschrijven — een liedjesfragment gebruikt hier dus de opgeslagen URL. */
+function previewReveal(){
+  document.body.classList.add('preview'); app.preview=true;
+  let q=null; try{ q=JSON.parse(localStorage.getItem('quiz:preview')||'null'); }catch(e){}
+  if(!q){ el.innerHTML=`<div class="center stack"><p class="muted">Geen vraag om te tonen.</p></div>`; return; }
+  app.role='host'; app.phase='question'; app.round=0; app.players=[]; app.scores={}; app.names={};
+  const f=flattenQuiz({ rounds:[{ name:'Voorbeeld', intro:'', questions:[q] }] });
+  app.quiz=applyShuffles(normalizeQuiz(f.questions)); app.rounds=f.rounds;
+  const r=app.quiz[0];
+  const staged=Array.isArray(r.stages);
+  app.stage = staged ? r.stages.length-1 : 0;        // alle hints onthuld
+  const hintsHTML = staged
+    ? `<div class="card stack" style="gap:8px"><b>${r.stages.length>1?'Alle hints':'Hint'}</b>${hostStagesHTML(r, app.stage)}</div>`
+    : qMediaHTML(r, true);                            // niet-staged: de eigen media van de vraag
+  el.innerHTML = `<div class="hostmain">${questionIntroHTML(r, hintsHTML)}${answersHTML(r)}</div>`;
+  wireClips();
+}
+
 async function boot(){
   const params = new URLSearchParams(location.search);
   const hash = new URLSearchParams(location.hash.replace(/^#/,''));   // ook via de hash: sommige servers strippen de querystring (clean-URL)
   const pv = hash.get('preview') || params.get('preview');
   if(pv==='host'){ await previewHost(); return; }
   if(pv==='player'){ await previewPlayer(); return; }
+  if(pv==='reveal'){ previewReveal(); return; }
   const jc = params.get('judge');
   if(jc){
     el.innerHTML = `<div class="center stack"><div class="qmeta">Jurylid</div><h1>Verbinden…</h1></div>`;

@@ -366,6 +366,9 @@
   .pv-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
   .pv-pane.host{flex:1.45;border-right:1px solid var(--line)}
   .pv-pane.player{flex:1}
+  /* voorvertoning: één host-iframe → smallere modal, enkele volle pane */
+  .pv-modal.reveal{width:min(820px,100%)}
+  .pv-pane.reveal{flex:1}
   .pv-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);padding:6px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
   .pv-frame{flex:1;width:100%;border:0;background:var(--bg);min-height:0}
   /* compacte spel-weergave binnen een preview-iframe */
