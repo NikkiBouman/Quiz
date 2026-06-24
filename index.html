@@ -271,6 +271,41 @@ function isCorrectAns(r, a){
   return Array.isArray(ans) ? ans.map(String).includes(String(a)) : String(a)===String(ans);
 }
 
+/* ---- deel-juistheid voor artiest+titel (':deezer') ----
+   Een ':deezer'-gok is pas goed als het hele liedje (de track-id) klopt, maar bij
+   "Ed Sheeran – Shape of You" terwijl "Ed Sheeran – Supermarket Flowers" gevraagd is,
+   klopt de artiest al wél. Labels zijn altijd "Artiest – Titel", dus splitsen + los
+   vergelijken geeft per helft een oordeel. */
+const DEEZER_SEP = ' – ';
+function splitArtistTitle(label){
+  const s = String(label==null?'':label);
+  const i = s.indexOf(DEEZER_SEP);                       // alles ná de eerste scheider is de titel
+  return i<0 ? { artist:'', title:s.trim() }
+             : { artist:s.slice(0,i).trim(), title:s.slice(i+DEEZER_SEP.length).trim() };
+}
+/* {artist,title} booleans, of null als deel-feedback niet van toepassing is
+   (andere modus, geen gok, antwoord niet als artiest–titel op te splitsen, of niets goed) */
+function partialMatch(r, guessLabel){
+  if(!r || r.optionsMode!=='deezer' || guessLabel==null) return null;
+  const want = splitArtistTitle(r.answerLabel||'');
+  if(!want.artist || !want.title) return null;
+  const got = splitArtistTitle(guessLabel);
+  const artist = normTxt(got.artist)===normTxt(want.artist);
+  const title  = normTxt(got.title) ===normTxt(want.title);
+  return (artist||title) ? { artist, title } : null;
+}
+/* kleine "artiest ✓ / titel ✗"-chips uit een {artist,title}-oordeel (leeg bij null) */
+function partialBadgesFrom(pm){
+  if(!pm) return '';
+  const chip = (label,ok)=>`<span class="part ${ok?'ok':'no'}">${label} ${ok?'✓':'✗'}</span>`;
+  return `<span class="parts">${chip('artiest',pm.artist)}${chip('titel',pm.title)}</span>`;
+}
+/* idem, maar berekent het oordeel zelf uit de labels — alleen waar het juiste antwoord
+   lokaal bekend is (host-schermen + onthulling); leeg als volledig goed of n.v.t. */
+function partialBadges(r, guessLabel, full){
+  return full ? '' : partialBadgesFrom(partialMatch(r, guessLabel));
+}
+
 /* vragenset kan plat zijn (lijst van vragen) of ingedeeld in rondes ({rounds:[{name,intro,questions:[]}]}) */
 function flattenQuiz(data){
   if(Array.isArray(data)) return { questions:data.slice(), rounds:[{name:'',intro:'',start:0,end:data.length}] };
@@ -439,7 +474,7 @@ function publicCurrent(){
 }
 function pushState(){
   // per-speler oordeel over hun huidige gok (alleen zichtbaar voor spelers ná 'controleer antwoorden')
-  let judged = null, bets = null;
+  let judged = null, bets = null, partials = null;
   if(app.phase==='question'){
     const r = app.quiz[app.round];
     if(r && Array.isArray(r.stages)){
@@ -447,6 +482,17 @@ function pushState(){
       app.players.forEach(p=>{
         const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
         if(a!=null) judged[p.id] = effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
+      });
+    }
+    // deel-oordeel (artiest/titel) — alleen booleans, dus geen antwoord-lek naar spelers
+    if(r && r.optionsMode==='deezer'){
+      partials = {};
+      app.players.forEach(p=>{
+        const a  = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
+        const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
+        if(a==null || isCorrectAns(r,a)) return;          // niet ingestuurd of helemaal goed → geen deel-chips
+        const pm = partialMatch(r, al);
+        if(pm) partials[p.id] = pm;
       });
     }
     if(r && r.betting){
@@ -461,7 +507,7 @@ function pushState(){
     current: (app.phase==='question'||app.phase==='reveal') ? publicCurrent() : null,
     scores: app.scores, names: app.names,
     results: app.phase==='reveal' ? app.results : null,
-    judged, bets,
+    judged, bets, partials,
     answeredCount: app.answeredCount, totalPlayers: Object.keys(app.names).length, ts: Date.now(),
   });
 }
@@ -850,6 +896,7 @@ function renderController(){
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
       <span class="rguess">${esc(ans)}</span>
+      ${partialBadges(r, al, eff)}
       <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
     </div>`;
   }).join('');
@@ -1032,6 +1079,7 @@ function playerRowsHTML(mode){
   const canPick = mode==='question' && r && r.optionsMode==='list';
   const rows = app.players.map(p=>{
     const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
+    const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
     const passed = !!(p.pass && p.pass[app.round]);
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
     const correct = a!=null && effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
@@ -1042,7 +1090,7 @@ function playerRowsHTML(mode){
     else if(a==null) st = `<span class="stbadge wait">nadenken…</span>`;
     else if(!staged || !app.checked) st = `<span class="stbadge done">✓ geantwoord</span>`;
     else if(correct) st = `<span class="stbadge good">goed ✓</span>`;
-    else st = `<span class="stbadge bad">fout ✗</span>`;
+    else st = `<span class="stbadge bad">fout ✗</span>${partialBadges(r, al, false)}`;
     // INZET (kolom alleen getoond bij inzetvragen; waarde pas ná de reveal)
     let betCell = '';
     if(betting){
@@ -1501,6 +1549,7 @@ function hostRevealView(){
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
       <span class="rguess">${esc(rr.label||'—')}${rr.gained>0?` <span class="pts">+${rr.gained}</span>`:''}</span>
+      ${partialBadges(r, rr.label, rr.correct)}
       <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
     </div>`;
   }).join('');
@@ -1743,7 +1792,8 @@ function playerQuestion(){
       const verdict = g.judged ? g.judged[app.pid] : undefined;
       if(verdict===true) return playerHold('correct', winNote(r,g));
       const pi = pointsInfo(r, false, app.myStage, app.bet[g.round], g.stage);
-      return pi.kind==='bust' ? playerHold('bust') : playerHold('wronghint');
+      const parts = partialBadgesFrom(g.partials && g.partials[app.pid]);   // host stuurt deel-oordeel (geen antwoord-lek)
+      return playerHold(pi.kind==='bust'?'bust':'wronghint', null, parts);
     }
     // nieuwe hint: goed = vergrendeld blijven, fout = opnieuw raden
     const verdict = g.judged ? g.judged[app.pid] : undefined;
@@ -1806,17 +1856,17 @@ function playerWaiting(){
     <h1>Antwoord binnen ✓</h1><p class="muted">Wachten op de rest <span class="waiting-dots"></span></p>
     <span class="pill" style="align-self:center">${g.answeredCount}/${g.totalPlayers} geantwoord</span></div>`;
 }
-function playerHold(kind, note){
+function playerHold(kind, note, parts){
   const g=app.game;
   let head, sub, color='';
   if(kind==='correct'){ head='Goed geraden! ✓'; color='var(--groen)'; sub=note||'Wachten op de host'; }
-  else if(kind==='wronghint'){ head='Helaas, fout'; color='var(--rood)'; sub='Wacht op de volgende hint.'; }
-  else if(kind==='bust'){ head='Helaas, fout'; color='var(--rood)'; sub='0 punten — je inzet is verlopen. Je mag straks nog voor de lol meeraden.'; }
+  else if(kind==='wronghint'){ head=parts?'Bijna!':'Helaas, fout'; color=parts?'var(--geel)':'var(--rood)'; sub='Wacht op de volgende hint.'; }
+  else if(kind==='bust'){ head=parts?'Bijna!':'Helaas, fout'; color=parts?'var(--geel)':'var(--rood)'; sub='0 punten — je inzet is verlopen. Je mag straks nog voor de lol meeraden.'; }
   else if(kind==='betwait'){ head='Je inzet staat ✓'; sub=note||'Wachten tot iedereen heeft gewed'; }
   else { head='Antwoord binnen ✓'; sub='Wachten op de controle'; }
   const hStyle = color?` style="color:${color}"`:'';
   el.innerHTML = `<div class="center stack"><div class="qmeta">${pRoundLbl()}</div>
-    <h1${hStyle}>${head}</h1><p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
+    <h1${hStyle}>${head}</h1>${parts?`<div class="parthold">${parts}</div>`:''}<p class="muted">${esc(sub)} <span class="waiting-dots"></span></p></div>`;
 }
 function allGuessesHTML(){
   const g=app.game; const res=g.results||{}; const names=g.names||{};
@@ -1827,6 +1877,7 @@ function allGuessesHTML(){
     const rr=res[pid]; const me=pid===app.pid?' me':'';
     return `<div class="reviewrow${me}"><span class="rnm">${esc(names[pid]||'?')}</span>
       <span class="rguess">${esc(rr.label||'—')}</span>
+      ${partialBadges(g.current, rr.label, rr.correct)}
       <span class="stbadge ${rr.correct?'good':'bad'}">${rr.correct?'goed ✓':'fout ✗'}</span></div>`;
   }).join('');
   return `<div class="card stack" style="gap:8px"><b>Alle gokken</b>${rows}</div>`;
@@ -1843,7 +1894,11 @@ function playerReveal(){
   } else {
     body = `<div class="card stack"><div>Juiste antwoord: <b>${esc(correctLabel)}</b></div>${c.answerImage?imgHTML(c.answerImage):''}${res&&res.label?`<div class="muted">Jouw gok: ${esc(res.label)}</div>`:''}</div>${allGuessesHTML()}`;
   }
-  const banner = res ? (correct ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>` : `<h1 style="color:var(--rood)">Helaas, fout</h1>`)
+  const myParts = res ? partialBadges(c, res.label, correct) : '';
+  const banner = res
+    ? (correct
+        ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>`
+        : `<h1 style="color:${myParts?'var(--geel)':'var(--rood)'}">${myParts?'Bijna!':'Helaas, fout'}</h1>${myParts?`<div class="parthold">${myParts}</div>`:''}`)
     : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
   el.innerHTML = `<div class="center stack">${banner}</div>${body}${playerLeaderboardHTML()}
     <p class="footnote">Wachten op de host voor de volgende vraag <span class="waiting-dots"></span></p>`;

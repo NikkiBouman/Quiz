@@ -206,6 +206,12 @@
   .stbadge{font-size:12.5px;font-weight:700;white-space:nowrap}
   .stbadge.wait{color:var(--muted)} .stbadge.done{color:var(--blauw)}
   .stbadge.good{color:var(--groen)} .stbadge.bad{color:var(--rood)} .stbadge.pass{color:var(--muted)}
+  /* deel-juist (artiest/titel) bij ':deezer'-gokken */
+  .parts{display:inline-flex;flex:none;gap:5px}
+  .part{font-size:11px;font-weight:700;white-space:nowrap;border-radius:999px;padding:2px 8px;border:1px solid var(--line)}
+  .part.ok{color:var(--groen);background:rgba(22,161,115,.12);border-color:rgba(22,161,115,.35)}
+  .part.no{color:var(--muted);background:var(--surface-2)}
+  .parthold{display:flex;justify-content:center;gap:6px;margin:-2px 0 2px}
   .betcell{font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
   .betcell.over{color:var(--rood)}
   .wronglist{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 2px}
