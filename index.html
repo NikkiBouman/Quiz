@@ -1014,7 +1014,7 @@ function renderHome(){
     ${saved ? `<div class="card stack" style="gap:10px"><b>Verder met je quiz</b>
         <button class="btn" id="b-resume">Hervat quiz ${saved}</button></div>` : ''}
     <button id="b-host-code" class="linkbtn">Hervatten als host met een code</button>`;
-  $('#b-host').onclick = hostCreate;
+  $('#b-host').onclick = ()=>{ location.href='account/quizzes/'; };   // eerst een eigen quiz kiezen i.p.v. de voorbeeldset hosten
   $('#b-join').onclick = renderJoin;
   $('#b-host-code').onclick = renderHostResume;
   if(saved) $('#b-resume').onclick = async ()=>{
