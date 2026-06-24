@@ -226,8 +226,8 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `source`      | Host-only builder metadata for film/song questions: `{kind:'tmdb'\|'deezer', id, label, clues:[…], preview?}`. Lets the question bank re-open the builder **losslessly** (zones + per-actor naam/foto toggles). Ignored by the game and **not** sent to players (`publicCurrent` omits it). Also makes `qTypeLabel` report film/lied even when the answer is a fact. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
-| `points`      | Base points (default 100). Editable per question in the quiz editor (number field); for betting questions this is the base that the multiplier scales. |
-| `pointsByStage` | Non-betting staged questions: points per stage (decreasing reward for later reveals). |
+| `points`      | Base points (default 100). Editable per question in the quiz editor (number field); for staged questions this is the base that the hint-decay fraction (and any bet multiplier) scales. |
+| `pointsByStage` | Optional legacy override for staged questions: explicit points per stage, replacing the default linear hint decay. |
 | `year`, `views`, `par` | Bandle metadata; auto-parsed from the audio folder name if absent. |
 
 ### `optionsMode` (derived by `normalizeQuiz`)
@@ -249,15 +249,21 @@ Each stage object: `{ text?, image?, audio?, label?, betMultiplier?, clipStart?,
 presence of a field decides the stage kind (`audio` > `image` > `text`). `label` is an optional
 caption. `clipStart`/`clipEnd` (seconds) clip an `audio` stage host-side (see `wireClips`).
 
+- **Hint decay always applies.** Every staged question pays out a *fraction* of `points` based
+  on the stage at which the player locked in the correct answer (`lock`/`astage`): hint 1
+  (stage 0) = 100%, the last hint = 25%, linear in between (4 hints → 100/75/50/25%), no correct
+  answer = 0%. See `hintFraction` / `stagePoints` / `computeGain`. This is independent of betting.
 - **Betting is optional.** A staged question is a **betting** question when `bet` is explicitly
   `true`, or — if `bet` is unset — when any stage has a `betMultiplier`. Setting `bet:false`
   turns betting off even if multipliers are present. On a betting question the host reveals hints
   one at a time and players wager on which hint they'll know the answer by, with higher
   multipliers for earlier (riskier) bets. `out.betMultipliers` is the per-stage multiplier array
   (any missing entry is filled from `defaultBetMults`). The quiz editor exposes this as a per-round
-  and per-question **"inzet"** checkbox (the round box toggles all its staged questions).
-- If a staged question is **not** betting but has `pointsByStage` → reward decreases with each
-  revealed hint; otherwise it scores flat `points`.
+  and per-question **"inzet"** checkbox (the round box toggles all its staged questions). The
+  bet multiplier is keyed to the **wagered** hint and stacks **on top of** the hint-decay fraction
+  (keyed to where you actually answered); you still **bust to 0** if you lock in later than your bet.
+- `pointsByStage` (optional, legacy) **overrides** the linear fraction with explicit points per
+  stage. Without betting, the question scores `points × fraction`.
 - **Audio stages are host-only**: audio paths are never sent to players (`publicCurrent`
   omits them); only the host machine plays sound. Images *are* sent to players as data-URIs.
 
@@ -390,11 +396,16 @@ lobby ──hostStart──▶ roundintro ──hostBeginRound──▶ question
   text via `normTxt`/`accept`, list index match, api-id match).
 - **`effectiveCorrect(round, pid, auto)`** — applies controller/host manual overrides from
   `app.judges` on top of `auto`.
-- **`computeGain(r, correct, bet, lock)`**:
+- **`hintFraction(lock, n, pointsByStage, base)`** — fraction earned by *when* you locked the
+  correct answer: stage 0 = 1.0, last stage = 0.25, linear between (`1 - 0.75·lock/(n-1)`);
+  `n<=1` → 1.0; an explicit `pointsByStage` overrides it with `pointsByStage[lock]/base`.
+- **`stagePoints(r, stage)`** — `round(points · hintFraction(stage, …))`, for the "nu X punten"
+  display on non-betting hint questions (and the per-stage points pushed to players).
+- **`computeGain(r, correct, bet, lock)`** — staged questions always scale by `hintFraction`:
   - betting: win only if `bet != null && lock <= bet` (you knew it by the hint you wagered);
-    gain = `round(points * betMultipliers[bet])`.
-  - `pointsByStage`: gain = `pointsByStage[lock]`.
-  - otherwise flat `points` (default 100).
+    gain = `round(points · fraction(lock) · betMultipliers[bet])`, else bust 0.
+  - non-betting: gain = `round(points · fraction(lock))`.
+  - non-staged: flat `points` (default 100).
 - **`buildResults()`** — for each player computes `{answer,label,autoCorrect,correct,gained,
   won,bet,lock,passed}` and recomputes `scores[pid] = preRoundScores[pid] + gained`. Always
   rebuilt from `preRoundScores`, so re-judging is idempotent.

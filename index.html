@@ -142,8 +142,10 @@ async function searchOptions(mode,q){ try{ return mode==='tmdb'?await tmdbSearch
    - answer: index (bij lijst) óf API-id (bij :tmdb/:deezer)
    - answerLabel: leesbaar juist antwoord (bij API aanbevolen)
    - stages: [{text?,image?,audio?,betMultiplier?}]  → gestage vraag
-       betMultiplier per stage  → inzetronde
-       anders pointsByStage[..]  → eerder = meer punten
+       hint-vragen schalen altijd met de hint waarop je het juiste antwoord vastlegt:
+       hint 1 = 100% … laatste hint = 25% (lineair); niet raden = 0%
+       betMultiplier per stage  → inzetronde (de inzet-multiplier komt bovenop die fractie)
+       pointsByStage[..]        → overruled de lineaire fractie met vaste punten per hint
    ============================================================ */
 const SAMPLE = [
   { question:'Welke planeet staat het dichtst bij de zon?', points:100,
@@ -483,7 +485,7 @@ function publicCurrent(){
     base.hintLabels = stageHintLabels(r.stages);   // host berekent labels uit de volledige vraag → speler ziet exact hetzelfde
     base.stage = app.stage;
     if(r.betting){ base.betting = true; base.betMultipliers = r.betMultipliers; }
-    else if(r.pointsByStage){ base.points = r.pointsByStage[app.stage] ?? base.points; }
+    else if(Array.isArray(r.pointsByStage)) base.pointsByStage = r.pointsByStage;   // volle base.points blijft staan; display/score schalen zelf per hint (anders dubbele decay)
   }
   if(app.phase==='reveal'){
     base.answer = r.answer;
@@ -691,16 +693,37 @@ function hostSkip(){
   else app.phase='final';
   pushState(); renderHost();
 }
-/* punten bepalen op basis van (eventueel overrulede) correctheid */
+/* fractie van de punten op basis van bij wélke hint je het juiste antwoord vastlegde:
+   hint 1 (stage 0) = 100%, laatste hint = 25%, lineair daartussen (4 hints → 100/75/50/25%).
+   Niet raden telt elders al als 0. Een expliciete pointsByStage (oude/handgemaakte vragen)
+   overruled de lineaire verdeling. Staat los van de inzet — die komt er als multiplier bovenop. */
+function hintFraction(lock, n, pointsByStage, base){
+  if(Array.isArray(pointsByStage)){
+    const st = lock!=null ? lock : pointsByStage.length-1;
+    return (pointsByStage[st] ?? base) / base;
+  }
+  if(n<=1) return 1;                          // één hint = meteen raden = 100%
+  const st = lock!=null ? lock : n-1;         // onbekende stage → behandel als de laatste hint
+  return Math.max(0, 1 - 0.75 * st/(n-1));    // 100% bij stage 0 … 25% bij de laatste
+}
+/* punten die een hint-vraag nú waard is (voor de "nu X punten"-weergave, los van inzet) */
+function stagePoints(r, stage){
+  const base = r.points ?? 100;
+  return Math.round(base * hintFraction(stage, (r.stages||[]).length, r.pointsByStage, base));
+}
+/* punten bepalen op basis van (eventueel overrulede) correctheid.
+   Bij hint-vragen telt de fractie (hoe vroeg je het juiste antwoord vastlegde) altijd mee;
+   bij een inzetronde komt de inzet-multiplier daar — mits gewonnen — bovenop. */
 function computeGain(r, correct, bet, lock){
   if(!correct) return { gained:0, won:false };
-  if(r.betting){
-    const won = bet!=null && lock!=null && lock<=bet;
-    return { gained: won ? Math.round((r.points??100)*(r.betMultipliers[bet]||1)) : 0, won };
-  }
-  if(Array.isArray(r.stages) && r.pointsByStage){
-    const st = lock!=null ? lock : r.pointsByStage.length-1;
-    return { gained: r.pointsByStage[st] ?? (r.points??100), won:true };
+  if(Array.isArray(r.stages)){
+    const base = r.points ?? 100;
+    const frac = hintFraction(lock, r.stages.length, r.pointsByStage, base);
+    if(r.betting){
+      const won = bet!=null && lock!=null && lock<=bet;   // niet uiterlijk bij je inzet goed → bust (0)
+      return { gained: won ? Math.round(base * frac * (r.betMultipliers[bet]||1)) : 0, won };
+    }
+    return { gained: Math.round(base * frac), won:true };
   }
   return { gained: r.points??100, won:true };
 }
@@ -711,14 +734,14 @@ function pointsInfo(r, correct, lock, bet, stage){
   if(r.betting){
     if(correct){
       const won = (bet!=null && lock!=null && lock<=bet);
-      if(won) return { text:`+${base} × ${r.betMultipliers[bet]||1}`, kind:'win' };
+      if(won){ const g = computeGain(r, true, bet, lock).gained; return { text:`+${g}`, kind:'win' }; }
       return { text:'0', kind:'bust' };
     }
     if(bet!=null && stage>=bet) return { text:'0', kind:'bust' };  // inzet-deadline verstreken
     return { text:'', kind:'open' };                                // nog mogelijk
   }
-  if(Array.isArray(r.stages) && r.pointsByStage){
-    if(correct){ const p=r.pointsByStage[lock] ?? base; return { text:`+${p}`, kind:'win' }; }
+  if(Array.isArray(r.stages)){
+    if(correct){ const g = computeGain(r, true, null, lock).gained; return { text:`+${g}`, kind:'win' }; }
     return stage>=r.stages.length-1 ? { text:'0', kind:'bust' } : { text:'', kind:'open' };
   }
   return correct ? { text:`+${base}`, kind:'win' } : { text:'0', kind:'bust' };
@@ -784,10 +807,16 @@ async function hostEnd(){
 /* host vult zelf een antwoord in namens een speler (backup) */
 async function hostSetAnswer(pid, idx){
   app.openPicker=null;
+  const r = app.quiz[app.round];
+  const staged = Array.isArray(r && r.stages);
   const p = app.players.find(x=>x.id===pid);   // optimistisch updaten voor snappy feedback
-  if(p){ p.ans = p.ans||{}; p.ans[app.round]=idx; }
+  if(p){
+    p.ans = p.ans||{}; p.ans[app.round]=idx;
+    if(staged){ p.astage = p.astage||{}; p.astage[app.round]=app.stage; }   // vergrendel op de huidige hint, niet de laatste
+  }
   renderHost();
   await set(ansRef(app.code, pid, app.round), idx);
+  if(staged) await set(ref(db, `games/${app.code}/players/${pid}/astage/${app.round}`), app.stage);
 }
 /* host verwijdert een speler handmatig */
 async function hostKick(pid){
@@ -1560,7 +1589,7 @@ function hostQuestion(){
   let spot, controls;
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
-                         : `${esc(r.question||'')} · nu ${(r.pointsByStage||[])[app.stage] ?? (r.points??100)} punten`;
+                         : `${esc(r.question||'')} · nu ${stagePoints(r, app.stage)} punten`;
     spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${hostStagesHTML(r, app.stage)}</div>`;
     if(!app.checked){
       const everyonePassed = app.players.length>0 && app.players.every(p=> p.pass && p.pass[app.round]);
@@ -1827,7 +1856,7 @@ function playerQuestion(){
         </div>
         <div class="card stack" style="gap:10px">
           <b>Bij welke hint denk je het uiterlijk te weten?</b>
-          <p class="muted" style="margin:0;font-size:13px">Zet in op wanneer jij denkt het antwoord te weten. Hoe meer risico je neemt, hoe hoger de beloning. Maar let op: heb je het niet uiterlijk bij die hint goed? Dan krijg je 0 punten voor deze vraag!</p>
+          <p class="muted" style="margin:0;font-size:13px">Zet in op wanneer jij denkt het antwoord te weten. Hoe meer risico je neemt, hoe hoger de beloning. Maar let op: heb je het niet uiterlijk bij die hint goed? Dan krijg je 0 punten voor deze vraag! En hoe vroeger je het juiste antwoord geeft, hoe meer van de punten je houdt — bij elke latere hint levert het minder op.</p>
           <div class="bets">${bets}</div>
         </div>
         ${passBtnHTML}${passModalHTML()}`;
@@ -1882,8 +1911,9 @@ function playerQuestion(){
       spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · ${betTxt}</div>${playerStagesHTML(r)}</div>`;
       pill = bi!=null ? `×${m}` : 'voor de lol';
     } else {
-      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${r.points} punten</div>${playerStagesHTML(r)}</div>`;
-      pill = `${r.points} punten`;
+      const np = stagePoints(r, g.stage);   // punten van de huidige hint (volle base wordt hier pas geschaald)
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${np} punten</div>${playerStagesHTML(r)}</div>`;
+      pill = `${np} punten`;
     }
   } else {
     spot = `<div class="spotlight">${imgHTML(r.image)}${videoHTML(r.video)}<div class="qtext">${esc(r.question)}</div></div>`;
