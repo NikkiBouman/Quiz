@@ -16,9 +16,11 @@
 </div>
 
 <script type="module">
-import { esc, loadBank, addToBank, saveBank, pickFromQuestion, customPickFromQuestion } from '../../../lib/quiz-core.js';
+import { esc, loadBank, addToBank, saveBank, pickFromQuestion, customPickFromQuestion, setMediaRoot } from '../../../lib/quiz-core.js';
+setMediaRoot('../../../');   // puzzel-thumbnails in de bouwer vanaf deze diepe pagina laten kloppen
 import { customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
+         puzzleFormHTML, makePuzzleActions, wirePuzzleForms,
          editorTopbarHTML } from '../../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
@@ -33,8 +35,10 @@ const toList = ()=>{ location.href = '../'; };
 
 const S = { view:'custom', err:'', scroll:0, editIndex, customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
-  songQuery:'', songResults:[], songBusy:false, songPick:null };
+  songQuery:'', songResults:[], songBusy:false, songPick:null,
+  puzzleRounds:null, puzzleBusy:false, puzzlePick:null };
 const actions = makeMediaActions(S, render);
+const pactions = makePuzzleActions(S, render);
 let mbSync = null;   // sync van de bouwer (voor de top-bar Opslaan)
 
 /* beginstand: een bestaande vraag bewerken, of een vers formulier van het gevraagde type.
@@ -45,10 +49,12 @@ function initForm(){
     const q=it.q;
     if(it.bucket==='films'){ S.filmPick=pickFromQuestion(q); S.view='film'; }
     else if(it.bucket==='liedjes'){ S.songPick=pickFromQuestion(q); S.view='song'; }
+    else if(it.bucket==='puzzels'){ S.puzzlePick=pickFromQuestion(q); S.view='puzzle'; }
     else { S.customPick=customPickFromQuestion(q); S.view='custom'; }
   } else {
-    const t = typeParam==='film'||typeParam==='song' ? typeParam : 'custom';   // oude ?type=mc/open → custom
+    const t = typeParam==='film'||typeParam==='song'||typeParam==='puzzle' ? typeParam : 'custom';   // oude ?type=mc/open → custom
     S.view = t;
+    if(t==='puzzle') pactions.loadPuzzleCatalog();
   }
 }
 
@@ -60,7 +66,7 @@ function bankAdd(bucket, label, q){
   toList();
 }
 function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd('custom', r.label, r.q); }
-function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd(r.isFilm?'films':'liedjes', r.label, r.q); }
+function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } bankAdd(r.kind==='puzzle'?'puzzels':r.isFilm?'films':'liedjes', r.label, r.q); }
 /* de top-bar 'Opslaan' kiest de juiste actie; bij de bouwer eerst de DOM terug-syncen */
 function saveCurrent(){
   if(mbSync) mbSync();
@@ -69,12 +75,13 @@ function saveCurrent(){
 }
 
 function render(){
-  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);   // brede twee-koloms-bouwer (film/liedje)
+  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick) || (S.view==='puzzle'&&S.puzzlePick);   // brede twee-koloms-bouwer
   const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner =
-    S.view==='film' ? filmFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
-    S.view==='song' ? songFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
-                      customFormHTML(S, { editing, hideAdd:true });
+    S.view==='film'   ? filmFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
+    S.view==='song'   ? songFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
+    S.view==='puzzle' ? puzzleFormHTML(S, { editing, hideAdd:true, backId:'b-formback' }) :
+                        customFormHTML(S, { editing, hideAdd:true });
   el.innerHTML = `${inner}${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}`;
   wire();
 }
@@ -82,6 +89,8 @@ function wire(){
   wireScroll($, S);
   if(S.view==='film' || S.view==='song'){
     mbSync = wireMediaForms(el, S, render, actions, { onAdd:addMedia, onBack:toList, backId:'b-formback' });
+  } else if(S.view==='puzzle'){
+    mbSync = wirePuzzleForms(el, S, render, pactions, { onAdd:addMedia, onBack:toList, backId:'b-formback' });
   } else {
     mbSync = wireCustomForm(el, S, render, {});
   }

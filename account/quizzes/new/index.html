@@ -18,10 +18,12 @@
 <script type="module">
 import { esc, icon, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
          loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
-         flattenQuiz, resolvePoolQuestions } from '../../../lib/quiz-core.js';
+         flattenQuiz, resolvePoolQuestions, setMediaRoot } from '../../../lib/quiz-core.js';
+setMediaRoot('../../../');   // puzzel-thumbnails in de bouwer vanaf deze diepe pagina laten kloppen
 import { enableDragSort } from '../../../lib/drag.js';
 import { rowText, customFormHTML, readCustomPick, wireCustomForm,
          filmFormHTML, songFormHTML, makeMediaActions, readMediaPick, wireMediaForms, wireScroll,
+         puzzleFormHTML, makePuzzleActions, wirePuzzleForms,
          editorTopbarHTML, openQuestionSimulate, openQuestionReveal } from '../../../lib/editor-ui.js';
 
 const el = document.getElementById('app');
@@ -33,8 +35,10 @@ const S = {
   customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null,
+  puzzleRounds:null, puzzleBusy:false, puzzlePick:null,
 };
 const actions = makeMediaActions(S, render);
+const pactions = makePuzzleActions(S, render);
 
 /* knop-label + icoon per kant-en-klare ronde-map (anders valt de round.json-naam terug). */
 const LIB_META = { bandle:{label:'Bandle', icon:'music'}, puzzle:{label:'Puzzel', icon:'puzzle'} };
@@ -144,7 +148,12 @@ function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri];
 
 /* maken → aan de gekozen ronde toevoegen (validatie + opbouw zit in editor-ui.js) */
 function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('cb','Eigen vragen',''); pushToDraft(round,'custom',r.label,r.q); S.customPick=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
-function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('mb', r.isFilm?'Films':'Liedjes', r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.'); pushToDraft(round, r.isFilm?'films':'liedjes', r.label, r.q); if(r.isFilm) S.filmPick=null; else S.songPick=null; S.err=''; S.view='edit'; S.msg=`${r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
+function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; }
+  const isPz=r.kind==='puzzle';
+  const round=targetRoundFor('mb', isPz?'Wie of wat is dit?':r.isFilm?'Films':'Liedjes', isPz?'Raad de figuur. Bij elke hint zie je een stukje meer.':r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.');
+  pushToDraft(round, isPz?'puzzels':r.isFilm?'films':'liedjes', r.label, r.q);
+  S.filmPick=null; S.songPick=null; S.puzzlePick=null;
+  S.err=''; S.view='edit'; S.msg=`${isPz?'Puzzel':r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
 
 /* ---------- HTML ---------- */
 /* knoppenrij voor de kant-en-klare rondes (elke ronde opent zijn eigen kies-scherm). */
@@ -215,12 +224,12 @@ function addHTML(){
       ${libButtonsHTML()}
       ${bankHTML}
       <div class="statusbar" style="margin-top:4px"><b>Nieuw maken</b></div>
-      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">${icon('plus',16)}Custom</button><button class="btn ghost" id="b-film">${icon('film',16)}Film</button><button class="btn ghost" id="b-song">${icon('music',16)}Liedje</button></div>
+      <div class="row" style="gap:6px"><button class="btn ghost" id="b-custom">${icon('plus',16)}Custom</button><button class="btn ghost" id="b-film">${icon('film',16)}Film</button><button class="btn ghost" id="b-song">${icon('music',16)}Liedje</button><button class="btn ghost" id="b-puzzle">${icon('eye',16)}Puzzel</button></div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${bankN&&!S.busy?'':'disabled'}>Toevoegen${bankN?` (${bankN})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
 function render(){
-  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick);   // brede twee-koloms-bouwer
+  const builder = (S.view==='film'&&S.filmPick) || (S.view==='song'&&S.songPick) || (S.view==='puzzle'&&S.puzzlePick);   // brede twee-koloms-bouwer
   const w=document.querySelector('.wrap'); if(w) w.classList.toggle('builderwide', !!builder);
   const inner =
     S.view==='add'  ? addHTML() :
@@ -228,6 +237,7 @@ function render(){
     S.view==='custom' ? customFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('cb','Eigen vragen') }) :
     S.view==='film' ? filmFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
     S.view==='song' ? songFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
+    S.view==='puzzle' ? puzzleFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Wie of wat is dit?') }) :
                       editHTML();
   el.innerHTML = `${inner}
     ${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}
@@ -256,6 +266,7 @@ function wire(){
     const cu=$('#b-custom'); if(cu)cu.onclick=()=>{ S.customPick=null; go('custom')(); };
     const f=$('#b-film'); if(f)f.onclick=go('film');
     const sg=$('#b-song'); if(sg)sg.onclick=go('song');
+    const pz=$('#b-puzzle'); if(pz)pz.onclick=()=>{ S.puzzlePick=null; pactions.loadPuzzleCatalog(); go('puzzle')(); };
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
     const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.err=''; S.msg=''; render(); };
     wireRoundPicker('bank');
@@ -281,6 +292,15 @@ function wire(){
     wireMediaForms(el, S, render, actions, {
       onAdd:addMedia,
       onBack:()=>{ S.filmPick=null; S.songPick=null; S.view='add'; S.err=''; render(); },
+      backId:'b-formback',
+      afterBuilderWire:()=>wireRoundPicker('mb'),
+    });
+    return;
+  }
+  if(v==='puzzle'){
+    wirePuzzleForms(el, S, render, pactions, {
+      onAdd:addMedia,
+      onBack:()=>{ S.puzzlePick=null; S.view='add'; S.err=''; render(); },
       backId:'b-formback',
       afterBuilderWire:()=>wireRoundPicker('mb'),
     });

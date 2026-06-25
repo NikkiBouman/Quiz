@@ -28,7 +28,7 @@ document.getElementById('chrome').innerHTML = navMenuHTML('questions', '../../')
 function delItem(i){ if(confirm('Vraag verwijderen?')){ deleteBankItem(i); if(S.addFor===i)S.addFor=null; render(); } }
 
 /* doelronde binnen de quiz: film/liedje naar hun eigen ronde, de rest naar "Eigen vragen". */
-function roundNameFor(it){ return it.bucket==='films'?'Films':it.bucket==='liedjes'?'Liedjes':'Eigen vragen'; }
+function roundNameFor(it){ return it.bucket==='films'?'Films':it.bucket==='liedjes'?'Liedjes':it.bucket==='puzzels'?'Wie of wat is dit?':'Eigen vragen'; }
 
 /* voeg de gekozen vraag toe aan een bestaande of nieuwe quiz en sla op */
 function addToQuiz(i){
@@ -73,6 +73,7 @@ function render(){
       <a class="btn grow center nolink" href="new/?type=custom">${icon('plus',16)}Custom</a>
       <a class="btn grow center nolink" href="new/?type=film">${icon('film',16)}Film</a>
       <a class="btn grow center nolink" href="new/?type=song">${icon('music',16)}Liedje</a>
+      <a class="btn grow center nolink" href="new/?type=puzzle">${icon('eye',16)}Puzzel</a>
     </div>
     <div class="stack edscroll" id="ed-scroll" style="gap:6px">${rows}</div>
     ${S.msg?`<p class="muted feedback txt-ok">${esc(S.msg)}</p>`:''}
