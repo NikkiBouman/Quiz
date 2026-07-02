@@ -414,6 +414,7 @@ const app = {
   unsubPlayers:null, unsubState:null, unsubMe:null, unsubJudges:null, kicked:false,
   judges:{}, preRoundScores:{},
   openPicker:null, confirmKick:null, confirmSkip:false, confirmStop:false, preview:false,
+  managePlayers:false, mergeFrom:null, confirmMerge:null,
 };
 const $ = s => document.querySelector(s);
 const el = $('#app');
@@ -583,6 +584,7 @@ function hostCreate(){
   app.role='host'; app.code=genCode(); app.phase='lobby'; app.round=-1; app.stage=0;
   app.scores={}; app.names={}; app.players=[]; app.results=null;
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
+  app.managePlayers=false; app.mergeFrom=null; app.confirmMerge=null;
   app.judgeToken = genToken(); app.loadInfo=null;
   // op de quizzen-pagina gekozen quiz oppakken, anders de voorbeeldset
   const active = takeActiveQuiz();
@@ -662,6 +664,7 @@ async function hostResume(code){
     app.preRoundScores[pid] = app.scores[pid] - g;
   });
   app.players=[]; app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr='';
+  app.managePlayers=false; app.mergeFrom=null; app.confirmMerge=null;
   const qs = await get(quizRef(code));
   app.quiz = normalizeQuiz(qs.exists() ? qs.val() : SAMPLE);
   const rs = await get(roundsRef(code));
@@ -863,6 +866,39 @@ async function hostKick(pid){
   if(app.results) delete app.results[pid];
   renderHost();
   await remove(playerRef(app.code, pid));
+}
+/* host voegt twee spelers samen (iemand kwam per ongeluk opnieuw binnen als nieuwe speler).
+   De meest recent verbonden node blijft (daar zit de speler nú op); de oudere 'spook'-node
+   schuift zijn punten + antwoordgeschiedenis erin en wordt verwijderd. */
+async function hostMerge(idA, idB){
+  app.confirmMerge=null; app.mergeFrom=null;
+  if(!idA || !idB || idA===idB){ renderHost(); return; }
+  const find = id => app.players.find(p=>p.id===id) || null;
+  const nodeA = find(idA) || {}, nodeB = find(idB) || {};
+  const seenA = nodeA.seen||0, seenB = nodeB.seen||0;
+  const keep = seenA>=seenB ? idA : idB;            // nieuwste verbinding = de live speler
+  const drop = keep===idA ? idB : idA;
+  const keepNode = find(keep) || {id:keep, name:app.names[keep]};
+  const dropNode = find(drop) || {id:drop, name:app.names[drop]};
+  // punten + pre-ronde-basis optellen (buildResults herrekent scores vanuit preRoundScores)
+  app.scores[keep] = (app.scores[keep]||0) + (app.scores[drop]||0);
+  app.preRoundScores[keep] = (app.preRoundScores[keep]||0) + (app.preRoundScores[drop]||0);
+  app.names[keep] = keepNode.name || dropNode.name || app.names[keep] || app.names[drop];
+  // antwoordgeschiedenis samenvoegen: keep wint per ronde, drop vult de gaten
+  const merged = { id:keep, name:app.names[keep], seen:Math.max(seenA,seenB) };
+  for(const f of ['ans','anslabel','astage','bet','pass','ready','guesses']){
+    const u = { ...(dropNode[f]||{}), ...(keepNode[f]||{}) };
+    if(Object.keys(u).length) merged[f] = u;
+  }
+  const clearDrop = ()=>{ delete app.names[drop]; delete app.scores[drop]; delete app.preRoundScores[drop];
+    if(app.results) delete app.results[drop]; app.players = app.players.filter(p=>p.id!==drop); };
+  clearDrop();
+  renderHost();
+  await set(playerRef(app.code, keep), merged);
+  await remove(playerRef(app.code, drop));
+  clearDrop();                                       // spelerslijstener kan de spook tussentijds hebben teruggezet
+  if(app.phase==='reveal') buildResults();
+  pushState(); renderHost();
 }
 
 /* ============================================================
@@ -1220,6 +1256,67 @@ function wirePlayerControls(){
   el.querySelectorAll('[data-pick]').forEach(b=> b.onclick=()=>{ const id=b.dataset.pick; app.openPicker = app.openPicker===id?null:id; renderHost(); });
   el.querySelectorAll('[data-setans]').forEach(b=> b.onclick=()=>{ const [id,i]=b.dataset.setans.split(':'); hostSetAnswer(id, parseInt(i,10)); });
 }
+/* ---- host: spelers beheren (verwijderen / samenvoegen) ----
+   Eén overlay, bereikbaar vanaf elk hostscherm, zodat een per ongeluk opnieuw
+   binnengekomen speler ook midden in het spel weer aan zijn oude score kan. */
+function manageBtnHTML(){
+  return `<button class="btn ghost" id="b-manage" style="font-size:12px;padding:6px 11px;flex:none">Spelers beheren</button>`;
+}
+function managePanelHTML(){
+  if(!app.managePlayers) return '';
+  const ids = Array.from(new Set([ ...app.players.map(p=>p.id), ...Object.keys(app.names||{}) ]));
+  const nameOf = id => { const p=app.players.find(x=>x.id===id); return (p&&p.name) || (app.names&&app.names[id]) || '???'; };
+  const rows = ids.map(id=>{
+    const nm = esc(nameOf(id)), pts = app.scores[id]||0;
+    if(app.mergeFrom===id)
+      return `<div class="reviewrow" style="outline:2px solid var(--blauw)"><span class="rnm">${nm}</span>
+        <span class="rguess">↓ kies hieronder wie dit is</span>
+        <button class="mini" data-mergecancel="1">annuleer</button></div>`;
+    if(app.mergeFrom){
+      if(app.confirmMerge===id)
+        return `<div class="reviewrow"><span class="rnm">${nm}</span>
+          <span class="rguess">samenvoegen met ${esc(nameOf(app.mergeFrom))}?</span>
+          <button class="mini danger" data-mgyes="${id}">Ja</button>
+          <button class="mini" data-mgno="1">Nee</button></div>`;
+      return `<div class="reviewrow"><span class="rnm">${nm}</span>
+        <span class="rguess">${pts} punten</span>
+        <button class="mini" data-mergeinto="${id}">= zelfde persoon</button></div>`;
+    }
+    if(app.confirmKick===id)
+      return `<div class="reviewrow"><span class="rnm">${nm}</span>
+        <span class="rguess">verwijderen?</span>
+        <button class="mini danger" data-mkyes="${id}">Ja</button>
+        <button class="mini" data-mkno="1">Nee</button></div>`;
+    return `<div class="reviewrow"><span class="rnm">${nm}</span>
+      <span class="rguess">${pts} punten</span>
+      <button class="mini" data-merge="${id}">samenvoegen</button>
+      <button class="mini danger" data-mkick="${id}">verwijder</button></div>`;
+  }).join('');
+  const hint = app.mergeFrom
+    ? `Kies de speler die <b>dezelfde persoon</b> is als ${esc(nameOf(app.mergeFrom))}. De punten worden opgeteld en de nieuwste verbinding blijft spelen.`
+    : `Verwijder een speler, of voeg iemand die per ongeluk opnieuw is binnengekomen samen met wie die eerder was.`;
+  return `<div class="modal" id="manage-ov"><div class="modalcard stack" style="gap:12px;max-width:460px">
+      <div class="statusbar"><b>Spelers beheren</b><button class="mini" id="b-manage-close">Sluiten</button></div>
+      <p class="muted" style="margin:0;font-size:12.5px">${hint}</p>
+      <div class="stack" style="gap:6px">${rows || '<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>
+    </div></div>`;
+}
+function wireManage(){
+  const close = ()=>{ app.managePlayers=false; app.mergeFrom=null; app.confirmMerge=null; app.confirmKick=null; renderHost(); };
+  const mb=$('#b-manage'); if(mb) mb.onclick=()=>{ app.managePlayers=true; app.mergeFrom=null; app.confirmMerge=null; app.confirmKick=null; renderHost(); };
+  const mc=$('#b-manage-close'); if(mc) mc.onclick=close;
+  const ov=$('#manage-ov'); if(ov) ov.onclick=e=>{ if(e.target===ov) close(); };
+  // verwijderen
+  el.querySelectorAll('[data-mkick]').forEach(b=> b.onclick=()=>{ app.confirmKick=b.dataset.mkick; renderHost(); });
+  el.querySelectorAll('[data-mkyes]').forEach(b=> b.onclick=()=> hostKick(b.dataset.mkyes));
+  el.querySelectorAll('[data-mkno]').forEach(b=> b.onclick=()=>{ app.confirmKick=null; renderHost(); });
+  // samenvoegen (kies eerst een speler, dan wie diegene eigenlijk is)
+  el.querySelectorAll('[data-merge]').forEach(b=> b.onclick=()=>{ app.mergeFrom=b.dataset.merge; app.confirmMerge=null; app.confirmKick=null; renderHost(); });
+  el.querySelectorAll('[data-mergecancel]').forEach(b=> b.onclick=()=>{ app.mergeFrom=null; app.confirmMerge=null; renderHost(); });
+  el.querySelectorAll('[data-mergeinto]').forEach(b=> b.onclick=()=>{ app.confirmMerge=b.dataset.mergeinto; renderHost(); });
+  el.querySelectorAll('[data-mgyes]').forEach(b=> b.onclick=()=> hostMerge(app.mergeFrom, b.dataset.mgyes));
+  el.querySelectorAll('[data-mgno]').forEach(b=> b.onclick=()=>{ app.confirmMerge=null; renderHost(); });
+}
 /* ---- lokaal ingeladen media (host) ----
    De host kan audio/afbeeldingen van de eigen schijf laden, zodat ze niet op
    GitHub hoeven. Audio speelt alleen de host af; afbeeldingen gaan via de
@@ -1469,7 +1566,8 @@ function hostAside(){
   const r = app.quiz[app.round];
   return `<aside class="hostaside"><div class="card stack" style="gap:10px">
     <div class="statusbar"><b>Spelers</b><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span></div>
-    <div class="plist">${playerRowsHTML('question')}</div></div></aside>`;
+    <div class="plist">${playerRowsHTML('question')}</div>
+    <div class="row" style="justify-content:flex-end">${manageBtnHTML()}</div></div></aside>`;
 }
 /* pas-knop + bevestigingspopup (speler) */
 const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
@@ -1494,11 +1592,14 @@ function wirePass(){
 function renderHost(){
   const wrap = document.querySelector('.wrap');
   if(wrap) wrap.classList.toggle('wide', app.phase==='question');
-  if(app.phase==='lobby') return hostLobby();
-  if(app.phase==='roundintro') return hostRoundIntro();
-  if(app.phase==='question') return hostQuestion();
-  if(app.phase==='reveal') return hostRevealView();
-  if(app.phase==='final') return hostFinal();
+  if(app.phase==='lobby') hostLobby();
+  else if(app.phase==='roundintro') hostRoundIntro();
+  else if(app.phase==='question') hostQuestion();
+  else if(app.phase==='reveal') hostRevealView();
+  else if(app.phase==='final') hostFinal();
+  else return;
+  if(app.managePlayers) el.insertAdjacentHTML('beforeend', managePanelHTML());
+  wireManage();
 }
 function hostLobby(){
   const count = app.players.length;
@@ -1513,7 +1614,7 @@ function hostLobby(){
       </div>
       <p class="muted" style="margin:0;font-size:13px">Quiz: ${quizLink} · ${app.quiz.length} ${app.quiz.length===1?'vraag':'vragen'}</p>
     </div>
-    <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b></div>
+    <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b>${count?manageBtnHTML():''}</div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
     <div class="row">
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
@@ -1532,7 +1633,7 @@ function hostRoundIntro(){
   const rc = roundCtx(app.round);
   const readyN = app.players.filter(p=> p.ready && p.ready[rc.ri]).length;
   el.innerHTML = `
-    <div class="topbar"><span class="tb-round">Ronde ${rc.ri+1}<small> / ${rc.roundCount}</small></span><span class="tb-actions"><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span>${stopBtnHTML()}</span></div>
+    <div class="topbar"><span class="tb-round">Ronde ${rc.ri+1}<small> / ${rc.roundCount}</small></span><span class="tb-actions"><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span>${manageBtnHTML()}${stopBtnHTML()}</span></div>
     <div class="center stack" style="gap:14px;flex:1;justify-content:center">
       <div class="qmeta">Nieuwe ronde</div>
       <h1 style="font-size:clamp(34px,8vw,58px)">${esc(rc.name||('Ronde '+(rc.ri+1)))}</h1>
@@ -1702,7 +1803,7 @@ function hostRevealView(){
   const noAns = app.players.filter(p=> (!res[p.id] || res[p.id].answer==null) && !(res[p.id] && res[p.id].passed)).map(p=>p.name);
   const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
   el.innerHTML = `
-    ${hostHead('<span class="pill ok">Antwoord</span>')}
+    ${hostHead('<span class="pill ok">Antwoord</span>'+manageBtnHTML())}
     <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div>${r.answerImage?imgHTML(resolveMedia(r.answerImage)):''}</div>
     ${grouping}
     <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
@@ -2092,6 +2193,7 @@ async function previewHost(){
   app.role='host'; app.code=genCode(); app.phase='question'; app.round=0; app.stage=0;
   app.scores={}; app.names={}; app.players=[]; app.results=null; app.judges={};
   app.openPicker=null; app.confirmKick=null; app.kicked=false; app.quizErr=''; app.loadInfo=null;
+  app.managePlayers=false; app.mergeFrom=null; app.confirmMerge=null;
   app.judgeToken=genToken(); app.quizFromLibrary=false; app.quizName='Voorbeeld';
   const f=flattenQuiz({ rounds:[{ name:'Voorbeeld', intro:'', questions:[q] }] });
   app.quiz=applyShuffles(normalizeQuiz(f.questions)); app.rounds=f.rounds;

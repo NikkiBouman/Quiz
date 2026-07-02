@@ -444,8 +444,29 @@ Columns: **Speler · Status · [Inzet] · Punten**.
   `.ptable.noinzet`).
 - During `betStep === 'bet'` bets render as **"✓ ingezet"** (hidden) and only reveal the
   actual "uiterlijk hint X" after **"Toon de inzetten"** — so nobody can react to a wager.
-- The kick (✕) control is **lobby-only**; it is removed from the in-game status table. The
+- The inline kick (✕) control stays **lobby-only** on the status table, but the host can kick
+  **and merge** players from any screen via the **"Spelers beheren"** panel (see below). The
   controller still sees the fout-✗ verdict button.
+
+### Spelers beheren (host: kick + merge)
+
+A host-only overlay (`managePanelHTML`/`wireManage`, trigger `manageBtnHTML`) reachable from every
+host screen (lobby, roundintro, question, reveal). It lists every known identity — present player
+nodes **and** score-only ghosts (`Object.keys(app.names)`) — with two actions:
+
+- **Verwijder** — the existing `hostKick(pid)` (remove the node + drop from `names`/`scores`/
+  `results`), now available mid-game, not just in the lobby.
+- **Samenvoegen** — `hostMerge(idA, idB)` for when someone left and rejoined as a **new** player
+  (new `pid`, score 0). Two-tap flow: pick a player, then pick who they *really are*. The survivor
+  is the **most recently connected** node (larger `players/{pid}/seen`, written at `playerJoin`) — so
+  the live device keeps playing — and it **absorbs** the other node: `scores` **and**
+  `preRoundScores` are summed (so reveal's `buildResults` recompute stays consistent), and the
+  answer-history maps (`ans`/`anslabel`/`astage`/`bet`/`pass`/`ready`/`guesses`) are unioned with the
+  survivor winning per round. The ghost node is `remove`d and cleared from the local score maps
+  (twice — once optimistically, once after the awaits, since the `players` listener never deletes
+  absent players and could momentarily re-add the ghost at 0). State: `app.managePlayers`,
+  `app.mergeFrom`, `app.confirmMerge`. **Host-only by design:** only the host writes `state`/scores,
+  so the jury/`?judge=` link cannot do this.
 
 ---
 
@@ -637,7 +658,8 @@ After changes: push (or serve locally), open the page. Test the cross-page flow 
 - **Session reconnect:** `saveSession`/`loadSession`/`clearSession` (per-tab `sessionStorage`,
   §15) — written on host create/resume + player join, read by `boot`.
 - **Host lifecycle:** `hostCreate`, `hostResume`, `startHost`, `hostStart`, `hostBeginRound`,
-  `hostNext`, `hostSkip`, `hostEnd`, `initQuestion`, `hostKick`.
+  `hostNext`, `hostSkip`, `hostEnd`, `initQuestion`, `hostKick`, `hostMerge`,
+  `manageBtnHTML`/`managePanelHTML`/`wireManage` (the "Spelers beheren" kick+merge panel).
 - **Host question flow:** `hostQuestion`, `hostStagesHTML`, `hostCheck`, `hostNextHint`,
   `hostStartPlay`, `hostRevealBets`, `hostReveal`, `hostRevealView`, `hostToggleCorrect`,
   `hostSetAnswer`, `hostHead`, `hostAside`, `hostRoundIntro`, `hostLobby`, `hostFinal`.
