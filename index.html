@@ -751,6 +751,40 @@ function effectiveCorrect(round, pid, auto){
   const o = app.judges && app.judges[round] ? app.judges[round][pid] : undefined;
   return (o===true||o===false) ? o : auto;
 }
+/* hint-vragen: na een foute gok mag een speler bij élke nieuwe hint opnieuw raden (zie de
+   speler-flow in playerQuestion). Zijn antwoord van een vórige hint telt dan niet meer als
+   "geantwoord" voor de huidige hint — een góede gok blijft wél vergrendeld. Zonder dit blijft
+   de status bij de host/controleur op "geantwoord" hangen zodra je naar de volgende hint gaat. */
+function staleGuess(r, p, round, stage){
+  if(!r || !Array.isArray(r.stages)) return false;
+  const a = (p.ans && p.ans[round]!=null) ? p.ans[round] : null;
+  if(a==null) return false;
+  const lock = (p.astage && p.astage[round]!=null) ? p.astage[round] : null;
+  if(lock==null || lock>=stage) return false;                 // op de huidige hint geantwoord
+  return !effectiveCorrect(round, p.id, isCorrectAns(r, a));   // fout op een vorige hint → opnieuw aan het raden
+}
+/* volledige gok-geschiedenis van één speler bij een hint-vraag: per hint wat ze gokten + goed/fout.
+   Opgebouwd uit players/{pid}/guesses/{round}/{stage} = {ans,label} (geschreven door playerSubmit/
+   playerPass/hostSetAnswer; eerdere gokken worden niet overschreven). Alleen host + jury lezen de
+   speler-nodes, dus dit lekt niets naar andere spelers. Geeft '' als er geen geschiedenis is. */
+function guessTrailHTML(r, p, round){
+  const gobj = p.guesses && p.guesses[round];
+  if(!gobj || typeof gobj!=='object') return '';
+  const lock = (p.astage && p.astage[round]!=null) ? p.astage[round] : null;
+  // Firebase kan een map met sleutels 0/1/2… als array teruggeven (met null-gaten als een hint is
+  // overgeslagen) → alleen echte entries meenemen, anders verschijnen er spook-gokken
+  const stages = Object.keys(gobj).map(Number).filter(n=>!isNaN(n) && gobj[n]!=null).sort((a,b)=>a-b);
+  if(!stages.length) return '';
+  const chips = stages.map(s=>{
+    const gy = gobj[s] || {};
+    const label = gy.label || (gy.ans!=null?String(gy.ans):'—');
+    if(gy.ans===PASS_ANS) return `<span class="trailchip pass">hint ${s+1}: ⤴ gepast</span>`;
+    // de vergrendelde (laatste) gok kan handmatig overruled zijn; eerdere gokken zijn per definitie fout
+    const ok = (s===lock) ? effectiveCorrect(round, p.id, isCorrectAns(r, gy.ans)) : isCorrectAns(r, gy.ans);
+    return `<span class="trailchip ${ok?'good':'bad'}">hint ${s+1}: ${esc(label)} ${ok?'✓':'✗'}</span>`;
+  }).join('');
+  return `<div class="guesstrail">${chips}</div>`;
+}
 /* resultaten + score voor de huidige ronde (her)berekenen */
 function buildResults(){
   const r = app.quiz[app.round];
@@ -816,7 +850,10 @@ async function hostSetAnswer(pid, idx){
   }
   renderHost();
   await set(ansRef(app.code, pid, app.round), idx);
-  if(staged) await set(ref(db, `games/${app.code}/players/${pid}/astage/${app.round}`), app.stage);
+  if(staged){
+    await set(ref(db, `games/${app.code}/players/${pid}/astage/${app.round}`), app.stage);
+    await set(ref(db, `games/${app.code}/players/${pid}/guesses/${app.round}/${app.stage}`), { ans: idx, label: (r.options&&r.options[idx])||'' });
+  }
 }
 /* host verwijdert een speler handmatig */
 async function hostKick(pid){
@@ -940,11 +977,15 @@ function renderController(){
     const passed = !!(p.pass&&p.pass[round]);
     const auto = isCorrectAns(r,a);
     const eff = effectiveCorrect(round, p.id, auto);
-    const ans = passed?'⤴ gepast':(a==null?'— nog niet':(al||String(a)));
-    const dis = (a==null||passed)?'disabled':'';
+    // tijdens het spelen telt een foute gok van een vorige hint niet meer (speler raadt opnieuw); bij de onthulling wél
+    const stale = g.phase==='question' && staleGuess(r, p, round, g.stage||0);
+    const ans = passed?'⤴ gepast':((a==null||stale)?'— nog niet':(al||String(a)));
+    const dis = (a==null||passed||stale)?'disabled':'';
+    // bij de onthulling: hele gok-historie per speler (hint voor hint); tijdens het spelen alleen de huidige gok
+    const trail = (g.phase==='reveal' && Array.isArray(r.stages)) ? guessTrailHTML(r, p, round) : '';
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess">${esc(ans)}</span>
+      <span class="rguess${trail?' wrap':''}">${trail||esc(ans)}</span>
       ${partialBadges(r, al, eff)}
       <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
     </div>`;
@@ -987,8 +1028,11 @@ async function playerSubmit(){
   await set(ansRef(app.code, app.pid, r), val);
   await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), label||'');
   if(cur.staged){
-    app.myStage = cur.stage||0;
-    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), cur.stage||0);
+    const st = cur.stage||0;
+    app.myStage = st;
+    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), st);
+    // gok van déze hint apart bewaren (niet overschrijven) → host/jury zien straks de hele gok-historie
+    await set(ref(db, `games/${app.code}/players/${app.pid}/guesses/${r}/${st}`), { ans: val, label: label||'' });
   }
   app.sel=null; app.searchPick=null; app.searchOpen=false; app.reguess=false;
   renderPlayer();
@@ -1018,8 +1062,10 @@ async function playerPass(){
   await set(ansRef(app.code, app.pid, r), PASS_ANS);
   await set(ref(db, `games/${app.code}/players/${app.pid}/anslabel/${r}`), '⤴ gepast');
   if(cur && cur.staged){
-    app.myStage = cur.stage||0;
-    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), cur.stage||0);
+    const st = cur.stage||0;
+    app.myStage = st;
+    await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), st);
+    await set(ref(db, `games/${app.code}/players/${app.pid}/guesses/${r}/${st}`), { ans: PASS_ANS, label: '⤴ gepast' });
   }
   renderPlayer();
 }
@@ -1132,11 +1178,12 @@ function playerRowsHTML(mode){
     const passed = !!(p.pass && p.pass[app.round]);
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
     const correct = a!=null && effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
+    const stale = staleGuess(r, p, app.round, app.stage);   // gok van een vorige hint → speler raadt opnieuw
     const score = app.scores[p.id]||0;
     // STATUS
     let st;
     if(passed) st = `<span class="stbadge pass">⤴ gepast</span>`;
-    else if(a==null) st = `<span class="stbadge wait">nadenken…</span>`;
+    else if(a==null || stale) st = `<span class="stbadge wait">nadenken…</span>`;
     else if(!staged || !app.checked) st = `<span class="stbadge done">✓ geantwoord</span>`;
     else if(correct) st = `<span class="stbadge good">goed ✓</span>`;
     else st = `<span class="stbadge bad">fout ✗</span>${partialBadges(r, al, false)}`;
@@ -1643,9 +1690,11 @@ function hostRevealView(){
   const answered = app.players.filter(p=> res[p.id] && res[p.id].answer!=null);
   const reviewRows = answered.map(p=>{
     const rr = res[p.id];
+    const trail = Array.isArray(r.stages) ? guessTrailHTML(r, p, app.round) : '';   // hele gok-historie bij hint-vragen
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess">${esc(rr.label||'—')}${rr.gained>0?` <span class="pts">+${rr.gained}</span>`:''}</span>
+      <span class="rguess${trail?' wrap':''}">${trail||esc(rr.label||'—')}</span>
+      ${rr.gained>0?`<span class="pts">+${rr.gained}</span>`:''}
       ${partialBadges(r, rr.label, rr.correct)}
       <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
     </div>`;

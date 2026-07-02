@@ -133,6 +133,9 @@ games/{CODE}/
     ans/{round}              # the player's answer (index | api-id | string)
     anslabel/{round}         # human-readable label of that answer
     astage/{round}           # the stage at which they locked in (for bet/points-by-stage)
+    guesses/{round}/{stage}  # staged questions only: {ans,label} per hint they guessed at — the full
+                             #   guess trail (earlier wrong guesses are NOT overwritten like ans/ is).
+                             #   Host/jury-only display at reveal (guessTrailHTML); never pushed to players.
     bet/{round}              # bet = stage index they wagered on
     pass/{round}             # true if they passed
     ready/{roundIdx}         # true if they tapped "Ik snap het" on a round intro
@@ -376,7 +379,10 @@ lobby ──hostStart──▶ roundintro ──hostBeginRound──▶ question
   - `'play'` — hints play out; the host runs `hostCheck` per stage; `hostNextHint` advances.
 - **`reveal`** — `hostReveal` calls `buildResults()` and shows the answer + per-player
   outcome. For non-multiple-choice questions, players also see an **"Alle gokken"** recap of
-  everyone's guess (`allGuessesHTML`). Host can still toggle verdicts here.
+  everyone's guess (`allGuessesHTML`). Host can still toggle verdicts here. For **staged**
+  questions the host + jury reveal rows show each player's **full guess trail** — hint-by-hint,
+  including the earlier wrong guesses — via `guessTrailHTML`, read from `players/{pid}/guesses`
+  (§5). The trail is host/jury-only; players see only their own guesses.
 - **`final`** — `hostFinal()` shows the podium/leaderboard.
 
 ### Navigation functions

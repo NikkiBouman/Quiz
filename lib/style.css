@@ -176,7 +176,14 @@
   .reviewrow{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface-2);border-radius:10px}
   .reviewrow .rnm{font-weight:600;flex:none;min-width:64px}
   .reviewrow .rguess{flex:1;font-size:14px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .reviewrow .pts{color:var(--groen);font-weight:700}
+  .reviewrow .rguess.wrap{overflow:visible;text-overflow:clip;white-space:normal}
+  .reviewrow .pts{flex:none;color:var(--groen);font-weight:700;white-space:nowrap}
+  /* gok-historie (hint voor hint) bij de onthulling van een hint-vraag */
+  .guesstrail{display:flex;flex-wrap:wrap;gap:6px}
+  .trailchip{font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
+  .trailchip.good{color:var(--groen);border-color:rgba(67,214,160,.5);background:rgba(67,214,160,.12)}
+  .trailchip.bad{color:var(--rood);border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)}
+  .trailchip.pass{color:var(--muted)}
   .judge{flex:none;padding:7px 12px;border-radius:var(--r-btn-sm);font-size:13px;font-weight:700;border:1px solid var(--line)}
   .judge.jok{background:rgba(67,214,160,.18);color:var(--groen);border-color:rgba(67,214,160,.5)}
   .judge.jbad{background:rgba(255,93,108,.16);color:var(--rood);border-color:rgba(255,93,108,.45)}
