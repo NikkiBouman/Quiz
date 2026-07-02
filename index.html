@@ -274,6 +274,12 @@ function factsHTML(r, isHost){
     return `<span class="pill">${f.label?esc(f.label)+': ':''}${esc(f.value)}</span>`;
   }).join('')}</div>`;
 }
+/* uitleg/feitje bij het antwoord — alleen zichtbaar bij de reveal (host + speler). Leeg = niets. */
+function explainHTML(text){
+  const t = (text==null?'':String(text)).trim();
+  if(!t) return '';
+  return `<div class="card explain"><div class="explain-h">${icon('info',15)} Wist je dat…</div><p class="explain-b">${esc(t)}</p></div>`;
+}
 /* tekst normaliseren voor losse antwoordvergelijking */
 function normTxt(s){ return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
 /* is dit antwoord goed? ondersteunt lijst/zoek (id of index), tekst, én meerdere juiste antwoorden (array) */
@@ -492,6 +498,7 @@ function publicCurrent(){
     base.answer = r.answer;
     base.answerLabel = r.answerLabel || (base.optionsMode==='list' && base.options ? base.options[r.answer] : '') || '';
     if(r.answerImage) base.answerImage = resolveMedia(r.answerImage) || null;
+    if(r.explanation) base.explanation = r.explanation;   // uitleg/feitje: pas bij reveal meesturen (geen spoiler)
   }
   return base;
 }
@@ -1805,6 +1812,7 @@ function hostRevealView(){
   el.innerHTML = `
     ${hostHead('<span class="pill ok">Antwoord</span>'+manageBtnHTML())}
     <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div>${r.answerImage?imgHTML(resolveMedia(r.answerImage)):''}</div>
+    ${explainHTML(r.explanation)}
     ${grouping}
     <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
       <p class="muted" style="margin:0;font-size:12px">Tik op goed/fout om handmatig te overrulen.</p>
@@ -2148,7 +2156,7 @@ function playerReveal(){
         ? `<h1 style="color:var(--groen)">Goed! +${res.gained}</h1>`
         : `<h1 style="color:${myParts?'var(--geel)':'var(--rood)'}">${myParts?'Bijna!':'Helaas, fout'}</h1>${myParts?`<div class="parthold">${myParts}</div>`:''}`)
     : `<h1 class="muted">Geen antwoord ingestuurd</h1>`;
-  el.innerHTML = `<div class="center stack">${banner}</div>${body}${playerLeaderboardHTML()}
+  el.innerHTML = `<div class="center stack">${banner}</div>${body}${explainHTML(c.explanation)}${playerLeaderboardHTML()}
     <p class="footnote">Wachten op de host voor de volgende vraag <span class="waiting-dots"></span></p>`;
 }
 function playerFinal(){

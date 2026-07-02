@@ -278,6 +278,10 @@
   /* hoofdbeeld in de info-rij: eigen regel, gecentreerd, originele aspect-ratio (geen uitrekken) */
   .factsrow .factmain{flex-basis:100%;width:100%;text-align:center;margin-top:4px}
   .factsrow .factmain .qimg{display:inline-block;width:auto;max-width:100%;max-height:340px;margin:0}
+  /* uitleg/feitje bij de reveal (host + speler) */
+  .card.explain{background:linear-gradient(180deg, rgba(43,127,255,.07), var(--surface));border-color:rgba(43,127,255,.35);padding:14px 16px}
+  .explain-h{display:flex;align-items:center;gap:7px;color:var(--blauw);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+  .explain-b{margin:0;color:var(--ink);font-size:15px;line-height:1.5;white-space:pre-wrap}
   /* sleep-bouwer met drie zones (quizzes.html / questions.html) */
   .czone{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--surface)}
   .czone-h{font-size:13px;font-weight:700;color:var(--ink);margin:0 2px 6px}

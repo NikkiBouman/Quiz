@@ -226,6 +226,7 @@ Fields (most are optional; `normalizeQuiz` fills in the rest):
 | `clipStart` / `clipEnd` | Optional seconds — play only this window of the `audio`. Works on a top-level `audio` *or* a stage's `audio`. Enforced host-side by `wireClips()` (seek to start, pause at end). Used by song questions (Deezer previews are a fixed ~30s, so this clips *within* that snippet). |
 | `answerImage` | Image shown on the **reveal** screen (e.g. a puzzle's `full.*` composite). Resolved like any media; sent to players via `publicCurrent` only at reveal. Film questions set this to the poster. |
 | `facts`       | **Info-subkop** (always-visible context): array of `{label, value}` (text pill), `{label, image}` (small photo), `{label, video}` (inline clip, sent to players), or `{label, audio}` (**host-only** — `publicCurrent` strips the src, players see a "🔊" pill). Rendered by `factsHTML(r, isHost)` on host + player; forwarded by `publicCurrent` in **all** phases (it's context, never the answer — the builder excludes the answer). Produced by the **Info** zone of the media builder *and* the custom builder (§22). |
+| `explanation` | Optional free-text **uitleg/feitje shown only at reveal** (host + player), rendered by `explainHTML(text)` under the answer spotlight. Unlike `facts` (always visible), it is sent to players via `publicCurrent` **only during `reveal`**, so it can't spoil. A single editor textarea (`#mb-explain`) in both builders; empty → field omitted, so pre-existing questions render nothing. |
 | `source`      | Host-only builder metadata for film/song questions: `{kind:'tmdb'\|'deezer', id, label, clues:[…], preview?}`. Lets the question bank re-open the builder **losslessly** (zones + per-actor naam/foto toggles). Ignored by the game and **not** sent to players (`publicCurrent` omits it). Also makes `qTypeLabel` report film/lied even when the answer is a fact. |
 | `stages`      | Array of progressive hints — presence makes the question "staged" (see below). |
 | `bet`         | Optional explicit betting toggle (boolean). When set it wins over the `betMultiplier` heuristic; when absent, betting is derived from whether any stage has a `betMultiplier`. Only meaningful for staged questions. |
@@ -382,7 +383,8 @@ lobby ──hostStart──▶ roundintro ──hostBeginRound──▶ question
   everyone's guess (`allGuessesHTML`). Host can still toggle verdicts here. For **staged**
   questions the host + jury reveal rows show each player's **full guess trail** — hint-by-hint,
   including the earlier wrong guesses — via `guessTrailHTML`, read from `players/{pid}/guesses`
-  (§5). The trail is host/jury-only; players see only their own guesses.
+  (§5). The trail is host/jury-only; players see only their own guesses. If the question has an
+  `explanation`, both host and players see it here under the answer (`explainHTML`, §7).
 - **`final`** — `hostFinal()` shows the podium/leaderboard.
 
 ### Navigation functions
@@ -476,7 +478,7 @@ nodes **and** score-only ghosts (`Object.keys(app.names)`) — with two actions:
   `rc: roundCtx(app.round)` for the current question and `current: publicCurrent()`.
 - **`publicCurrent()`** builds the player-facing question payload: resolves image media to
   data-URIs, **omits audio paths**, only includes stages up to `app.stage` (or all on
-  reveal), and adds `answer`/`answerLabel` only during `reveal`.
+  reveal), and adds `answer`/`answerLabel`/`explanation` only during `reveal`.
 - **Listeners** (`startHost` / `startPlayer`):
   - Host subscribes to `players` (recompute `answeredCount`, rebuild results on reveal,
     re-push, re-render) and `judge` (re-judge on overrides).
