@@ -1068,12 +1068,22 @@ function renderController(){
     const dis = (a==null||passed||stale)?'disabled':'';
     // hele gok-historie per speler (hint voor hint) i.p.v. alleen de laatste gok, met de switch aan ook goed te keuren
     const trail = showTrail ? guessTrailHTML(r, p, round, {approve}) : '';
-    return `<div class="reviewrow">
-      <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess${trail?' has-trail':''}">${trail||esc(ans)}</span>
-      ${partialBadges(r, al, eff)}
-      <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
-    </div>`;
+    return trail
+      ? `<div class="reviewrow" style="flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="rnm">${esc(p.name)}</span>
+            <span class="grow"></span>
+            ${partialBadges(r, al, eff)}
+            <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
+          </div>
+          <span class="rguess has-trail">${trail}</span>
+        </div>`
+      : `<div class="reviewrow">
+          <span class="rnm">${esc(p.name)}</span>
+          <span class="rguess">${esc(ans)}</span>
+          ${partialBadges(r, al, eff)}
+          <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
+        </div>`;
   }).join('');
   const trailToggle = staged
     ? `<label class="ctrltoggle"><input type="checkbox" id="c-showtrail" ${app.ctrlShowTrail?'checked':''}> toon eerdere antwoorden</label>`
@@ -1860,13 +1870,24 @@ function hostRevealView(){
   const reviewRows = answered.map(p=>{
     const rr = res[p.id];
     const trail = Array.isArray(r.stages) ? guessTrailHTML(r, p, app.round) : '';   // hele gok-historie bij hint-vragen
-    return `<div class="reviewrow">
-      <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess${trail?' has-trail':''}">${trail||esc(rr.label||'—')}</span>
-      ${reviewPtsHTML(r, rr)}
-      ${partialBadges(r, rr.label, rr.correct)}
-      <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
-    </div>`;
+    return trail
+      ? `<div class="reviewrow" style="flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="rnm">${esc(p.name)}</span>
+            <span class="grow"></span>
+            ${reviewPtsHTML(r, rr)}
+            ${partialBadges(r, rr.label, rr.correct)}
+            <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
+          </div>
+          <span class="rguess has-trail">${trail}</span>
+        </div>`
+      : `<div class="reviewrow">
+          <span class="rnm">${esc(p.name)}</span>
+          <span class="rguess">${esc(rr.label||'—')}</span>
+          ${reviewPtsHTML(r, rr)}
+          ${partialBadges(r, rr.label, rr.correct)}
+          <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
+        </div>`;
   }).join('');
   const noAns = app.players.filter(p=> (!res[p.id] || res[p.id].answer==null) && !(res[p.id] && res[p.id].passed)).map(p=>p.name);
   const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
