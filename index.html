@@ -1801,7 +1801,7 @@ function hostRevealView(){
     const trail = Array.isArray(r.stages) ? guessTrailHTML(r, p, app.round) : '';   // hele gok-historie bij hint-vragen
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess${trail?' wrap':''}">${trail||esc(rr.label||'—')}</span>
+      <span class="rguess${trail?' has-trail':''}">${trail||esc(rr.label||'—')}</span>
       ${rr.gained>0?`<span class="pts">+${rr.gained}</span>`:''}
       ${partialBadges(r, rr.label, rr.correct)}
       <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
@@ -1851,15 +1851,35 @@ function podiumHTML(){
 /* ============================================================
    RENDER — SPELER
    ============================================================ */
+/* Unieke sleutel voor de huidige sub-view van de speler. Wordt gebruikt om te detecteren
+   of de view echt verandert of dat het alleen een state-update is (bv. answeredCount).
+   Als de sleutel gelijk blijft, herstellen we de scroll-positie na de re-render zodat
+   een update van een andere speler het scherm niet doet verspringen. */
+function playerViewKey(){
+  const g = app.game; if(!g) return 'none';
+  if(g.phase !== 'question') return g.phase;
+  const r = g.round;
+  if(app.passed[r]) return 'q:passed';
+  if(g.betStep==='bet' && (app.bet||{})[r]==null) return 'q:bet';
+  if(g.betStep==='bet') return 'q:betwait';
+  if(g.betStep==='reveal') return 'q:betreveal';
+  if(app.submittedRound===r) return 'q:submitted:'+g.stage;
+  return 'q:answering:'+g.stage;
+}
 function renderPlayer(){
   const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
-  if(g.phase==='lobby')   return playerLobby();
-  if(g.phase==='roundintro') return playerRoundIntro();
-  if(g.phase==='question')return playerQuestion();
-  if(g.phase==='reveal')  return playerReveal();
-  if(g.phase==='final')   return playerFinal();
+  const prevKey = playerViewKey();
+  const savedScroll = window.scrollY;
+  if(g.phase==='lobby')        playerLobby();
+  else if(g.phase==='roundintro') playerRoundIntro();
+  else if(g.phase==='question')   playerQuestion();
+  else if(g.phase==='reveal')     playerReveal();
+  else if(g.phase==='final')      playerFinal();
+  // Herstel scroll als de view niet veranderd is (bijv. alleen answeredCount bijgewerkt)
+  if(prevKey === playerViewKey() && savedScroll > 0)
+    requestAnimationFrame(()=> window.scrollTo(0, savedScroll));
 }
 function renderPlayerKicked(){
   el.innerHTML = `<div class="center stack">
