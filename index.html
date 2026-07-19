@@ -756,6 +756,21 @@ function pointsInfo(r, correct, lock, bet, stage){
   }
   return correct ? { text:`+${base}`, kind:'win' } : { text:'0', kind:'bust' };
 }
+/* puntenberekening voor de review-rij na afloop: toont de breakdown bij hint-vragen */
+function reviewPtsHTML(r, rr){
+  if(!rr.correct) return '';
+  if(Array.isArray(r.stages)){
+    const base = r.points ?? 100;
+    const stagePts = Math.round(base * hintFraction(rr.lock, r.stages.length, r.pointsByStage, base));
+    if(r.betting){
+      if(!rr.won) return `<span class="pts" style="color:var(--muted)">0</span>`;
+      const mul = (r.betMultipliers||[])[rr.bet]||1;
+      return `<span class="pts">${stagePts} × ${mul} = +${rr.gained}</span>`;
+    }
+    return `<span class="pts">+${stagePts}</span>`;
+  }
+  return rr.gained > 0 ? `<span class="pts">+${rr.gained}</span>` : '';
+}
 /* effectieve correctheid: handmatig oordeel (host/controleur) overruult de auto-check */
 function effectiveCorrect(round, pid, auto){
   const o = app.judges && app.judges[round] ? app.judges[round][pid] : undefined;
@@ -1802,7 +1817,7 @@ function hostRevealView(){
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
       <span class="rguess${trail?' has-trail':''}">${trail||esc(rr.label||'—')}</span>
-      ${rr.gained>0?`<span class="pts">+${rr.gained}</span>`:''}
+      ${reviewPtsHTML(r, rr)}
       ${partialBadges(r, rr.label, rr.correct)}
       <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
     </div>`;
