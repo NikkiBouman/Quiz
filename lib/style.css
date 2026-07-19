@@ -3,6 +3,7 @@
     --bg:#eaf1fb; --bg2:#ffffff; --surface:#ffffff; --surface-2:#eef4fc;
     --ink:#142944; --muted:#5d6b82; --line:#d6e3f2; --gold:#2b7fff;
     --rood:#e5484d; --blauw:#2b7fff; --geel:#e29400; --groen:#16a173;
+    --paars:#7c3aed; --oranje:#e8620a; --roze:#d63384; --cyaan:#0891b2;
     --radius:18px; --r-btn:14px; --r-btn-sm:11px; --shadow:0 16px 34px -20px rgba(31,68,128,.30);
     --display:"Space Grotesk", ui-sans-serif, system-ui, sans-serif;
     --body:"Inter", ui-sans-serif, system-ui, sans-serif;
@@ -64,6 +65,8 @@
   .ans[data-c="2"]{box-shadow:inset 4px 0 0 var(--geel)} .ans[data-c="3"]{box-shadow:inset 4px 0 0 var(--groen)}
   .ans[data-c="0"] .shape{color:var(--rood)} .ans[data-c="1"] .shape{color:var(--blauw)}
   .ans[data-c="2"] .shape{color:var(--geel)} .ans[data-c="3"] .shape{color:var(--groen)}
+  .ans[data-c="4"] .shape{color:var(--paars)} .ans[data-c="5"] .shape{color:var(--oranje)}
+  .ans[data-c="6"] .shape{color:var(--roze)} .ans[data-c="7"] .shape{color:var(--cyaan)}
   .ans.sel{border-color:var(--gold);background:#dce9fb}
   .ans.correct{border-color:var(--groen);background:rgba(67,214,160,.16)}
   .ans.wrong{border-color:var(--rood);background:rgba(255,93,108,.14);opacity:.85}
@@ -121,6 +124,8 @@
   .popt .shape{font-size:17px;width:24px;text-align:center;flex:none}
   .popt[data-c="0"] .shape{color:var(--rood)} .popt[data-c="1"] .shape{color:var(--blauw)}
   .popt[data-c="2"] .shape{color:var(--geel)} .popt[data-c="3"] .shape{color:var(--groen)}
+  .popt[data-c="4"] .shape{color:var(--paars)} .popt[data-c="5"] .shape{color:var(--oranje)}
+  .popt[data-c="6"] .shape{color:var(--roze)} .popt[data-c="7"] .shape{color:var(--cyaan)}
   /* reveal: wie koos wat */
   .ansline{border-radius:14px;border:2px solid transparent;background:var(--surface-2);padding:12px 14px}
   .ansline.correct{border-color:var(--groen);background:rgba(67,214,160,.14)}
@@ -128,6 +133,8 @@
   .ans-head{display:flex;align-items:center;gap:12px;font-weight:600;font-size:16px}
   .ansline[data-c="0"] .shape{color:var(--rood)} .ansline[data-c="1"] .shape{color:var(--blauw)}
   .ansline[data-c="2"] .shape{color:var(--geel)} .ansline[data-c="3"] .shape{color:var(--groen)}
+  .ansline[data-c="4"] .shape{color:var(--paars)} .ansline[data-c="5"] .shape{color:var(--oranje)}
+  .ansline[data-c="6"] .shape{color:var(--roze)} .ansline[data-c="7"] .shape{color:var(--cyaan)}
   .ans-head .shape{font-size:18px;width:24px;text-align:center;flex:none}
   .ans-head .otxt{flex:1}
   .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:var(--groen);padding:3px 8px;border-radius:999px}
