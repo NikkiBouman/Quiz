@@ -1853,7 +1853,7 @@ function leaderboardHTML(showGain){
   if(!rows.length) return '';
   return `<div class="card lb">${rows.map((p,i)=>`<div class="lbrow">
       <span class="rank">${i+1}</span><span class="nm">${esc(p.name)}</span>
-      ${showGain && p.gain>0?`<span class="gain">+${p.gain}</span>`:''}<span class="sc">${p.score}</span></div>`).join('')}</div>`;
+      ${showGain?`<span class="gain">+${p.gain}</span>`:''}<span class="sc">${p.score}</span></div>`).join('')}</div>`;
 }
 function podiumHTML(){
   const rows = Object.keys(app.names).map(pid=>({name:app.names[pid],score:app.scores[pid]||0})).sort((a,b)=>b.score-a.score);
