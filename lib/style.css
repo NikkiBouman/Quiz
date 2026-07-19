@@ -183,7 +183,7 @@
   .reviewrow{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface-2);border-radius:10px}
   .reviewrow .rnm{font-weight:600;flex:none;min-width:64px}
   .reviewrow .rguess{flex:1;font-size:14px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .reviewrow .rguess.wrap{overflow:visible;text-overflow:clip;white-space:normal}
+  .reviewrow .rguess.has-trail{overflow:visible;text-overflow:clip;white-space:normal}
   .reviewrow .pts{flex:none;color:var(--groen);font-weight:700;white-space:nowrap}
   /* gok-historie (hint voor hint) bij de onthulling van een hint-vraag */
   .guesstrail{display:flex;flex-wrap:wrap;gap:6px}

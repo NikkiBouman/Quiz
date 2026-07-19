@@ -793,7 +793,7 @@ function guessTrailHTML(r, p, round){
     const ok = (s===lock) ? effectiveCorrect(round, p.id, isCorrectAns(r, gy.ans)) : isCorrectAns(r, gy.ans);
     return `<span class="trailchip ${ok?'good':'bad'}">hint ${s+1}: ${esc(label)} ${ok?'✓':'✗'}</span>`;
   }).join('');
-  return `<div class="guesstrail">${chips}</div>`;
+  return `<span class="guesstrail">${chips}</span>`;
 }
 /* resultaten + score voor de huidige ronde (her)berekenen */
 function buildResults(){
@@ -1028,7 +1028,7 @@ function renderController(){
     const trail = (g.phase==='reveal' && Array.isArray(r.stages)) ? guessTrailHTML(r, p, round) : '';
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
-      <span class="rguess${trail?' wrap':''}">${trail||esc(ans)}</span>
+      <span class="rguess${trail?' has-trail':''}">${trail||esc(ans)}</span>
       ${partialBadges(r, al, eff)}
       <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
     </div>`;
