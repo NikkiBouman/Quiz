@@ -191,6 +191,13 @@
   .trailchip.good{color:var(--groen);border-color:rgba(67,214,160,.5);background:rgba(67,214,160,.12)}
   .trailchip.bad{color:var(--rood);border-color:rgba(255,93,108,.45);background:rgba(255,93,108,.10)}
   .trailchip.pass{color:var(--muted)}
+  .trailchip.tappable{cursor:pointer;font-family:inherit;line-height:1.3}
+  .trailchip.tappable:hover{border-color:var(--blauw)}
+  .trailchip.tappable:active{transform:scale(.97)}
+  /* controleur: kop met de "toon eerdere antwoorden"-switch */
+  .ctrlbeoordeel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .ctrltoggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+  .ctrltoggle input{accent-color:var(--blauw)}
   .judge{flex:none;padding:7px 12px;border-radius:var(--r-btn-sm);font-size:13px;font-weight:700;border:1px solid var(--line)}
   .judge.jok{background:rgba(67,214,160,.18);color:var(--groen);border-color:rgba(67,214,160,.5)}
   .judge.jbad{background:rgba(255,93,108,.16);color:var(--rood);border-color:rgba(255,93,108,.45)}

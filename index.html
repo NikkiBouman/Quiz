@@ -763,7 +763,7 @@ function reviewPtsHTML(r, rr){
     const base = r.points ?? 100;
     const stagePts = Math.round(base * hintFraction(rr.lock, r.stages.length, r.pointsByStage, base));
     if(r.betting){
-      if(!rr.won) return `<span class="pts" style="color:var(--muted)">0</span>`;
+      if(!rr.won) return `<span class="pts" style="color:var(--muted)">inzet hint ${(rr.bet??0)+1}, goed bij hint ${(rr.lock??0)+1} → 0</span>`;
       const mul = (r.betMultipliers||[])[rr.bet]||1;
       return `<span class="pts">${stagePts} × ${mul} = +${rr.gained}</span>`;
     }
@@ -771,10 +771,29 @@ function reviewPtsHTML(r, rr){
   }
   return rr.gained > 0 ? `<span class="pts">+${rr.gained}</span>` : '';
 }
-/* effectieve correctheid: handmatig oordeel (host/controleur) overruult de auto-check */
+/* effectieve correctheid: handmatig oordeel (host/controleur) overruult de auto-check.
+   Een oordeel kan ook naar een specifieke hint wijzen ({stage:N}) — dan is die gok goedgekeurd
+   en telt de speler als goed (zie judgedOutcome voor welke hint de punten bepaalt). */
 function effectiveCorrect(round, pid, auto){
   const o = app.judges && app.judges[round] ? app.judges[round][pid] : undefined;
+  if(o && typeof o==='object') return true;              // goedgekeurde hint → goed
   return (o===true||o===false) ? o : auto;
+}
+/* het volledige oordeel voor een speler in deze ronde → {correct, lock, ans, label}.
+   Wijst het oordeel naar een eerdere hint ({stage}), dan telt díe gok als goed, met de punten
+   van díe hint — zo kan de controleur een eerder hint-antwoord alsnog goedkeuren. Anders geldt
+   het boolean-oordeel (of de auto-check) op de vergrendelde (laatste) gok. */
+function judgedOutcome(r, p, round){
+  const lastAns  = (p.ans && p.ans[round]!=null) ? p.ans[round] : null;
+  const lastLbl  = (p.anslabel && p.anslabel[round]!=null) ? p.anslabel[round] : null;
+  const lastLock = (p.astage && p.astage[round]!=null) ? p.astage[round] : null;
+  const o = app.judges && app.judges[round] ? app.judges[round][p.id] : undefined;
+  if(o && typeof o==='object' && o.stage!=null){
+    const gy = p.guesses && p.guesses[round] && p.guesses[round][o.stage];
+    if(gy && gy.ans!=null) return { correct:true, lock:Number(o.stage), ans:gy.ans, label:gy.label||String(gy.ans) };
+  }
+  const correct = (o===true||o===false) ? o : isCorrectAns(r, lastAns);
+  return { correct, lock:lastLock, ans:lastAns, label:lastLbl };
 }
 /* hint-vragen: na een foute gok mag een speler bij élke nieuwe hint opnieuw raden (zie de
    speler-flow in playerQuestion). Zijn antwoord van een vórige hint telt dan niet meer als
@@ -792,10 +811,15 @@ function staleGuess(r, p, round, stage){
    Opgebouwd uit players/{pid}/guesses/{round}/{stage} = {ans,label} (geschreven door playerSubmit/
    playerPass/hostSetAnswer; eerdere gokken worden niet overschreven). Alleen host + jury lezen de
    speler-nodes, dus dit lekt niets naar andere spelers. Geeft '' als er geen geschiedenis is. */
-function guessTrailHTML(r, p, round){
+function guessTrailHTML(r, p, round, opts){
+  opts = opts || {};
   const gobj = p.guesses && p.guesses[round];
   if(!gobj || typeof gobj!=='object') return '';
   const lock = (p.astage && p.astage[round]!=null) ? p.astage[round] : null;
+  const o = app.judges && app.judges[round] ? app.judges[round][p.id] : undefined;
+  // de hint waarop het handmatige oordeel slaat: een {stage}-oordeel wijst een eerdere hint aan,
+  // anders geldt het (boolean) oordeel op de vergrendelde gok
+  const judgedStage = (o && typeof o==='object' && o.stage!=null) ? Number(o.stage) : lock;
   // Firebase kan een map met sleutels 0/1/2… als array teruggeven (met null-gaten als een hint is
   // overgeslagen) → alleen echte entries meenemen, anders verschijnen er spook-gokken
   const stages = Object.keys(gobj).map(Number).filter(n=>!isNaN(n) && gobj[n]!=null).sort((a,b)=>a-b);
@@ -804,9 +828,12 @@ function guessTrailHTML(r, p, round){
     const gy = gobj[s] || {};
     const label = gy.label || (gy.ans!=null?String(gy.ans):'—');
     if(gy.ans===PASS_ANS) return `<span class="trailchip pass">hint ${s+1}: ⤴ gepast</span>`;
-    // de vergrendelde (laatste) gok kan handmatig overruled zijn; eerdere gokken zijn per definitie fout
-    const ok = (s===lock) ? effectiveCorrect(round, p.id, isCorrectAns(r, gy.ans)) : isCorrectAns(r, gy.ans);
-    return `<span class="trailchip ${ok?'good':'bad'}">hint ${s+1}: ${esc(label)} ${ok?'✓':'✗'}</span>`;
+    // de beoordeelde hint volgt het handmatige oordeel; andere hints hun eigen auto-check
+    const ok = (s===judgedStage) ? effectiveCorrect(round, p.id, isCorrectAns(r, gy.ans)) : isCorrectAns(r, gy.ans);
+    const inner = `hint ${s+1}: ${esc(label)} ${ok?'✓':'✗'}`;
+    return opts.approve                                    // controleur: elke gok apart goed te keuren
+      ? `<button type="button" class="trailchip tappable ${ok?'good':'bad'}" data-capprove="${esc(p.id)}:${s}" title="Reken deze gok als het goede antwoord (punten van hint ${s+1})">${inner}</button>`
+      : `<span class="trailchip ${ok?'good':'bad'}">${inner}</span>`;
   }).join('');
   return `<span class="guesstrail">${chips}</span>`;
 }
@@ -815,15 +842,12 @@ function buildResults(){
   const r = app.quiz[app.round];
   app.results = {};
   app.players.forEach(p=>{
-    const a  = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
-    const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
-    const lock = (p.astage && p.astage[app.round]!=null) ? p.astage[app.round] : null;
     const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
     const passed = !!(p.pass && p.pass[app.round]);
-    const auto = isCorrectAns(r,a);
-    const correct = effectiveCorrect(app.round, p.id, auto);
-    const g = computeGain(r, correct, bet, lock);
-    app.results[p.id] = { answer:a, label:al, autoCorrect:auto, correct, gained:g.gained, won:g.won, bet, lock, passed };
+    // houdt rekening met een goedgekeurde eerdere hint: die gok telt dan als goed, met de punten van díe hint
+    const oc = judgedOutcome(r, p, app.round);
+    const g = computeGain(r, oc.correct, bet, oc.lock);
+    app.results[p.id] = { answer:oc.ans, label:oc.label, autoCorrect:isCorrectAns(r, oc.ans), correct:oc.correct, gained:g.gained, won:g.won, bet, lock:oc.lock, passed };
   });
   Object.keys(app.names).forEach(pid=>{
     app.scores[pid] = (app.preRoundScores[pid]||0) + (app.results[pid] ? app.results[pid].gained : 0);
@@ -1029,6 +1053,9 @@ function renderController(){
   }
   // ---- speel/onthul: beoordelen ----
   const correctLabel = r.answerLabel || (r.optionsMode==='list'&&r.options?r.options[r.answer]:'') || '—';
+  const staged = Array.isArray(r.stages);
+  const showTrail = staged && (app.ctrlShowTrail || g.phase==='reveal');  // bij de onthulling altijd; tijdens het spelen achter de switch
+  const approve  = staged && !!app.ctrlShowTrail;                         // eerdere hints goedkeuren: alleen met de switch aan
   const rows = app.players.map(p=>{
     const a = (p.ans&&p.ans[round]!=null)?p.ans[round]:null;
     const al = (p.anslabel&&p.anslabel[round]!=null)?p.anslabel[round]:null;
@@ -1039,8 +1066,8 @@ function renderController(){
     const stale = g.phase==='question' && staleGuess(r, p, round, g.stage||0);
     const ans = passed?'⤴ gepast':((a==null||stale)?'— nog niet':(al||String(a)));
     const dis = (a==null||passed||stale)?'disabled':'';
-    // bij de onthulling: hele gok-historie per speler (hint voor hint); tijdens het spelen alleen de huidige gok
-    const trail = (g.phase==='reveal' && Array.isArray(r.stages)) ? guessTrailHTML(r, p, round) : '';
+    // hele gok-historie per speler (hint voor hint) i.p.v. alleen de laatste gok, met de switch aan ook goed te keuren
+    const trail = showTrail ? guessTrailHTML(r, p, round, {approve}) : '';
     return `<div class="reviewrow">
       <span class="rnm">${esc(p.name)}</span>
       <span class="rguess${trail?' has-trail':''}">${trail||esc(ans)}</span>
@@ -1048,13 +1075,22 @@ function renderController(){
       <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
     </div>`;
   }).join('');
+  const trailToggle = staged
+    ? `<label class="ctrltoggle"><input type="checkbox" id="c-showtrail" ${app.ctrlShowTrail?'checked':''}> toon eerdere antwoorden</label>`
+    : '';
+  const hint = approve
+    ? 'Tik op een hint-gok om díe als het goede antwoord te rekenen (met de punten van die hint); of op goed/fout voor het laatste antwoord.'
+    : 'Tik op goed/fout — telt direct mee in de score.';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">${esc(roundLbl)}</span><span class="pill ok">controleur</span></div>
     <div class="spotlight"><div class="qmeta">Juiste antwoord</div><div class="qtext" style="font-size:22px">${esc(correctLabel)}</div></div>
-    <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
-      <p class="muted" style="margin:0;font-size:12px">Tik om goed/fout te zetten — telt direct mee in de score.</p>
+    <div class="card stack" style="gap:8px">
+      <div class="ctrlbeoordeel-h"><b>Antwoorden beoordelen</b>${trailToggle}</div>
+      <p class="muted" style="margin:0;font-size:12px">${hint}</p>
       ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
   el.querySelectorAll('[data-cjudge]').forEach(b=> b.onclick=()=> ctrlToggle(b.dataset.cjudge));
+  el.querySelectorAll('[data-capprove]').forEach(b=> b.onclick=()=>{ const [pid,s]=b.dataset.capprove.split(':'); ctrlApproveStage(pid, parseInt(s,10)); });
+  const st=el.querySelector('#c-showtrail'); if(st) st.onchange=()=>{ app.ctrlShowTrail = st.checked; renderController(); };
 }
 function ctrlSetBet(pid, k){
   const round = app.game.round;
@@ -1065,7 +1101,17 @@ function ctrlToggle(pid){
   const p = app.players.find(x=>x.id===pid);
   const a = (p&&p.ans&&p.ans[round]!=null)?p.ans[round]:null;
   const auto = isCorrectAns(r,a);
-  setJudge(round, pid, !effectiveCorrect(round, pid, auto));
+  setJudge(round, pid, !effectiveCorrect(round, pid, auto));   // schrijft een boolean → wist een eventueel hint-oordeel
+}
+/* controleur keurt een specifieke hint-gok goed → die telt als het goede antwoord, met de punten
+   van díe hint. Nogmaals op dezelfde hint tikken wist het oordeel (terug naar de auto-check). */
+function ctrlApproveStage(pid, stage){
+  const round = app.game.round;
+  const cur = app.judges && app.judges[round] ? app.judges[round][pid] : undefined;
+  if(cur && typeof cur==='object' && Number(cur.stage)===Number(stage))
+    remove(ref(db, `games/${app.code}/judge/${round}/${pid}`));
+  else
+    set(ref(db, `games/${app.code}/judge/${round}/${pid}`), { stage: Number(stage) });
 }
 async function playerSubmit(){
   if(app.kicked) return;
