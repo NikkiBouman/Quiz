@@ -21,6 +21,11 @@
       "label": "Imagine Dragons – Whatever It Takes",
       "tracks": ["1-drums.m4a", "2-bass+synth.m4a", "3-strings+choir.m4a", "4-electric-guitar+backing-vocals.m4a", "5-voice.m4a"]
     },
+    "Kelly_Clarkson-Stronger_(2011_551M_par-5)": {
+      "deezerId": 14241633,
+      "label": "Kelly Clarkson – Stronger (What Doesn't Kill You)",
+      "tracks": ["1-drums+bass.m4a", "2-electric-guitar.m4a", "3-synth.m4a", "4-backing-vocals.m4a", "5-voice.m4a"]
+    },
     "Lady_Gaga-Born_this_Way_(2011_326M_par-2)": {
       "deezerId": 11747931,
       "label": "Lady Gaga – Born This Way",
@@ -45,6 +50,11 @@
       "deezerId": 71828725,
       "label": "Nickelback – Rockstar",
       "tracks": ["1-drums.m4a", "2-bass.m4a", "3-electric-guitar+guitar.m4a", "4-electric-guitar-2+organ.m4a", "5-voice.m4a"]
+    },
+    "Spice_Girls-Wannabe_(1996_708M_par-2)": {
+      "deezerId": 3133738,
+      "label": "Spice Girls – Wannabe",
+      "tracks": ["1-drums.m4a", "2-bass.m4a", "3-piano+electric-guitar.m4a", "4-synth.m4a", "5-voice.m4a"]
     },
     "The_Fray-How_to_Save_a_Life_(2005_349M_par-4)": {
       "deezerId": 7674865,
