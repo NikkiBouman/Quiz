@@ -17,8 +17,9 @@
 
 <script type="module">
 import { esc, icon, itemLabel, ICON_TRASH, ICON_GRIP, loadCatalog, buildQuestion,
-         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank,
-         flattenQuiz, resolvePoolQuestions, setMediaRoot } from '../../../lib/quiz-core.js';
+         loadSavedQuizzes, saveQuizToDevice, deleteSavedQuiz, loadBank, addToBank, saveBank,
+         flattenQuiz, resolvePoolQuestions, setMediaRoot,
+         pickFromQuestion, customPickFromQuestion } from '../../../lib/quiz-core.js';
 setMediaRoot('../../../');   // puzzel-thumbnails in de bouwer vanaf deze diepe pagina laten kloppen
 import { enableDragSort } from '../../../lib/drag.js';
 import { rowText, customFormHTML, readCustomPick, wireCustomForm,
@@ -32,6 +33,7 @@ const toList = ()=>{ location.href = '../'; };
 const S = {
   view:'edit', catalog:null, busy:false, err:'', msg:'', scroll:0,
   draft:null, editingName:null, sel:{}, bankSel:{}, libFolder:null,
+  editingQ:null,
   customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null,
@@ -143,6 +145,34 @@ async function addSelections(){
 function reorderRounds(order){ syncEdit(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
 function reorderQ(ri,order){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
 function delQ(ri,qi){ const d=S.draft, r=d&&d.rounds[ri]; if(!r)return; r.questions.splice(qi,1); if(!r.questions.length) d.rounds.splice(ri,1); render(); }
+function qForCompare(q){ const c=JSON.parse(JSON.stringify(q)); delete c.points; delete c.bet; return JSON.stringify(c); }
+function editQ(ri,qi){
+  syncEdit();
+  const q=S.draft&&S.draft.rounds[ri]&&S.draft.rounds[ri].questions[qi]; if(!q) return;
+  const src=q.source||{};
+  const bank=loadBank(), cmp=qForCompare(q);
+  const bankIdx=bank.findIndex(it=>qForCompare(it.q)===cmp);
+  S.editingQ={ri,qi,bankIdx}; S.err=''; S.msg='';
+  if(src.kind==='puzzle'){ S.puzzlePick=pickFromQuestion(q); S.view='puzzle'; }
+  else if(src.kind==='tmdb'||q.options===':tmdb'){ S.filmPick=pickFromQuestion(q); S.view='film'; }
+  else if(src.kind==='deezer'){ S.songPick=pickFromQuestion(q); S.view='song'; }
+  else { S.customPick=customPickFromQuestion(q); S.view='custom'; }
+  render();
+}
+function applyUpdate(newQ, bucket, label){
+  const {ri,qi,bankIdx}=S.editingQ;
+  const old=S.draft.rounds[ri]&&S.draft.rounds[ri].questions[qi];
+  if(old){ newQ.points=old.points; if(old.bet!=null) newQ.bet=old.bet; S.draft.rounds[ri].questions[qi]=newQ; }
+  if(bankIdx>=0){ const b=loadBank(); if(b[bankIdx]){ b[bankIdx]={ bucket, label, q:JSON.parse(JSON.stringify(newQ)) }; saveBank(b); } }
+  S.editingQ=null; S.err=''; S.view='edit';
+  S.msg=bankIdx>=0?'Vraag bijgewerkt (ook in Mijn vragen).':'Vraag bijgewerkt.';
+}
+function updateCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; }
+  applyUpdate(r.q,'custom',r.label); S.customPick=null; render(); }
+function updateMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; }
+  const isPz=r.kind==='puzzle';
+  applyUpdate(r.q, isPz?'puzzels':r.isFilm?'films':'liedjes', r.label);
+  S.filmPick=null; S.songPick=null; S.puzzlePick=null; render(); }
 function toggleQBet(ri,qi){ syncEdit(); const q=S.draft&&S.draft.rounds[ri]&&S.draft.rounds[ri].questions[qi]; if(!q)return; q.bet=!betOf(q); render(); }
 function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions.forEach(q=>{ if(Array.isArray(q.stages)) q.bet=on; }); render(); }
 
@@ -204,6 +234,7 @@ function editHTML(){
         ${Array.isArray(q.stages)?`<label class="betlbl" title="Inzetten toestaan op deze vraag"><input type="checkbox" data-qbet="${ri}|${qi}" ${betOf(q)?'checked':''}>inzet</label>`:''}
         <button class="mini" data-qreveal="${ri}|${qi}" title="voorvertoning — volledige vraag met alle hints" aria-label="voorvertoning">${icon('eye',15)}</button>
         <button class="mini" data-qsim="${ri}|${qi}" title="simuleren — speel de vraag na" aria-label="simuleren">${icon('play',15)}</button>
+        <button class="mini" data-qedit="${ri}|${qi}" title="wijzigen" aria-label="wijzigen">${icon('pencil',15)}</button>
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>
     </div>`;
@@ -234,10 +265,10 @@ function render(){
   const inner =
     S.view==='add'  ? addHTML() :
     S.view==='lib'  ? libHTML() :
-    S.view==='custom' ? customFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('cb','Eigen vragen') }) :
-    S.view==='film' ? filmFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
-    S.view==='song' ? songFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
-    S.view==='puzzle' ? puzzleFormHTML(S, { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Wie of wat is dit?') }) :
+    S.view==='custom' ? customFormHTML(S, S.editingQ ? { addLabel:'Bijwerken', backId:'b-formback' } : { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('cb','Eigen vragen') }) :
+    S.view==='film' ? filmFormHTML(S, S.editingQ ? { addLabel:'Bijwerken', backId:'b-formback' } : { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Films') }) :
+    S.view==='song' ? songFormHTML(S, S.editingQ ? { addLabel:'Bijwerken', backId:'b-formback' } : { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Liedjes') }) :
+    S.view==='puzzle' ? puzzleFormHTML(S, S.editingQ ? { addLabel:'Bijwerken', backId:'b-formback' } : { addLabel:'Toevoegen aan quiz', backId:'b-formback', roundPickerHTML:roundPickerHTML('mb','Wie of wat is dit?') }) :
                       editHTML();
   el.innerHTML = `${inner}
     ${S.err?`<p class="err feedback">${esc(S.err)}</p>`:''}
@@ -254,6 +285,7 @@ function wire(){
     el.querySelectorAll('[data-qdel]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qdel.split('|'); delQ(+a[0],+a[1]); });
     el.querySelectorAll('[data-qreveal]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qreveal.split('|'); const q=S.draft&&S.draft.rounds[+a[0]]&&S.draft.rounds[+a[0]].questions[+a[1]]; if(q) openQuestionReveal(q, '../../../'); });
     el.querySelectorAll('[data-qsim]').forEach(b=>b.onclick=()=>{ syncEdit(); const a=b.dataset.qsim.split('|'); const q=S.draft&&S.draft.rounds[+a[0]]&&S.draft.rounds[+a[0]].questions[+a[1]]; if(q) openQuestionSimulate(q, '../../../'); });
+    el.querySelectorAll('[data-qedit]').forEach(b=>b.onclick=()=>{ const a=b.dataset.qedit.split('|'); editQ(+a[0],+a[1]); });
     el.querySelectorAll('[data-qbet]').forEach(cb=>cb.onchange=()=>{ const a=cb.dataset.qbet.split('|'); toggleQBet(+a[0],+a[1]); });
     el.querySelectorAll('.r-bet').forEach(cb=>{ cb.indeterminate = cb.dataset.some==='1'; cb.onchange=()=>toggleRoundBet(+cb.dataset.ri, cb.checked); });
     const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
@@ -280,29 +312,32 @@ function wire(){
     return;
   }
   if(v==='custom'){
+    const eq=S.editingQ;
     wireCustomForm(el, S, render, {
-      onAdd:addCustom,
-      onBack:()=>{ S.customPick=null; S.view='add'; S.err=''; render(); },
+      onAdd:eq ? updateCustom : addCustom,
+      onBack:()=>{ S.customPick=null; S.editingQ=null; S.view=eq?'edit':'add'; S.err=''; render(); },
       backId:'b-formback',
-      afterBuilderWire:()=>wireRoundPicker('cb'),
+      afterBuilderWire:eq ? undefined : ()=>wireRoundPicker('cb'),
     });
     return;
   }
   if(v==='film' || v==='song'){
+    const eq=S.editingQ;
     wireMediaForms(el, S, render, actions, {
-      onAdd:addMedia,
-      onBack:()=>{ S.filmPick=null; S.songPick=null; S.view='add'; S.err=''; render(); },
+      onAdd:eq ? updateMedia : addMedia,
+      onBack:()=>{ S.filmPick=null; S.songPick=null; S.editingQ=null; S.view=eq?'edit':'add'; S.err=''; render(); },
       backId:'b-formback',
-      afterBuilderWire:()=>wireRoundPicker('mb'),
+      afterBuilderWire:eq ? undefined : ()=>wireRoundPicker('mb'),
     });
     return;
   }
   if(v==='puzzle'){
+    const eq=S.editingQ;
     wirePuzzleForms(el, S, render, pactions, {
-      onAdd:addMedia,
-      onBack:()=>{ S.puzzlePick=null; S.view='add'; S.err=''; render(); },
+      onAdd:eq ? updateMedia : addMedia,
+      onBack:()=>{ S.puzzlePick=null; S.editingQ=null; S.view=eq?'edit':'add'; S.err=''; render(); },
       backId:'b-formback',
-      afterBuilderWire:()=>wireRoundPicker('mb'),
+      afterBuilderWire:eq ? undefined : ()=>wireRoundPicker('mb'),
     });
     return;
   }
