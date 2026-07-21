@@ -1833,6 +1833,10 @@ function hostQuestion(){
     spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${qMediaHTML(r, true)}<div class="qtext">${esc(r.question)}</div></div>`;
     controls = `<button class="${revealCls}" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
   }
+  const _audioSnap = [];
+  el.querySelectorAll('audio.qaudio').forEach(a => {
+    if (!a.paused) _audioSnap.push({ src: a.src, t: a.currentTime });
+  });
   el.innerHTML = `
     <div class="hostgrid">
       <div class="hostmain">
@@ -1849,6 +1853,11 @@ function hostQuestion(){
   const rb=$('#b-reveal'); if(rb) rb.onclick=hostReveal;
   wirePlayerControls();
   wireClips();
+  _audioSnap.forEach(snap => {
+    el.querySelectorAll('audio.qaudio').forEach(a => {
+      if (a.src === snap.src) { a.currentTime = snap.t; a.play().catch(() => {}); }
+    });
+  });
 }
 function hostRevealView(){
   const r = app.quiz[app.round];
