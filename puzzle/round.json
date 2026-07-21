@@ -17,7 +17,7 @@
       "answer": "Bob de Bouwer",
       "accept": ["Bob the Builder", "Bob"],
       "tmdb": "tv:10938",
-      "parts": ["1-eye.jpg", "2-mouth.jpg", "3-nose.jpg", "4-ear.jpg", "5-hand.jpg"],
+      "parts": ["1-eye.jpg", "2-mouth.jpg", "3-nose.jpg", "4-ear.jpg", "5-hoofddeksel.jpg"],
       "full": "full.jpg"
     },
     "David_de_Kabouter": {
