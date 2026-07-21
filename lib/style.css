@@ -150,12 +150,20 @@
   .cnum{flex:none;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-family:var(--display);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-top:2px}
   .cbody{flex:1}
   .cbody .qimg{margin-bottom:6px;max-height:220px}
-  /* inzet-knoppen */
-  .bets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  @media (max-width:520px){.bets{grid-template-columns:1fr}}
-  .betopt{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-weight:600;font-size:15px}
-  .betopt:hover{background:#dce9fb;border-color:var(--gold)}
-  .betopt .mult{font-family:var(--display);font-weight:700;color:var(--gold);font-size:18px}
+  /* inzet-picker (twee kolommen: Hint | Berekening) */
+  .betpicker{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center}
+  .betpicker-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-bottom:2px}
+  .betrow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;background:var(--surface-2);border:2px solid transparent;color:var(--ink);font-weight:600;font-size:14px;text-align:left;width:100%}
+  .betrow:hover:not(.sel){background:#eef3fb}
+  .betrow.sel{background:#dce9fb;border-color:var(--blauw)}
+  .betrow .betnum{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line);font-family:var(--display);font-size:12px;font-weight:700;flex-shrink:0;color:var(--muted)}
+  .betrow.sel .betnum{background:var(--blauw);border-color:var(--blauw);color:#fff}
+  .betrow .betlbl{flex:1}
+  .betrow .betmult{font-family:var(--display);font-weight:700;color:var(--gold);font-size:16px}
+  .betrow.sel .betmult{color:var(--blauw)}
+  .betcalc{font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;padding:0 4px}
+  .betcalc-x{color:var(--muted);font-weight:400}
+  .betcalc-bust{color:var(--muted);font-size:18px}
   /* open zoeken */
   .searchwrap{display:flex;flex-direction:column;gap:0}
   .sinput{margin-bottom:8px}

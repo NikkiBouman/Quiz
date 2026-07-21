@@ -413,7 +413,7 @@ const app = {
   role:null, code:null,
   phase:'lobby', round:-1, scores:{}, names:{}, players:[], answeredCount:0, results:null,
   quiz:[], rounds:[], quizName:'', quizErr:'', stage:0, betStep:null, checked:false, mediaCount:0, mediaWarn:'',
-  pid:null, name:'', ans:{}, bet:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
+  pid:null, name:'', ans:{}, bet:{}, betDraft:{}, passed:{}, confirmPass:false, submittedRound:-1, sel:null, game:null,
   searchText:'', searchResults:[], searchPick:null, searchBusy:false, searchRound:-1, _sTimer:null, searchOpen:false, textAns:'',
   wrongGuesses:{}, lastSubmitLabel:null, readyRounds:{},
   myStage:null, reguess:false, forFun:false,
@@ -1653,7 +1653,6 @@ function passModalHTML(){
   if(!app.confirmPass) return '';
   return `<div class="modal"><div class="modalcard stack" style="gap:12px">
       <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
-      <p class="muted" style="margin:0;font-size:13px">Passen telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.</p>
       <div class="row"><button class="btn grow" id="b-passno">Terug</button><button class="btn grow danger" id="b-passyes">Pas</button></div>
     </div></div>`;
 }
@@ -2100,6 +2099,7 @@ function playerQuestion(){
     app.searchRound=g.round; app.searchText=''; app.searchResults=[]; app.searchPick=null;
     app.searchBusy=false; app.sel=null; app.searchOpen=false; app.myStage=null; app.textAns='';
     app.reguess=false; app.forFun=false; app.confirmPass=false;
+    app.betDraft[g.round]=null;
     app.wrongGuesses[g.round]=[]; app.lastSubmitLabel=null;
   }
 
@@ -2110,24 +2110,44 @@ function playerQuestion(){
   if(r.betting && g.betStep==='bet'){
     if(app.bet[g.round]==null){
       const base = r.points ?? 100;
+      const muls = r.betMultipliers || [];
+      if(app.betDraft[g.round]==null) app.betDraft[g.round] = muls.length - 1;
+      const draft = app.betDraft[g.round];
+      const pts = stagePointList(r);
+      const rows = muls.map((m,i)=>{
+        const lbl = (r.hintLabels||[])[i] || ('Hint '+(i+1));
+        const isSel = i === draft;
+        const calc = i <= draft
+          ? `${pts[i]} <span class="betcalc-x">×</span> ${muls[draft]}`
+          : `<span class="betcalc-bust">0</span>`;
+        return `
+          <button class="betrow${isSel?' sel':''}" data-bet="${i}">
+            <span class="betnum">${i+1}</span>
+            <span class="betlbl">${esc(lbl)}</span>
+            <span class="betmult">×${m}</span>
+          </button>
+          <div class="betcalc">${calc}</div>`;
+      }).join('');
       const spot = `<div class="spotlight"><div class="qmeta">${base} punten × je inzet</div><div class="qtext">${esc(r.question||'')}</div></div>`;
-      const bets = (r.betMultipliers||[]).map((m,i)=>`<button class="betopt" data-bet="${i}"><span>Hint ${i+1}</span><span class="mult">×${m}</span></button>`).join('');
       el.innerHTML = `
         <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">inzet</span></div>
         ${spot}
         ${metaHTML(r)}${factsHTML(r, false)}
-        <div class="pointsbig">Deze vraag is <b>${base}</b> punten waard <span>× je inzet</span></div>
-        <div class="card stack" style="gap:8px">
-          <b>Hints die je gaat krijgen</b>
-          ${hintLabelsHTML(r.hintLabels, stagePointList(r))}
-        </div>
         <div class="card stack" style="gap:10px">
-          <b>Bij welke hint denk je het uiterlijk te weten?</b>
-          <p class="muted" style="margin:0;font-size:13px">Zet in op wanneer jij denkt het antwoord te weten. Hoe meer risico je neemt, hoe hoger de beloning. Maar let op: heb je het niet uiterlijk bij die hint goed? Dan krijg je 0 punten voor deze vraag! En hoe vroeger je het juiste antwoord geeft, hoe meer van de punten je houdt — bij elke latere hint levert het minder op.</p>
-          <div class="bets">${bets}</div>
+          <b>Inzet</b>
+          <p class="muted" style="margin:0;font-size:13px">Met deze vraag kan je maximaal <b style="color:var(--ink)">${base}</b> punten × je inzet verdienen</p>
+          <div class="betpicker">
+            <div class="betpicker-head">Hint</div>
+            <div class="betpicker-head">Berekening</div>
+            ${rows}
+          </div>
+          <button class="btn big" id="b-submitbet">Inzet versturen</button>
         </div>
 `;
-      el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=> playerBet(parseInt(b.dataset.bet,10)));
+      el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=>{
+        app.betDraft[g.round]=parseInt(b.dataset.bet,10); renderPlayer();
+      });
+      $('#b-submitbet').onclick = ()=> playerBet(app.betDraft[g.round]);
       return;
     }
     const m=(r.betMultipliers||[])[app.bet[g.round]];
