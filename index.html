@@ -1651,15 +1651,10 @@ function hostAside(){
 const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
 function passModalHTML(){
   if(!app.confirmPass) return '';
-  const g=app.game, cur=g&&g.current;
-  const betStep = !!(cur && cur.betting && g.betStep==='bet');
-  const body = betStep
-    ? 'Je doet dan deze vraag niet mee voor punten.'
-    : 'Passen telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.';
   return `<div class="modal"><div class="modalcard stack" style="gap:12px">
       <b style="font-size:18px">Weet je zeker dat je wilt passen?</b>
-      <p class="muted" style="margin:0;font-size:13px">${body}</p>
-      <div class="row"><button class="btn grow" id="b-passno">Nee</button><button class="btn grow danger" id="b-passyes">Ja, passen</button></div>
+      <p class="muted" style="margin:0;font-size:13px">Passen telt als een fout antwoord voor deze hint. Is er nog een hint, dan mag je daarna gewoon opnieuw raden.</p>
+      <div class="row"><button class="btn grow" id="b-passno">Terug</button><button class="btn grow danger" id="b-passyes">Pas</button></div>
     </div></div>`;
 }
 function wirePass(){
@@ -2130,9 +2125,8 @@ function playerQuestion(){
           <p class="muted" style="margin:0;font-size:13px">Zet in op wanneer jij denkt het antwoord te weten. Hoe meer risico je neemt, hoe hoger de beloning. Maar let op: heb je het niet uiterlijk bij die hint goed? Dan krijg je 0 punten voor deze vraag! En hoe vroeger je het juiste antwoord geeft, hoe meer van de punten je houdt — bij elke latere hint levert het minder op.</p>
           <div class="bets">${bets}</div>
         </div>
-        ${passBtnHTML}${passModalHTML()}`;
+`;
       el.querySelectorAll('[data-bet]').forEach(b=> b.onclick=()=> playerBet(parseInt(b.dataset.bet,10)));
-      wirePass();
       return;
     }
     const m=(r.betMultipliers||[])[app.bet[g.round]];
