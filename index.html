@@ -1064,7 +1064,7 @@ function renderController(){
     const eff = effectiveCorrect(round, p.id, auto);
     // tijdens het spelen telt een foute gok van een vorige hint niet meer (speler raadt opnieuw); bij de onthulling wél
     const stale = g.phase==='question' && staleGuess(r, p, round, g.stage||0);
-    const ans = passed?'⤴ gepast':((a==null||stale)?'— nog niet':(al||String(a)));
+    const ans = passed?'⤴ gepast':((a==null||stale)?'aan het nadenken...':(al||String(a)));
     const dis = (a==null||passed||stale)?'disabled':'';
     // hele gok-historie per speler (hint voor hint) i.p.v. alleen de laatste gok, met de switch aan ook goed te keuren
     const trail = showTrail ? guessTrailHTML(r, p, round, {approve}) : '';
@@ -1648,7 +1648,7 @@ function hostAside(){
     <div class="row" style="justify-content:flex-end">${manageBtnHTML()}</div></div></aside>`;
 }
 /* pas-knop + bevestigingspopup (speler) */
-const passBtnHTML = `<button class="btn ghost pasbtn" id="b-pass">Pas</button>`;
+const passBtnHTML = `<button class="btn danger sm pasbtn" id="b-pass">Pas</button>`;
 function passModalHTML(){
   if(!app.confirmPass) return '';
   return `<div class="modal"><div class="modalcard stack" style="gap:12px">
@@ -2011,6 +2011,7 @@ function wireSearchResults(){
   el.querySelectorAll('.sresult').forEach(b=> b.onclick=()=>{
     const id=b.dataset.id, n=Number(id);
     app.searchPick = { id:(id!==''&&!isNaN(n))?n:id, label:b.dataset.label };
+    app.searchText = b.dataset.label;
     app.searchOpen = false;            // na keuze inklappen
     renderPlayer();
   });
@@ -2187,17 +2188,20 @@ function playerQuestion(){
   const wrongs = (app.wrongGuesses&&app.wrongGuesses[g.round])||[];
   const funBanner = app.forFun
     ? `<div class="card funbanner"><b>Je speelt voor de lol 🎈</b> <span class="muted">Je inzet is verlopen, dit levert geen punten meer op — maar raad gerust mee!</span></div>`
-    : (wrongs.length ? `<div class="wronglist"><span class="wl-h">Foute gokken:</span> ${wrongs.map(w=>`<span class="wl-chip">${esc(w)}</span>`).join('')}</div>` : '');
+    : (wrongs.length && g.checked ? `<div class="wronglist"><span class="wl-h">Foute gokken:</span> ${wrongs.map(w=>`<span class="wl-chip">${esc(w)}</span>`).join('')}</div>` : '');
   const lockReady = r.optionsMode==='list' ? app.sel!=null : r.optionsMode==='text' ? !!(app.textAns&&app.textAns.trim()) : app.searchPick!=null;
-  const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord bevestigen';
+  const btn = r.staged ? 'Antwoord vergrendelen' : 'Antwoord versturen';
   el.innerHTML = `
     <div class="statusbar"><span class="pill">${pRoundLbl()}</span><span class="pill">${pill}</span></div>
     ${spot}
     ${metaHTML(r)}${factsHTML(r, false)}
     ${funBanner}
     ${answerAreaHTML(r)}
-    <button class="btn big" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>
-    ${passBtnHTML}${passModalHTML()}`;
+    <div class="row" style="flex-wrap:nowrap">
+      ${passBtnHTML}
+      <button class="btn big grow" id="b-submit" ${lockReady?'':'disabled'}>${btn}</button>
+    </div>
+    ${passModalHTML()}`;
   wireAnswerArea(r);
   $('#b-submit').onclick = playerSubmit;
   wirePass();
