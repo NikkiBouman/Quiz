@@ -33,7 +33,7 @@ const toList = ()=>{ location.href = '../'; };
 const S = {
   view:'edit', catalog:null, busy:false, err:'', msg:'', scroll:0,
   draft:null, editingName:null, sel:{}, bankSel:{}, libFolder:null,
-  editingQ:null,
+  editingQ:null, targetRound:null,
   customPick:null,
   filmQuery:'', filmResults:[], filmBusy:false, filmPick:null,
   songQuery:'', songResults:[], songBusy:false, songPick:null,
@@ -69,9 +69,10 @@ function betOf(q){ return q.bet!=null ? !!q.bet : (Array.isArray(q.stages) && q.
 /* doelronde-kiezer: kies een bestaande ronde van de quiz of maak een nieuwe. */
 function roundPickerHTML(pfx, defName){
   const rounds=(S.draft&&S.draft.rounds)||[];
-  const opts = rounds.map(r=>`<option value="${esc(r.name)}">${esc(r.name)} (${r.questions.length})</option>`).join('');
+  const pre = S.targetRound != null ? rounds[S.targetRound] : null;
+  const opts = rounds.map(r=>`<option value="${esc(r.name)}" ${pre&&r===pre?'selected':''}>${esc(r.name)} (${r.questions.length})</option>`).join('');
   return `<label class="lbl">In welke ronde?</label>
-    <select id="${pfx}-round" class="sinput">${opts}<option value="" selected>+ Nieuwe ronde…</option></select>
+    <select id="${pfx}-round" class="sinput">${opts}<option value="" ${pre?'':'selected'}>+ Nieuwe ronde…</option></select>
     <input id="${pfx}-newround" class="sinput" placeholder="Naam van de nieuwe ronde" value="${esc(defName||'')}">`;
 }
 function wireRoundPicker(pfx){
@@ -114,7 +115,7 @@ function saveDraft(){
   if(!saveQuizToDevice(nm, JSON.parse(JSON.stringify(d)))){ S.err='Opslaan mislukt (opslag vol?).'; S.view='edit'; render(); return; }
   toList();
 }
-function gotoAdd(){ syncEdit(); S.sel={}; S.bankSel={}; S.view='add'; S.err=''; S.msg=''; render(); }
+function gotoAdd(ri){ syncEdit(); S.sel={}; S.bankSel={}; S.view='add'; S.err=''; S.msg=''; S.targetRound=ri!=null?ri:null; render(); }
 function toggleItem(f,k){ if(!S.sel[f])S.sel[f]={}; S.sel[f][k]=!S.sel[f][k]; render(); }
 function toggleRound(f){ const rd=(S.catalog||[]).find(r=>r.folder===f); if(!rd)return; const keys=Object.keys(rd.items); const sel=S.sel[f]||(S.sel[f]={}); const all=keys.every(k=>sel[k]); keys.forEach(k=>sel[k]=!all); render(); }
 function toggleBank(i){ S.bankSel[i]=!S.bankSel[i]; render(); }
@@ -127,12 +128,16 @@ async function addSelections(){
     const sel=$('#bank-round'); const nm=sel?sel.value:'';
     bankRoundName = nm || (($('#bank-newround')&&$('#bank-newround').value.trim()) || 'Eigen vragen');
   }
+  /* lees lib-ronde-kiezer vóór re-render (DOM verdwijnt daarna) */
+  const libSelEl=$('#lib-round'), libNewEl=$('#lib-newround');
+  let libRoundName = libSelEl ? libSelEl.value : null;
+  if(libRoundName==='' && libNewEl) libRoundName = libNewEl.value.trim() || null;
   S.busy=true; render(); let added=0;
   try{
     for(const rd of (S.catalog||[])){
       const picked=Object.keys(rd.items).filter(k=> S.sel[rd.folder]&&S.sel[rd.folder][k]);
       if(!picked.length) continue;
-      const round=ensureRound(S.draft, rd.name, rd.intro);
+      const round=ensureRound(S.draft, libRoundName||rd.name, rd.intro);
       for(const k of picked){ round.questions.push(await buildQuestion(rd,k,rd.items[k])); added++; }
     }
     if(bankPicked.length){
@@ -140,7 +145,7 @@ async function addSelections(){
       bankPicked.forEach(i=>{ round.questions.push(JSON.parse(JSON.stringify(bank[+i].q))); added++; });
     }
   }catch(e){ S.err='Toevoegen mislukt: '+e.message; }
-  S.sel={}; S.bankSel={}; S.busy=false; S.view='edit'; S.msg=added?`${added} vraag/vragen toegevoegd.`:''; render();
+  S.sel={}; S.bankSel={}; S.busy=false; S.view='edit'; S.targetRound=null; S.msg=added?`${added} vraag/vragen toegevoegd.`:''; render();
 }
 function reorderRounds(order){ syncEdit(); const d=S.draft; if(!d)return; d.rounds = order.map(i=>d.rounds[i]); render(); }
 function reorderQ(ri,order){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions = order.map(i=>r.questions[i]); render(); }
@@ -177,13 +182,13 @@ function toggleQBet(ri,qi){ syncEdit(); const q=S.draft&&S.draft.rounds[ri]&&S.d
 function toggleRoundBet(ri,on){ syncEdit(); const r=S.draft&&S.draft.rounds[ri]; if(!r)return; r.questions.forEach(q=>{ if(Array.isArray(q.stages)) q.bet=on; }); render(); }
 
 /* maken → aan de gekozen ronde toevoegen (validatie + opbouw zit in editor-ui.js) */
-function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('cb','Eigen vragen',''); pushToDraft(round,'custom',r.label,r.q); S.customPick=null; S.err=''; S.view='edit'; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
+function addCustom(){ const r=readCustomPick(S); if(r.error){ S.err=r.error; render(); return; } const round=targetRoundFor('cb','Eigen vragen',''); pushToDraft(round,'custom',r.label,r.q); S.customPick=null; S.err=''; S.view='edit'; S.targetRound=null; S.msg=`Vraag toegevoegd aan "${round.name}".`; render(); }
 function addMedia(){ const r=readMediaPick(S); if(r.error){ S.err=r.error; render(); return; }
   const isPz=r.kind==='puzzle';
   const round=targetRoundFor('mb', isPz?'Wie of wat is dit?':r.isFilm?'Films':'Liedjes', isPz?'Raad de figuur. Bij elke hint zie je een stukje meer.':r.isFilm?'Raad de film.':'Raad het nummer aan het fragment.');
   pushToDraft(round, isPz?'puzzels':r.isFilm?'films':'liedjes', r.label, r.q);
   S.filmPick=null; S.songPick=null; S.puzzlePick=null;
-  S.err=''; S.view='edit'; S.msg=`${isPz?'Puzzel':r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
+  S.err=''; S.view='edit'; S.targetRound=null; S.msg=`${isPz?'Puzzel':r.isFilm?'Film':'Liedje'} toegevoegd aan "${round.name}".`; render(); }
 
 /* ---------- HTML ---------- */
 /* knoppenrij voor de kant-en-klare rondes (elke ronde opent zijn eigen kies-scherm). */
@@ -208,6 +213,7 @@ function libHTML(){
         <div class="statusbar"><label class="picklabel"><input type="checkbox" data-round="${esc(rd.folder)}" ${all?'checked':''}><b>Alles</b></label><span class="muted f12">${on}/${keys.length}</span></div>
         ${keys.map(k=>`<label class="picklabel"><input type="checkbox" data-folder="${esc(rd.folder)}" data-key="${esc(k)}" ${(S.sel[rd.folder]&&S.sel[rd.folder][k])?'checked':''}><span>${esc(itemLabel(rd,rd.items[k])||k)}</span></label>`).join('')}
       </div>
+      <div class="card stack" style="gap:6px">${roundPickerHTML('lib', rd.name)}</div>
     </div>
     <div class="row"><button class="btn grow" id="b-apply" ${on&&!S.busy?'':'disabled'}>Toevoegen${on?` (${on})`:''}</button><button class="btn ghost" id="b-back">Terug</button></div>`;
 }
@@ -237,6 +243,7 @@ function editHTML(){
         <button class="mini" data-qedit="${ri}|${qi}" title="wijzigen" aria-label="wijzigen">${icon('pencil',15)}</button>
         <button class="mini danger" data-qdel="${ri}|${qi}" title="verwijderen" aria-label="verwijderen">${ICON_TRASH}</button></div>`).join('')}
       </div>
+      <button class="btn ghost" data-addtoround="${ri}" style="align-self:flex-start">${icon('plus',14)}Vraag toevoegen</button>
     </div>`;
   }).join('') : `<p class="muted m0">Nog geen vragen. Klik “+ Vraag toevoegen”.</p>`;
   return `<div class="statusbar"><h1 class="h-md">${S.editingName?'Quiz wijzigen':'Nieuwe quiz'}</h1></div>
@@ -288,7 +295,8 @@ function wire(){
     el.querySelectorAll('[data-qedit]').forEach(b=>b.onclick=()=>{ const a=b.dataset.qedit.split('|'); editQ(+a[0],+a[1]); });
     el.querySelectorAll('[data-qbet]').forEach(cb=>cb.onchange=()=>{ const a=cb.dataset.qbet.split('|'); toggleQBet(+a[0],+a[1]); });
     el.querySelectorAll('.r-bet').forEach(cb=>{ cb.indeterminate = cb.dataset.some==='1'; cb.onchange=()=>toggleRoundBet(+cb.dataset.ri, cb.checked); });
-    const ga=$('#b-goadd'); if(ga)ga.onclick=gotoAdd;
+    const ga=$('#b-goadd'); if(ga)ga.onclick=()=>gotoAdd();
+    el.querySelectorAll('[data-addtoround]').forEach(b=>b.onclick=()=>{ syncEdit(); gotoAdd(+b.dataset.addtoround); });
     return;
   }
   if(v==='add'){
@@ -300,7 +308,7 @@ function wire(){
     const sg=$('#b-song'); if(sg)sg.onclick=go('song');
     const pz=$('#b-puzzle'); if(pz)pz.onclick=()=>{ S.puzzlePick=null; pactions.loadPuzzleCatalog(); go('puzzle')(); };
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
-    const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.err=''; S.msg=''; render(); };
+    const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.view='edit'; S.targetRound=null; S.err=''; S.msg=''; render(); };
     wireRoundPicker('bank');
     return;
   }
@@ -309,6 +317,7 @@ function wire(){
     el.querySelectorAll('[data-round]').forEach(cb=>cb.onchange=()=>toggleRound(cb.dataset.round));
     const ap=$('#b-apply'); if(ap)ap.onclick=addSelections;
     const bk=$('#b-back'); if(bk)bk.onclick=()=>{ S.sel={}; S.view='add'; S.err=''; S.msg=''; render(); };
+    wireRoundPicker('lib');
     return;
   }
   if(v==='custom'){
