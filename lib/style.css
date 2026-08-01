@@ -15,10 +15,14 @@
     background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
   .wrap.wide{max-width:1180px}
-  .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
   .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
   .brand b{font-family:var(--display);letter-spacing:.5px;font-size:15px;text-transform:uppercase}
-  .brand span{color:var(--muted);font-size:13px;margin-left:auto}
+  .brand span{color:var(--muted);font-size:13px}
+  .brand #conn-left:empty{display:none}          /* quiz-info links; leeg buiten de lobby */
+  .brand #conn{margin-left:auto}                 /* verbindingsteller naar rechts (duwt teller + knop naar rechts) */
+  .brand #conn-actions{display:flex;align-items:center}  /* jurylink-knop sluit direct aan op de teller */
+  .brand #conn-actions:empty{display:none}
   h1{font-family:var(--display);font-weight:700;line-height:1.05;margin:.2em 0;letter-spacing:-.5px}
   .screen{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;animation:fade .35s ease both}
   /* alleen opacity (geen transform): een getransformeerde voorouder zou een vast-gepositioneerd
@@ -84,6 +88,13 @@
   .pcol.first{height:150px}.pcol.second{height:120px}.pcol.third{height:100px}
   .medal{font-size:26px}
   .statusbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .lobby-or{font-family:var(--display);font-weight:700;font-size:clamp(28px,6vw,46px);color:var(--muted);letter-spacing:.06em}
+  .lobby-code-box,.lobby-or-box,.lobby-qr-box{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+  /* labels bovenaan op één lijn; even hoog (2 regels) zodat het middenvlak even groot is */
+  .lobby-lbl{min-height:2.6em;line-height:1.3;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center}
+  /* code / OF / QR gecentreerd in de resterende hoogte → code en OF op dezelfde hoogte, labels bovenaan */
+  .lobby-fill{flex:1;display:flex;align-items:center;justify-content:center}
+  .lobby-qr{width:200px;height:200px;border-radius:14px;background:#fff;padding:9px;box-sizing:border-box;display:block}
   .progress{height:8px;background:var(--surface-2);border-radius:999px;overflow:hidden}
   .progress>i{display:block;height:100%;background:var(--gold);transition:width .3s ease}
   .footnote{color:var(--muted);font-size:12px;text-align:center;margin-top:14px}

@@ -12,7 +12,9 @@
 <body>
 <div class="wrap">
   <div class="brand">
+    <span id="conn-left"></span>
     <span id="conn"></span>
+    <span id="conn-actions"></span>
   </div>
   <main id="app" class="screen" aria-live="polite"></main>
 </div>
@@ -426,6 +428,10 @@ const $ = s => document.querySelector(s);
 const el = $('#app');
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const setConn = t => { $('#conn').textContent = t||''; };
+/* actie-knoppen naast de verbindingsteller rechtsboven (nu: de jurylink-knop in de lobby) */
+const setConnActions = html => { const a=$('#conn-actions'); if(a) a.innerHTML = html||''; };
+/* extra info links in de bovenbalk (nu: welke quiz geladen is, tijdens de lobby) */
+const setConnLeft = html => { const a=$('#conn-left'); if(a) a.innerHTML = html||''; };
 const genCode = () => { const a='ABCDEFGHJKLMNPQRSTUVWXYZ'; let s=''; for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)]; return s; };
 const genId = () => 'p'+Math.random().toString(36).slice(2,9);
 const genToken = () => Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);
@@ -1194,6 +1200,7 @@ function resetToHome(){ cleanup(); clearSession(); app.role=null; app.code=null;
    ============================================================ */
 function renderHome(){
   const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
+  setConnActions(''); setConnLeft('');   // bovenbalk-extra's (jurylink + quiz-info) weghalen buiten de lobby
   const saved = recall();
   el.innerHTML = `
     ${navMenuHTML('home','')}
@@ -1210,7 +1217,7 @@ function renderHome(){
         <button class="btn" id="b-resume">Hervat quiz ${saved}</button></div>` : ''}
     <button id="b-host-code" class="linkbtn">Hervatten als host met een code</button>`;
   $('#b-host').onclick = ()=>{ location.href='account/quizzes/'; };   // eerst een eigen quiz kiezen i.p.v. de voorbeeldset hosten
-  $('#b-join').onclick = renderJoin;
+  $('#b-join').onclick = ()=>renderJoin();   // zonder argument (anders lekt het click-event als 'code' binnen)
   $('#b-host-code').onclick = renderHostResume;
   if(saved) $('#b-resume').onclick = async ()=>{
     const ok = await hostResume(saved);
@@ -1242,12 +1249,14 @@ function renderHostResume(){
   };
   code.addEventListener('keydown',e=>{ if(e.key==='Enter') $('#b-rgo').click(); });
 }
-function renderJoin(){
+function renderJoin(prefillCode){
+  const pre = (prefillCode||'').trim().toUpperCase();
+  const locked = pre.length===4;   // via QR gescand → code staat vast, alleen de naam nog
   el.innerHTML = `
     <h1 style="font-size:clamp(30px,7vw,46px)">Meedoen</h1>
     <div class="card stack">
       <div class="stack"><label class="lbl" for="i-code">Spelcode</label>
-        <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center"></div>
+        <input id="i-code" inputmode="text" autocapitalize="characters" maxlength="4" placeholder="ABCD" value="${esc(pre)}" ${locked?'readonly':''} style="text-transform:uppercase;letter-spacing:.3em;font-family:var(--display);font-size:26px;text-align:center${locked?';opacity:.65;pointer-events:none':''}"></div>
       <div class="stack" id="namewrap"><label class="lbl" for="i-name">Jouw naam</label>
         <input id="i-name" maxlength="16"></div>
       <p id="join-err" class="err" style="min-height:18px;margin:0"></p>
@@ -1256,6 +1265,7 @@ function renderJoin(){
     </div>`;
   $('#b-back').onclick = renderHome;
   const code=$('#i-code'), name=$('#i-name'), err=$('#join-err');
+  if(locked) name.focus(); else code.focus();
   $('#b-go').onclick = async ()=>{
     const c=code.value.trim().toUpperCase(), n=name.value.trim();
     if(c.length!==4){ err.textContent='Vul een geldige code van 4 letters in.'; return; }
@@ -1664,6 +1674,7 @@ function wirePass(){
 function renderHost(){
   const wrap = document.querySelector('.wrap');
   if(wrap) wrap.classList.toggle('wide', app.phase==='question');
+  setConnActions(''); setConnLeft('');   // alleen de lobby vult deze weer (jurylink rechts + quiz-info links)
   if(app.phase==='lobby') hostLobby();
   else if(app.phase==='roundintro') hostRoundIntro();
   else if(app.phase==='question') hostQuestion();
@@ -1680,11 +1691,11 @@ function hostLobby(){
     : `<b>${esc(app.quizName||'eigen set')}</b>`;
   el.innerHTML = `
     <div class="card stack" style="gap:10px">
-      <div class="statusbar">
-        <div><div class="qmeta" style="text-align:left">Spelers vullen deze code in</div><div class="code" style="font-size:clamp(36px,9vw,58px);margin:0">${app.code}</div></div>
-        <button class="btn ghost" id="b-copyctrl" style="font-size:13px;padding:9px 12px">${icon('link',15)}Kopieer geheime jurylink</button>
+      <div class="statusbar" style="align-items:stretch">
+        <div class="lobby-code-box"><div class="qmeta lobby-lbl"><span>ga naar <span style="text-transform:none">nikkibouman.github.io/Quiz</span><br>en vul deze code in:</span></div><div class="lobby-fill"><div class="code" style="font-size:clamp(36px,9vw,58px);margin:0">${app.code}</div></div></div>
+        <div class="lobby-or-box"><div class="qmeta lobby-lbl" aria-hidden="true"><span></span></div><div class="lobby-fill"><div class="lobby-or">OF</div></div></div>
+        <div class="lobby-qr-box"><div class="qmeta lobby-lbl"><span>Scan deze QR</span></div><div class="lobby-fill"><img id="lobby-qr" class="lobby-qr" alt="QR-code om mee te doen" width="200" height="200"></div></div>
       </div>
-      <p class="muted" style="margin:0;font-size:13px">Quiz: ${quizLink} · ${app.quiz.length} ${app.quiz.length===1?'vraag':'vragen'}</p>
     </div>
     <div class="card stack"><div class="statusbar"><b>Spelers (${count})</b>${count?manageBtnHTML():''}</div>
       <div class="plist">${playerRowsHTML('lobby')}</div></div>
@@ -1692,11 +1703,17 @@ function hostLobby(){
       <button class="btn grow big" id="b-start" ${count?'':'disabled'}>Quiz starten</button>
       <button class="btn ghost" id="b-end">Annuleren</button>
     </div>`;
+  // welke quiz geladen is → linksboven in de bovenbalk (zelfde regel als de jurylink-knop)
+  setConnLeft(`Quiz: ${quizLink} · ${app.quiz.length} ${app.quiz.length===1?'vraag':'vragen'}`);
+  // jurylink-knop naar de balk rechtsboven, naast de verbindingsteller
+  setConnActions(`<button class="btn ghost" id="b-copyctrl" style="font-size:12px;padding:6px 10px">${icon('link',14)}Kopieer geheime jurylink</button>`);
   const cc=$('#b-copyctrl'); if(cc) cc.onclick=()=>{
     const txt=ctrlLinkFor(app.code, app.judgeToken||'');
-    const done=()=>{ cc.innerHTML=icon('check',15)+' Jurylink gekopieerd!'; setTimeout(()=>{ cc.innerHTML=icon('link',15)+'Kopieer geheime jurylink'; },1600); };
+    const done=()=>{ cc.innerHTML=icon('check',14)+' Jurylink gekopieerd!'; setTimeout(()=>{ cc.innerHTML=icon('link',14)+'Kopieer geheime jurylink'; },1600); };
     copyText(txt, done);
   };
+  // QR-code met de publieke meedoen-link (alleen de code, niet de geheime jurylink)
+  const qi=$('#lobby-qr'); if(qi) renderJoinQR(qi, joinLinkFor(app.code));
   $('#b-start').onclick = hostStart;
   $('#b-end').onclick = hostEnd;
   wirePlayerControls();
@@ -2309,6 +2326,25 @@ function playerLeaderboardHTML(){
 function ctrlLinkFor(code, token){
   return location.origin + location.pathname + '?judge=' + encodeURIComponent(code) + '&t=' + encodeURIComponent(token);
 }
+/* publieke meedoen-link: scannen opent het meedoen-scherm met de code al ingevuld */
+function joinLinkFor(code){
+  return location.origin + location.pathname + '?join=' + encodeURIComponent(code);
+}
+/* QR-code lokaal genereren (lib pas hier laden; faalt de CDN, dan alleen de knop weg — niet de app) */
+const _qrCache = {};
+async function renderJoinQR(imgEl, url){
+  if(_qrCache[url]){ imgEl.src=_qrCache[url]; return; }
+  try{
+    const mod = await import('https://esm.sh/qrcode@1.5.4');
+    const QR = mod.default || mod;
+    const data = await QR.toDataURL(url, { margin:1, width:440, color:{ dark:'#0b1020', light:'#ffffff' } });
+    _qrCache[url]=data;
+    if(imgEl.isConnected) imgEl.src=data;
+  }catch(e){
+    const box = imgEl.closest('.lobby-qr-box');
+    if(box) box.innerHTML = `<span class="muted" style="font-size:11px;max-width:150px;text-align:center">QR niet beschikbaar — gebruik de code</span>`;
+  }
+}
 
 /* ============================================================
    VRAAG-PREVIEW  (host- + spelerscherm, échte rendering, tijdelijk spel)
@@ -2429,6 +2465,10 @@ async function boot(){
     }catch(e){}
     clearSession();   // spel weg of herstel mislukt → schoon naar home
   }
+  // gescande QR-link: meedoen-scherm met de code al ingevuld (na de sessie-check, zodat
+  // een al-verbonden speler bij refresh gewoon terugkoppelt i.p.v. opnieuw te moeten joinen)
+  const jn = (params.get('join') || hash.get('join') || '').trim().toUpperCase();
+  if(jn){ renderJoin(jn); return; }
   renderHome();
 }
 boot();
