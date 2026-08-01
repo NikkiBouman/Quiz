@@ -230,6 +230,10 @@
   .slabel{font-weight:600;font-size:15px}
   .nowtag{margin-left:8px;font-size:12px;font-weight:700;color:var(--gold)}
   .slocked{font-size:13px;color:var(--muted);font-style:italic}
+  /* punten per hint, naast de hint zelf: blauw = huidige hint, grijs = geweest */
+  .stagepts{flex:none;align-self:flex-start;margin-top:3px;font-family:var(--display);font-weight:700;font-size:14px;white-space:nowrap}
+  .stagepts.now{color:var(--blauw)}
+  .stagepts.past{color:var(--muted)}
   .hintlist{display:flex;flex-wrap:wrap;gap:6px}
   .hintlabel{display:flex;align-items:center;gap:7px;background:var(--surface-2);border-radius:9px;padding:5px 10px;font-size:14px;font-weight:600}
   .hintpts{margin-left:2px;padding-left:8px;border-left:1px solid var(--line);color:var(--gold);font-weight:700;font-size:13px}

@@ -1560,8 +1560,9 @@ function clueListHTML(stages){
   return `<div class="clues">${stages.map((s,idx)=>`<div class="clue"><span class="cnum">${idx+1}</span>
     <div class="cbody">${imgHTML(s.image)}${audioHTML(s.audio, s.clipStart, s.clipEnd)}${s.text?`<div class="qtext sm">${esc(s.text)}</div>`:''}</div></div>`).join('')}</div>`;
 }
-/* één stage-rij; isHost bepaalt of audio afspeelbaar is */
-function stageRowHTML(kind, label, idx, cur, revealed, media, isHost, clipStart, clipEnd){
+/* één stage-rij; isHost bepaalt of audio afspeelbaar is.
+   pts (optioneel): punten die déze hint waard is → blauw als 't de huidige hint is, grijs als 'ie geweest is. */
+function stageRowHTML(kind, label, idx, cur, revealed, media, isHost, clipStart, clipEnd, pts){
   const isCur = idx===cur;
   let body;
   if(kind==='audio'){
@@ -1575,7 +1576,8 @@ function stageRowHTML(kind, label, idx, cur, revealed, media, isHost, clipStart,
     body = revealed ? `<div class="qtext sm">${esc(media||'')}</div>` : `<span class="slocked">nog niet getoond</span>`;
   }
   const cls = `stagerow ${isCur?'cur':''} ${revealed?'':'dim'}`;
-  return `<div class="${cls}"><span class="cnum">${idx+1}</span><div class="cbody">${body}</div></div>`;
+  const ptsHTML = pts!=null ? `<span class="stagepts ${isCur?'now':'past'}">${pts} punten</span>` : '';
+  return `<div class="${cls}"><span class="cnum">${idx+1}</span><div class="cbody">${body}</div>${ptsHTML}</div>`;
 }
 /* host: echte stages (incl. audio om af te spelen) */
 function hostStagesHTML(r, cur){
@@ -1583,7 +1585,9 @@ function hostStagesHTML(r, cur){
     const kind = s.audio?'audio':s.video?'video':s.image?'image':'text';
     const revealed = idx<=cur;
     const media = kind==='audio'?resolveMedia(s.audio):kind==='video'?resolveMedia(s.video):kind==='image'?resolveMedia(s.image):s.text;
-    return stageRowHTML(kind, s.label, idx, cur, revealed, media, true, s.clipStart, s.clipEnd);
+    // punten per hint bij de hint zelf (blauw = nu, grijs = geweest). Niet bij inzet: daar komt de multiplier er nog bovenop.
+    const pts = (!r.betting && revealed) ? stagePoints(r, idx) : null;
+    return stageRowHTML(kind, s.label, idx, cur, revealed, media, true, s.clipStart, s.clipEnd, pts);
   }).join('')}</div>`;
 }
 /* speler: stage-meta uit state (geen audio-paden) */
@@ -1612,7 +1616,9 @@ function playerStagesHTML(c){
   const cur = c.stage||0;
   return `<div class="stagelist">${(c.stages||[]).map((s,idx)=>{
     const media = s.kind==='image'?s.image:s.kind==='video'?s.video:s.kind==='text'?s.text:null;
-    return stageRowHTML(s.kind, s.label, idx, cur, !!s.revealed, media, false);
+    // punten per hint bij de hint zelf (blauw = nu, grijs = geweest). Niet bij inzet: daar komt de multiplier er nog bovenop.
+    const pts = (!c.betting && s.revealed) ? stagePoints(c, idx) : null;
+    return stageRowHTML(s.kind, s.label, idx, cur, !!s.revealed, media, false, undefined, undefined, pts);
   }).join('')}</div>`;
 }
 /* inzet-overzicht per speler */
@@ -1753,6 +1759,27 @@ function questionIntroHTML(r, hintsHTML){
       ${r.betting?`<div class="pointsbig">Deze vraag is <b>${r.points??100}</b> punten waard <span>× inzet</span></div>`:''}
       ${hintsHTML}`;
 }
+/* host, hint-vraag na 'Controleer antwoorden': wie al goed zit. Per speler het blauwe hint-nummer
+   waarop ze het juiste antwoord vastlegden + de punten die dat oplevert. Puur afgeleid uit data die
+   de host al heeft — judgedOutcome respecteert zowel de auto-check als een handmatig jury-oordeel,
+   en pointsInfo verrekent de hint-fractie én een eventuele inzet (te laat ingezet → 0). */
+function correctSoFarHTML(r){
+  const round = app.round;
+  const rows = app.players
+    .map(p => ({ p, oc: judgedOutcome(r, p, round) }))
+    .filter(x => x.oc.correct)
+    .sort((a,b) => (a.oc.lock??0)-(b.oc.lock??0) || a.p.name.localeCompare(b.p.name))
+    .map(({p,oc}) => {
+      const bet = (p.bet && p.bet[round]!=null) ? p.bet[round] : null;
+      const pi = pointsInfo(r, true, oc.lock, bet, app.stage);
+      const pts = pi.kind==='win'
+        ? `<span class="pts">${pi.text}</span>`
+        : `<span class="pts" style="color:var(--muted)">${pi.text||'0'}</span>`;   // goed, maar te laat ingezet → 0
+      return `<div class="reviewrow"><span class="cnum">${(oc.lock??0)+1}</span><span class="rnm">${esc(p.name)}</span><span class="grow"></span>${pts}</div>`;
+    }).join('');
+  return `<div class="card stack" style="gap:8px"><b>Al goed</b>
+    ${rows || '<p class="muted" style="margin:0">Nog niemand goed.</p>'}</div>`;
+}
 function hostQuestion(){
   const r = app.quiz[app.round];
   refreshSongPreview(r);          // verlopen Deezer-preview-URL bijwerken (host-only fragment)
@@ -1810,10 +1837,10 @@ function hostQuestion(){
     && activeP.every(p=> effectiveCorrect(app.round, p.id, isCorrectAns(r, p.ans[app.round])));
   const revealCls = everyoneCorrect ? 'btn big' : 'btn ghost big';
   const opts = answersHTML(r);
-  let spot, controls, progress='';
+  let spot, controls, progress='', correctBlock='';
   if(staged){
-    const meta = betting ? `${esc(r.question||'')} · inzetronde`
-                         : `${esc(r.question||'')} · nu ${stagePoints(r, app.stage)} punten`;
+    // punten staan nu per hint (in hostStagesHTML), dus hier alleen de vraag zelf (+ 'inzetronde' bij een inzetvraag)
+    const meta = betting ? `${esc(r.question||'')} · inzetronde` : esc(r.question||'');
     spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${hostStagesHTML(r, app.stage)}</div>`;
     if(!app.checked){
       const everyonePassed = total>0 && passedN>=total;
@@ -1824,6 +1851,7 @@ function hostQuestion(){
         controls = `<button class="btn big" id="b-check" ${allDone?'':'disabled'}>Controleer antwoorden</button>`;
       }
     } else {
+      correctBlock = correctSoFarHTML(r);   // na 'Controleer antwoorden': wie al goed zit (naam · hint-nummer · punten)
       const moreHints = app.stage < r.stages.length-1;
       controls = `${moreHints?`<button class="btn big" id="b-hint">Volgende hint (${app.stage+2}/${r.stages.length})</button>`:''}
                   <button class="${revealCls}" id="b-reveal">Toon het antwoord</button>`;
@@ -1845,6 +1873,7 @@ function hostQuestion(){
         ${metaHTML(r)}${factsHTML(r, true)}
         ${opts}
         ${progress}
+        ${correctBlock}
         ${controls}
       </div>
       ${hostAside()}
@@ -2222,8 +2251,8 @@ function playerQuestion(){
       spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · ${betTxt}</div>${playerStagesHTML(r)}</div>`;
       pill = bi!=null ? `×${m}` : 'voor de lol';
     } else {
-      const np = stagePoints(r, g.stage);   // punten van de huidige hint (volle base wordt hier pas geschaald)
-      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')} · nu ${np} punten</div>${playerStagesHTML(r)}</div>`;
+      const np = stagePoints(r, g.stage);   // punten van de huidige hint → staan nu bij de hint zelf; hier alleen nog de losse pill
+      spot = `<div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div>${playerStagesHTML(r)}</div>`;
       pill = `${np} punten`;
     }
   } else {
