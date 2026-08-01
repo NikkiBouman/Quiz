@@ -572,25 +572,62 @@ function startHost(){
     renderHost();
   });
 }
-/* AFK-detectie: schrijft of de speler nu weg is (ander tabblad/app) én telt hoe vaak
-   dat tijdens een vraag gebeurt. Alleen spelers rapporteren, alleen tijdens phase==='question'. */
+/* AFK-detectie: schrijft of de speler nu weg is (ander tabblad/app) én logt per
+   weg-episode wanneer die begon (at) en hoe lang die duurde (ms). Alleen spelers
+   rapporteren, alleen tijdens phase==='question'. Per vraag wordt de log gereset.
+   Coulance: weg-zijn telt pas na AFK_GRACE_MS onafgebroken; kort wegwippen (snelle
+   lock, notificatie, kort belletje) valt zo buiten de meting. */
+const AFK_GRACE_MS = 3000;
+function afkCancelTimer(){ if(app._afkTimer){ clearTimeout(app._afkTimer); app._afkTimer=null; } }
+/* lopende (al gelogde) weg-episode afronden: schrijf de duur en zet 'weg' uit */
+function afkFinalize(base){
+  if(!app._afkWasAway) return;
+  const dur = Date.now() - (app._afkSince || Date.now());
+  if(app._afkIdx != null) set(ref(db, `${base}/afkLog/${app._afkIdx}/ms`), dur);
+  app._afkWasAway = false; app._afkSince = null; app._afkIdx = null;
+  set(ref(db, `${base}/afk`), false);
+}
 function afkReport(){
-  if(app.role!=='player' || app.kicked) return;
-  if(!(app.game && app.game.phase==='question')) return;   // buiten een vraag: niets melden
-  const away = document.hidden || !document.hasFocus();     // tab-wissel (hidden) óf venster-/app-wissel (focus)
-  if(away === app._afkWasAway) return;                      // alleen op een echte transitie, niet elk los event
-  app._afkWasAway = away;
+  if(app.role!=='player' || app.kicked){ afkCancelTimer(); return; }
   const base = `games/${app.code}/players/${app.pid}`;
-  if(away){
-    app.afkCount = (app.afkCount||0) + 1;
-    set(ref(db, `${base}/afkCount`), app.afkCount);
+  const g = app.game;
+  if(!(g && g.phase==='question')){                        // buiten een vraag: meting stoppen
+    afkCancelTimer(); afkFinalize(base);                   // was iemand nog weg → episode afronden op vraag-einde
+    return;
   }
-  set(ref(db, `${base}/afk`), away);
+  if(g.round !== app._afkRound){                            // nieuwe vraag → per-vraag meting resetten
+    afkCancelTimer();
+    app._afkRound = g.round;
+    app._afkWasAway = false; app._afkSince = null; app._afkIdx = null; app._afkN = 0;
+    set(ref(db, `${base}/afk`), false);
+    set(ref(db, `${base}/afkLog`), null);                  // vorige vraag wissen
+  }
+  const away = document.hidden || !document.hasFocus();     // tab-wissel (hidden) óf venster-/app-wissel (focus)
+  if(away){
+    if(!app._afkWasAway && !app._afkTimer){                 // net weg → coulance starten, nog niets loggen
+      app._afkSince = Date.now();                           // moment van weggaan (voor 'hoe laat')
+      const forRound = g.round, since = app._afkSince;
+      app._afkTimer = setTimeout(()=>{
+        app._afkTimer = null;
+        if(app.role!=='player' || app.kicked) return;
+        const gg = app.game;
+        if(!(gg && gg.phase==='question' && gg.round===forRound)) return;   // vraag voorbij/gewisseld → vergeten
+        if(!(document.hidden || !document.hasFocus())) return;              // toch weer terug → niets
+        app._afkWasAway = true;
+        app._afkIdx = app._afkN++;                          // nieuwe episode; duur volgt bij terugkeer
+        set(ref(db, `${base}/afkLog/${app._afkIdx}`), { at: since });
+        set(ref(db, `${base}/afk`), true);
+      }, AFK_GRACE_MS);
+    }
+  } else {
+    afkCancelTimer();                                       // binnen coulance terug → nooit gelogd
+    afkFinalize(base);                                      // was al gelogd → afronden met de duur
+  }
 }
 function startPlayer(){
   if(!app._afkBound){
     app._afkBound = true;
-    app._afkWasAway = false;
+    app._afkWasAway = false; app._afkTimer = null; app._afkSince = null; app._afkIdx = null; app._afkN = 0;
     document.addEventListener('visibilitychange', afkReport);
     window.addEventListener('blur', afkReport);
     window.addEventListener('focus', afkReport);
@@ -605,6 +642,7 @@ function startPlayer(){
   });
 }
 function cleanup(){
+  afkCancelTimer();
   if(app.unsubPlayers){ app.unsubPlayers(); app.unsubPlayers=null; }
   if(app.unsubState){ app.unsubState(); app.unsubState=null; }
   if(app.unsubMe){ app.unsubMe(); app.unsubMe=null; }
@@ -979,7 +1017,7 @@ async function hostMerge(idA, idB){
    ============================================================ */
 async function playerJoin(code, name){
   app.role='player'; app.code=code.toUpperCase(); app.pid=genId(); app.name=name.trim();
-  app.ans={}; app.bet={}; app.submittedRound=-1; app.sel=null; app.afkCount=0;
+  app.ans={}; app.bet={}; app.submittedRound=-1; app.sel=null;
   const snap = await get(stateRef(app.code));
   if(!snap.exists()) return false;
   const pr = playerRef(app.code, app.pid);
@@ -1005,11 +1043,12 @@ async function playerResume(code, pid, name){
   const pv = pSnap.val() || {};
   app.role='player'; app.code=code; app.pid=pid; app.name=(pv.name||name||'').trim();
   app.kicked=false; app.sel=null; app.searchPick=null; app.searchText=''; app.textAns='';
-  app.afkCount = pv.afkCount || 0;   // teller uit Firebase terughalen zodat een refresh 'm niet reset
+  app._afkN = pv.afkLog ? Object.keys(pv.afkLog).length : 0;   // episode-nummer terughalen zodat een refresh niet overschrijft
   // antwoorden / inzetten / passes / ready terughalen zodat de UI je voortgang toont
   app.ans = pv.ans || {}; app.bet = pv.bet || {}; app.passed = pv.pass || {};
   app.readyRounds = pv.ready || {};
   const round = (snap.val().round!=null) ? snap.val().round : -1;
+  app._afkRound = round;                                    // huidige vraag onthouden zodat afkReport de teller niet reset na een refresh
   app.searchRound = round;                                  // voorkomt dat playerQuestion de per-ronde staat (myStage) wist
   if(pv.ans && pv.ans[round]!=null){ app.submittedRound = round; app.lastSubmitLabel = (pv.anslabel&&pv.anslabel[round])||null; }
   else app.submittedRound = -1;
@@ -1054,6 +1093,22 @@ function renderAfkAlert(){
   const verb = names.length === 1 ? 'heeft' : 'hebben';
   box.textContent = `${who} ${verb} de applicatie verlaten, controleer of er niet wordt vals gespeeld`;
   box.classList.add('show');
+}
+/* Klikbaar AFK-merkje voor de controleur: 'AFK N×' dat uitklapt naar één regel per
+   weg-episode deze vraag (hoe laat weggegaan + hoe lang). Open/dicht-status leeft in
+   app.afkOpen zodat een her-render 'm niet dichtklapt. */
+function afkBadgeHTML(p){
+  const log = p.afkLog || {};
+  const eps = Object.keys(log).map(k=>log[k]).filter(Boolean).sort((a,b)=>(a.at||0)-(b.at||0));
+  if(!eps.length) return '';
+  const open = !!(app.afkOpen && app.afkOpen[p.id]);
+  const lines = eps.map(e=>{
+    const t = new Date(e.at||0);
+    const hhmmss = [t.getHours(),t.getMinutes(),t.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+    const dur = (e.ms!=null) ? Math.max(1,Math.round(e.ms/1000))+'s' : 'nog weg';
+    return `<div class="afk-line">${hhmmss} · ${dur}</div>`;
+  }).join('');
+  return `<span class="afk-badge${open?' open':''}" data-afk="${p.id}" role="button" tabindex="0" title="Bekijk weg-momenten">AFK ${eps.length}×${open?`<span class="afk-detail">${lines}</span>`:''}</span>`;
 }
 function renderController(){
   renderAfkAlert();
@@ -1120,7 +1175,7 @@ function renderController(){
       ? `<div class="reviewrow" style="flex-direction:column;gap:6px">
           <div style="display:flex;align-items:center;gap:10px">
             <span class="rnm">${esc(p.name)}</span>
-            ${p.afkCount ? `<span class="afk-badge">AFK ${p.afkCount}×</span>` : ''}
+            ${afkBadgeHTML(p)}
             <span class="grow"></span>
             ${partialBadges(r, al, eff)}
             <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
@@ -1129,7 +1184,7 @@ function renderController(){
         </div>`
       : `<div class="reviewrow">
           <span class="rnm">${esc(p.name)}</span>
-          ${p.afkCount ? `<span class="afk-badge">AFK ${p.afkCount}×</span>` : ''}
+          ${afkBadgeHTML(p)}
           <span class="rguess">${esc(ans)}</span>
           ${partialBadges(r, al, eff)}
           <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
@@ -1149,6 +1204,7 @@ function renderController(){
       <p class="muted" style="margin:0;font-size:12px">${hint}</p>
       ${rows||'<p class="muted" style="margin:0">Nog geen spelers.</p>'}</div>`;
   el.querySelectorAll('[data-cjudge]').forEach(b=> b.onclick=()=> ctrlToggle(b.dataset.cjudge));
+  el.querySelectorAll('[data-afk]').forEach(b=> b.onclick=()=>{ app.afkOpen = app.afkOpen||{}; const id=b.dataset.afk; app.afkOpen[id]=!app.afkOpen[id]; renderController(); });
   el.querySelectorAll('[data-capprove]').forEach(b=> b.onclick=()=>{ const [pid,s]=b.dataset.capprove.split(':'); ctrlApproveStage(pid, parseInt(s,10)); });
   const st=el.querySelector('#c-showtrail'); if(st) st.onchange=()=>{ app.ctrlShowTrail = st.checked; renderController(); };
 }
