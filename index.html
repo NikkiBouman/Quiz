@@ -572,10 +572,32 @@ function startHost(){
     renderHost();
   });
 }
+/* AFK-detectie: schrijft of de speler nu weg is (ander tabblad/app) én telt hoe vaak
+   dat tijdens een vraag gebeurt. Alleen spelers rapporteren, alleen tijdens phase==='question'. */
+function afkReport(){
+  if(app.role!=='player' || app.kicked) return;
+  if(!(app.game && app.game.phase==='question')) return;   // buiten een vraag: niets melden
+  const away = document.hidden || !document.hasFocus();     // tab-wissel (hidden) óf venster-/app-wissel (focus)
+  if(away === app._afkWasAway) return;                      // alleen op een echte transitie, niet elk los event
+  app._afkWasAway = away;
+  const base = `games/${app.code}/players/${app.pid}`;
+  if(away){
+    app.afkCount = (app.afkCount||0) + 1;
+    set(ref(db, `${base}/afkCount`), app.afkCount);
+  }
+  set(ref(db, `${base}/afk`), away);
+}
 function startPlayer(){
+  if(!app._afkBound){
+    app._afkBound = true;
+    app._afkWasAway = false;
+    document.addEventListener('visibilitychange', afkReport);
+    window.addEventListener('blur', afkReport);
+    window.addEventListener('focus', afkReport);
+  }
   app.unsubState = onValue(stateRef(app.code), snap=>{
     const v = snap.val(); if(!v) return;
-    app.game = v; setConn('verbonden'); renderPlayer();
+    app.game = v; setConn('verbonden'); renderPlayer(); afkReport();
   });
   // eigen node bewaken: verdwijnt die, dan ben je door de host verwijderd
   app.unsubMe = onValue(playerRef(app.code, app.pid), snap=>{
@@ -957,7 +979,7 @@ async function hostMerge(idA, idB){
    ============================================================ */
 async function playerJoin(code, name){
   app.role='player'; app.code=code.toUpperCase(); app.pid=genId(); app.name=name.trim();
-  app.ans={}; app.bet={}; app.submittedRound=-1; app.sel=null;
+  app.ans={}; app.bet={}; app.submittedRound=-1; app.sel=null; app.afkCount=0;
   const snap = await get(stateRef(app.code));
   if(!snap.exists()) return false;
   const pr = playerRef(app.code, app.pid);
@@ -983,6 +1005,7 @@ async function playerResume(code, pid, name){
   const pv = pSnap.val() || {};
   app.role='player'; app.code=code; app.pid=pid; app.name=(pv.name||name||'').trim();
   app.kicked=false; app.sel=null; app.searchPick=null; app.searchText=''; app.textAns='';
+  app.afkCount = pv.afkCount || 0;   // teller uit Firebase terughalen zodat een refresh 'm niet reset
   // antwoorden / inzetten / passes / ready terughalen zodat de UI je voortgang toont
   app.ans = pv.ans || {}; app.bet = pv.bet || {}; app.passed = pv.pass || {};
   app.readyRounds = pv.ready || {};
@@ -1013,7 +1036,27 @@ async function controllerJoin(code, token){
   renderController();
   return 'ok';
 }
+/* Losse overlay-banner op het controleur-scherm: flasht rood zolang minstens één speler
+   tijdens een vraag weg is. Staat buiten #app, dus de flash-animatie herstart niet bij elke
+   her-render van de beoordeel-lijst, en de content verschuift niet (position: fixed). */
+function renderAfkAlert(){
+  const wrap = document.querySelector('.wrap'); if(!wrap) return;
+  let box = document.getElementById('afk-alert');
+  if(!box){ box = document.createElement('div'); box.id = 'afk-alert'; box.setAttribute('role','alert'); wrap.appendChild(box); }
+  const g = app.game;
+  const active = !!(g && g.phase === 'question');           // dubbele fase-check: niks blijft hangen na de reveal
+  const away = active ? (app.players||[]).filter(p => p && p.afk === true) : [];
+  if(!away.length){ box.classList.remove('show'); box.textContent = ''; return; }
+  const names = away.map(p => `"${p.name}"`);
+  const who = names.length === 1
+    ? names[0]
+    : names.slice(0,-1).join(', ') + ' en ' + names[names.length-1];
+  const verb = names.length === 1 ? 'heeft' : 'hebben';
+  box.textContent = `${who} ${verb} de applicatie verlaten, controleer of er niet wordt vals gespeeld`;
+  box.classList.add('show');
+}
 function renderController(){
+  renderAfkAlert();
   const wrap=document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   const g = app.game;
   const rc = (g && g.rc) || {};
@@ -1077,6 +1120,7 @@ function renderController(){
       ? `<div class="reviewrow" style="flex-direction:column;gap:6px">
           <div style="display:flex;align-items:center;gap:10px">
             <span class="rnm">${esc(p.name)}</span>
+            ${p.afkCount ? `<span class="afk-badge">AFK ${p.afkCount}×</span>` : ''}
             <span class="grow"></span>
             ${partialBadges(r, al, eff)}
             <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>
@@ -1085,6 +1129,7 @@ function renderController(){
         </div>`
       : `<div class="reviewrow">
           <span class="rnm">${esc(p.name)}</span>
+          ${p.afkCount ? `<span class="afk-badge">AFK ${p.afkCount}×</span>` : ''}
           <span class="rguess">${esc(ans)}</span>
           ${partialBadges(r, al, eff)}
           <button class="judge ${eff?'jok':'jbad'}" data-cjudge="${p.id}" ${dis}>${eff?'goed ✓':'fout ✗'}</button>

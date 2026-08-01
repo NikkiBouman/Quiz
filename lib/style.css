@@ -455,3 +455,23 @@
     .pv-panes{flex-direction:column}
     .pv-pane.host{flex:1;border-right:0;border-bottom:1px solid var(--line)}
   }
+
+  /* AFK-waarschuwing op het controleur-scherm: flashende overlay (geen reflow van de content) */
+  #afk-alert{
+    position:fixed; left:50%; top:14px; transform:translateX(-50%);
+    z-index:9999; max-width:min(92vw,640px);
+    padding:13px 18px; border-radius:var(--radius);
+    background:var(--rood); color:#fff; font-family:var(--display); font-weight:700;
+    text-align:center; line-height:1.25; box-shadow:0 10px 30px -8px rgba(0,0,0,.45);
+    display:none; pointer-events:none;
+  }
+  #afk-alert.show{ display:block; animation:afk-flash .8s steps(1,end) infinite }
+  @keyframes afk-flash{ 50%{ background:#9c1116 } }
+  @media (prefers-reduced-motion:reduce){ #afk-alert.show{ animation:none } }
+  /* blijvend AFK-merkje naast de spelernaam in de beoordeel-lijst */
+  .afk-badge{
+    display:inline-flex; align-items:center; margin:0 6px;
+    padding:3px 9px; border-radius:999px;
+    background:var(--rood); color:#fff; font-size:11px; font-weight:700;
+    white-space:nowrap; flex:none;
+  }
