@@ -562,8 +562,7 @@ function startHost(){
     }
     if(app.phase==='reveal') buildResults();
     pushState();
-    setConn(app.code+' · '+present.length+' verbonden');
-    renderHost();
+    renderHost();   // renderHost zet zelf de balk rechtsboven (code+teller alleen in de lobby)
   });
   // handmatige oordelen (van host of controleur) → herbereken + opnieuw tonen
   app.unsubJudges = onValue(ref(db, `games/${app.code}/judge`), snap=>{
@@ -1292,33 +1291,10 @@ function playerRowsHTML(mode){
   if(mode==='lobby')
     return app.players.map(p=>`<div class="prow"><span class="nm">${esc(p.name)}</span>${kickHTML(p)}</div>`).join('');
 
-  const staged = r && Array.isArray(r.stages);
-  const betting = r && r.betting;
-  const betsRevealed = betting && app.betStep!=='bet';   // inzetten pas zichtbaar na "Toon de inzetten"
+  // zijbalk-tabel: alleen naam + punten (status/inzet niet gewenst)
   const canPick = mode==='question' && r && r.optionsMode==='list';
   const rows = app.players.map(p=>{
-    const a = (p.ans && p.ans[app.round]!=null) ? p.ans[app.round] : null;
-    const al = (p.anslabel && p.anslabel[app.round]!=null) ? p.anslabel[app.round] : null;
-    const passed = !!(p.pass && p.pass[app.round]);
-    const bet  = (p.bet && p.bet[app.round]!=null) ? p.bet[app.round] : null;
-    const correct = a!=null && effectiveCorrect(app.round, p.id, isCorrectAns(r,a));
-    const stale = staleGuess(r, p, app.round, app.stage);   // gok van een vorige hint → speler raadt opnieuw
     const score = app.scores[p.id]||0;
-    // STATUS
-    let st;
-    if(passed) st = `<span class="stbadge pass">⤴ gepast</span>`;
-    else if(a==null || stale) st = `<span class="stbadge wait">nadenken…</span>`;
-    else if(!staged || !app.checked) st = `<span class="stbadge done">✓ geantwoord</span>`;
-    else if(correct) st = `<span class="stbadge good">goed ✓</span>`;
-    else st = `<span class="stbadge bad">fout ✗</span>${partialBadges(r, al, false)}`;
-    // INZET (kolom alleen getoond bij inzetvragen; waarde pas ná de reveal)
-    let betCell = '';
-    if(betting){
-      if(passed) betCell = '<span class="betcell">—</span>';
-      else if(bet==null) betCell = '<span class="betcell">…</span>';
-      else if(!betsRevealed) betCell = '<span class="betcell">✓ ingezet</span>';   // verbergen tot reveal
-      else { const over = app.stage>bet && !correct; betCell = `<span class="betcell ${over?'over':''}">uiterlijk hint ${bet+1}${over?' · te laat':''}</span>`; }
-    }
     // NAAM (+ evt. host-picker voor losse meerkeuze) — geen kick tijdens het spel
     const nameInner = canPick
       ? `<button class="nm-btn" data-pick="${p.id}" aria-expanded="${app.openPicker===p.id}"><span>${esc(p.name)}</span></button>`
@@ -1326,12 +1302,10 @@ function playerRowsHTML(mode){
     const picker = (canPick && app.openPicker===p.id)
       ? `<div class="picker">${r.options.map((o,i)=>`<button class="popt" data-c="${i}" data-setans="${p.id}:${i}"><span class="shape" aria-hidden="true">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>`
       : '';
-    return `<div class="prow2"><span class="pnm">${nameInner}</span>${st}${betting?betCell:''}<span class="pscore">${score}</span></div>${picker}`;
+    return `<div class="prow2"><span class="pnm">${nameInner}</span><span class="pscore">${score}</span></div>${picker}`;
   }).join('');
-  const head = betting
-    ? `<div class="phead"><span>Speler</span><span>Status</span><span>Inzet</span><span>Punten</span></div>`
-    : `<div class="phead"><span>Speler</span><span>Status</span><span>Punten</span></div>`;
-  return `<div class="ptable${betting?'':' noinzet'}">${head}${rows}</div>`;
+  const head = `<div class="phead"><span>Speler</span><span>Punten</span></div>`;
+  return `<div class="ptable pmini">${head}${rows}</div>`;
 }
 function wirePlayerControls(){
   wireHostStop();
@@ -1651,11 +1625,10 @@ function betOverviewHTML(entries, mults){
 }
 /* host-statuszijbalk */
 function hostAside(){
-  const r = app.quiz[app.round];
+  const mode = app.phase==='reveal' ? 'reveal' : 'question';
   return `<aside class="hostaside"><div class="card stack" style="gap:10px">
-    <div class="statusbar"><b>Spelers</b><span class="tb-conn">${app.code} · ${app.players.length} verbonden</span></div>
-    <div class="plist">${playerRowsHTML('question')}</div>
-    <div class="row" style="justify-content:flex-end">${manageBtnHTML()}</div></div></aside>`;
+    <div class="statusbar"><b>Spelers (${app.players.length})</b>${manageBtnHTML()}</div>
+    <div class="plist">${playerRowsHTML(mode)}</div></div></aside>`;
 }
 /* pas-knop + bevestigingspopup (speler) */
 const passBtnHTML = `<button class="btn danger sm pasbtn" id="b-pass">Pas</button>`;
@@ -1673,8 +1646,10 @@ function wirePass(){
 }
 function renderHost(){
   const wrap = document.querySelector('.wrap');
-  if(wrap) wrap.classList.toggle('wide', app.phase==='question');
+  if(wrap) wrap.classList.toggle('wide', app.phase==='question' || app.phase==='reveal');
   setConnActions(''); setConnLeft('');   // alleen de lobby vult deze weer (jurylink rechts + quiz-info links)
+  // rechtsboven: alleen in de lobby de code + teller; tijdens het spel staat de code in de bovenbalk
+  setConn(app.phase==='lobby' ? `${app.code} · ${app.players.length} verbonden` : '');
   if(app.phase==='lobby') hostLobby();
   else if(app.phase==='roundintro') hostRoundIntro();
   else if(app.phase==='question') hostQuestion();
@@ -1747,12 +1722,16 @@ function wireHostStop(){
   const sn=$('#b-stopno'); if(sn) sn.onclick=()=>{ app.confirmStop=false; renderHost(); };
 }
 /* bovenbalk host: rondenaam + vraag X/Y links, status (+ evt. skip) + stoppen rechts */
-function hostHead(right, skip){
+function hostHead(phase, skip, kind){
   const rc = roundCtx(app.round);
   const skipBtn = !skip ? '' : (app.confirmSkip
     ? `<span class="tb-skipconfirm">Overslaan? <button class="mini danger" id="b-skipyes">Ja</button> <button class="mini" id="b-skipno">Nee</button></span>`
     : `<button class="tb-skip" id="b-skip" title="Niemand krijgt punten">Vraag overslaan</button>`);
-  return `<div class="topbar"><span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span><span class="tb-actions">${right||''}${skipBtn}${stopBtnHTML()}</span></div>`;
+  const phaseHTML = `<span class="tb-phase">${phase?`<span class="pill${kind==='ok'?' ok':''}">${esc(phase)}</span>`:''}</span>`;
+  return `<div class="hosthead">
+    <span class="tb-round">${esc(rc.name||('Ronde '+(rc.ri+1)))} <small>· vraag ${rc.qIn+1}/${rc.qCount}</small></span>
+    ${phaseHTML}
+    <span class="tb-actions"><span class="tb-code">${esc(app.code)}</span>${skipBtn}${stopBtnHTML()}</span></div>`;
 }
 /* antwoord-opties zoals de host ze toont: de keuzelijst met vormpjes, of een hint hoe spelers
    antwoorden bij een open/zoek-vraag. Eén bron van waarheid — gedeeld door het live host-scherm
@@ -1787,7 +1766,7 @@ function hostQuestion(){
     el.innerHTML = `
       <div class="hostgrid">
         <div class="hostmain">
-          ${hostHead('<span class="pill">inzetten</span>', true)}
+          ${hostHead('Inzetten', true)}
           ${questionIntroHTML(r, `<div class="card stack" style="gap:8px"><b>Hints die je gaat krijgen</b>${hintLabelsHTML(stageHintLabels(r.stages), stagePointList(r))}</div>`)}
           <p class="muted center">${placed}/${app.players.length} ingezet${passed?` · ${passed} gepast`:''}</p>
           <button class="btn big" id="b-revealbets" ${(placed||passed)?'':'disabled'}>Toon de inzetten</button>
@@ -1804,7 +1783,7 @@ function hostQuestion(){
     el.innerHTML = `
       <div class="hostgrid">
         <div class="hostmain">
-          ${hostHead('<span class="pill ok">inzetten</span>', true)}
+          ${hostHead('Inzetten', true, 'ok')}
           <div class="spotlight"><div class="qmeta">${esc(r.question||'')}</div><div class="qtext" style="font-size:24px">De inzetten</div></div>
           ${betOverviewHTML(entries, r.betMultipliers)}
           <button class="btn big" id="b-startplay">Start de vraag</button>
@@ -1817,7 +1796,13 @@ function hostQuestion(){
   }
 
   // ---- SPELEN ----
-  const answeredAny = app.players.some(p=> p.ans && p.ans[app.round]!=null);
+  // iedereen klaar = elke speler heeft (voor de huidige hint) geantwoord of gepast; pas dan is de knop klikbaar
+  const passedN = app.players.filter(p=> p.pass && p.pass[app.round]).length;
+  const answeredN = app.players.filter(p=> !(p.pass && p.pass[app.round]) && p.ans && p.ans[app.round]!=null
+    && !(staged && staleGuess(r, p, app.round, app.stage))).length;
+  const total = app.players.length;
+  const allDone = total>0 && (answeredN + passedN) >= total;
+  const progressHTML = `<p class="muted center" style="margin:0">${answeredN}/${total} geantwoord${passedN?` · ${passedN} gepast`:''}</p>`;
   // "toon antwoord" is pas blauw (uitnodigend) als IEDEREEN (die niet past) het goed heeft; anders gedempt
   const activeP = app.players.filter(p=> !(p.pass && p.pass[app.round]));
   const everyoneCorrect = activeP.length>0
@@ -1825,16 +1810,19 @@ function hostQuestion(){
     && activeP.every(p=> effectiveCorrect(app.round, p.id, isCorrectAns(r, p.ans[app.round])));
   const revealCls = everyoneCorrect ? 'btn big' : 'btn ghost big';
   const opts = answersHTML(r);
-  let spot, controls;
+  let spot, controls, progress='';
   if(staged){
     const meta = betting ? `${esc(r.question||'')} · inzetronde`
                          : `${esc(r.question||'')} · nu ${stagePoints(r, app.stage)} punten`;
     spot = `<div class="spotlight"><div class="qmeta">${meta}</div>${hostStagesHTML(r, app.stage)}</div>`;
     if(!app.checked){
-      const everyonePassed = app.players.length>0 && app.players.every(p=> p.pass && p.pass[app.round]);
-      controls = everyonePassed
-        ? `<button class="${revealCls}" id="b-reveal">Toon het antwoord</button>`
-        : `<button class="btn big" id="b-check" ${answeredAny?'':'disabled'}>Controleer antwoorden</button>`;
+      const everyonePassed = total>0 && passedN>=total;
+      if(everyonePassed){
+        controls = `<button class="${revealCls}" id="b-reveal">Toon het antwoord</button>`;
+      } else {
+        progress = progressHTML;
+        controls = `<button class="btn big" id="b-check" ${allDone?'':'disabled'}>Controleer antwoorden</button>`;
+      }
     } else {
       const moreHints = app.stage < r.stages.length-1;
       controls = `${moreHints?`<button class="btn big" id="b-hint">Volgende hint (${app.stage+2}/${r.stages.length})</button>`:''}
@@ -1842,7 +1830,8 @@ function hostQuestion(){
     }
   } else {
     spot = `<div class="spotlight"><div class="qmeta">${r.points??100} punten</div>${qMediaHTML(r, true)}<div class="qtext">${esc(r.question)}</div></div>`;
-    controls = `<button class="${revealCls}" id="b-reveal" ${answeredAny?'':'disabled'}>Toon het antwoord</button>`;
+    progress = progressHTML;
+    controls = `<button class="btn big" id="b-reveal" ${allDone?'':'disabled'}>Toon het antwoord</button>`;
   }
   const _audioSnap = [];
   el.querySelectorAll('audio.qaudio').forEach(a => {
@@ -1851,10 +1840,11 @@ function hostQuestion(){
   el.innerHTML = `
     <div class="hostgrid">
       <div class="hostmain">
-        ${hostHead(app.checked?'<span class="pill ok">gecontroleerd</span>':'', true)}
+        ${hostHead(app.checked?'Gecontroleerd':'Vraag', true, app.checked?'ok':'')}
         ${spot}
         ${metaHTML(r)}${factsHTML(r, true)}
         ${opts}
+        ${progress}
         ${controls}
       </div>
       ${hostAside()}
@@ -1887,45 +1877,50 @@ function hostRevealView(){
         </div>`;}).join('')}</div>`;
   }
   const answered = app.players.filter(p=> res[p.id] && res[p.id].answer!=null);
+  // punten i.p.v. goed/fout-knop: +winst en het nieuwe totaal (beoordelen doet de controleur)
   const reviewRows = answered.map(p=>{
     const rr = res[p.id];
+    const gain = rr.correct ? reviewPtsHTML(r, rr) : `<span class="pts" style="color:var(--muted)">+0</span>`;
+    const total = `<span class="rtotal">${app.scores[p.id]||0}</span>`;
     const trail = Array.isArray(r.stages) ? guessTrailHTML(r, p, app.round) : '';   // hele gok-historie bij hint-vragen
     return trail
       ? `<div class="reviewrow" style="flex-direction:column;gap:6px">
           <div style="display:flex;align-items:center;gap:10px">
             <span class="rnm">${esc(p.name)}</span>
             <span class="grow"></span>
-            ${reviewPtsHTML(r, rr)}
+            ${gain}
             ${partialBadges(r, rr.label, rr.correct)}
-            <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
+            ${total}
           </div>
           <span class="rguess has-trail">${trail}</span>
         </div>`
       : `<div class="reviewrow">
           <span class="rnm">${esc(p.name)}</span>
           <span class="rguess">${esc(rr.label||'—')}</span>
-          ${reviewPtsHTML(r, rr)}
+          ${gain}
           ${partialBadges(r, rr.label, rr.correct)}
-          <button class="judge ${rr.correct?'jok':'jbad'}" data-judge="${p.id}">${rr.correct?'goed ✓':'fout ✗'}</button>
+          ${total}
         </div>`;
   }).join('');
   const noAns = app.players.filter(p=> (!res[p.id] || res[p.id].answer==null) && !(res[p.id] && res[p.id].passed)).map(p=>p.name);
   const passedNames = app.players.filter(p=> res[p.id] && res[p.id].passed).map(p=>p.name);
   el.innerHTML = `
-    ${hostHead('<span class="pill ok">Antwoord</span>'+manageBtnHTML())}
-    <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div>${r.answerImage?imgHTML(resolveMedia(r.answerImage)):''}</div>
-    ${explainHTML(r.explanation)}
-    ${grouping}
-    <div class="card stack" style="gap:8px"><b>Antwoorden beoordelen</b>
-      <p class="muted" style="margin:0;font-size:12px">Tik op goed/fout om handmatig te overrulen.</p>
-      ${reviewRows || '<p class="muted" style="margin:0">Niemand heeft geantwoord.</p>'}</div>
-    ${noAns.length?`<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>`:''}
-    ${passedNames.length?`<p class="footnote">Gepast: ${passedNames.map(esc).join(', ')}</p>`:''}
-    ${leaderboardHTML(true)}
-    <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende vraag'}</button>`;
-  el.querySelectorAll('[data-judge]').forEach(b=> b.onclick=()=> hostToggleCorrect(b.dataset.judge));
+    <div class="hostgrid">
+      <div class="hostmain">
+        ${hostHead('Antwoord', false, 'ok')}
+        <div class="spotlight"><div class="qmeta">Het juiste antwoord is</div><div class="qtext">${esc(correctLabel)}</div>${r.answerImage?imgHTML(resolveMedia(r.answerImage)):''}</div>
+        ${explainHTML(r.explanation)}
+        ${grouping}
+        <div class="card stack" style="gap:8px"><b>Antwoorden</b>
+          ${reviewRows || '<p class="muted" style="margin:0">Niemand heeft geantwoord.</p>'}</div>
+        ${noAns.length?`<p class="footnote">Geen antwoord: ${noAns.map(esc).join(', ')}</p>`:''}
+        ${passedNames.length?`<p class="footnote">Gepast: ${passedNames.map(esc).join(', ')}</p>`:''}
+        <button class="btn big" id="b-next">${last?'Naar de eindstand':'Volgende vraag'}</button>
+      </div>
+      ${hostAside()}
+    </div>`;
   $('#b-next').onclick = hostNext;
-  wireHostStop();
+  wirePlayerControls();
 }
 function hostFinal(){
   el.innerHTML = `

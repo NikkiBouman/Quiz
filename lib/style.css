@@ -14,7 +14,7 @@
     background:radial-gradient(1200px 600px at 50% -10%, rgba(43,127,255,.12), transparent 60%),linear-gradient(180deg, var(--bg) 0%, #dce8f8 100%);
     background-attachment:fixed;min-height:100%;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:780px;margin:0 auto;padding:24px 18px 64px;min-height:100vh;display:flex;flex-direction:column}
-  .wrap.wide{max-width:1180px}
+  .wrap.wide{max-width:1400px}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
   .dot{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold)}
   .brand b{font-family:var(--display);letter-spacing:.5px;font-size:15px;text-transform:uppercase}
@@ -204,6 +204,7 @@
   .reviewrow .rguess{flex:1;font-size:14px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .reviewrow .rguess.has-trail{overflow:visible;text-overflow:clip;white-space:normal}
   .reviewrow .pts{flex:none;color:var(--groen);font-weight:700;white-space:nowrap}
+  .reviewrow .rtotal{flex:none;font-family:var(--display);font-weight:700;min-width:2.5ch;text-align:right}
   /* gok-historie (hint voor hint) bij de onthulling van een hint-vraag */
   .guesstrail{display:flex;flex-wrap:wrap;gap:6px}
   .trailchip{font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;border:1px solid var(--line);background:var(--surface);white-space:nowrap}
@@ -240,6 +241,7 @@
   .ptable{display:flex;flex-direction:column;gap:6px}
   .ptable .phead,.ptable .prow2{display:grid;grid-template-columns:1.4fr 1.3fr 1.2fr auto;gap:8px;align-items:center}
   .ptable.noinzet .phead,.ptable.noinzet .prow2{grid-template-columns:1.4fr 1.3fr auto}
+  .ptable.pmini .phead,.ptable.pmini .prow2{grid-template-columns:1fr auto}   /* zijbalk: alleen naam + punten */
   .ptable .phead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;padding:0 12px}
   .ptable .prow2{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
   .ptable .prow2 .pnm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
@@ -260,7 +262,11 @@
   .wronglist .wl-chip{font-size:13px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;text-decoration:line-through}
   /* bovenbalk */
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .tb-round{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow)}
+  /* geconsolideerde host-bovenbalk: ronde+vraag links, fase in het midden, code+stoppen rechts */
+  .hosthead{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;margin-bottom:14px}
+  .hosthead .tb-phase{margin-left:auto;margin-right:auto}
+  .tb-code{font-family:var(--display);font-weight:700;letter-spacing:.15em;font-size:16px;color:var(--gold)}
+  .tb-round{font-family:var(--display);font-weight:700;font-size:15px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 14px;box-shadow:var(--shadow);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
   .tb-round small{font-weight:600;color:var(--muted);font-family:var(--body)}
   .tb-conn{font-size:13px;color:var(--muted);font-weight:600}
   .introtext{font-size:17px;line-height:1.5;max-width:46ch;margin:0 auto;color:var(--ink);text-align:left;white-space:pre-wrap}
@@ -279,8 +285,14 @@
   .hostmain{display:flex;flex-direction:column;gap:16px;min-width:0}
   .hostaside{display:flex;flex-direction:column;gap:12px;min-width:0}
   @media(min-width:900px){
-    .hostgrid{grid-template-columns:minmax(0,1fr) 320px}
+    .hostgrid{grid-template-columns:minmax(0,1fr) 300px}
     .hostaside{position:sticky;top:16px}
+  }
+  /* breed genoeg: lege kolom links spiegelt de zijbalk rechts → hoofdcontent staat écht in het midden */
+  @media(min-width:1200px){
+    .hostgrid{grid-template-columns:300px minmax(0,1fr) 300px}
+    .hostmain{grid-column:2}
+    .hostaside{grid-column:3}
   }
   .psc{margin-left:auto;font-family:var(--display);font-weight:700;color:var(--gold);font-size:15px;padding:0 4px}
   .st.good{color:var(--groen)} .st.wait{color:var(--muted)} .st.bad{color:var(--rood)}
