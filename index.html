@@ -1967,6 +1967,19 @@ function renderPlayer(){
   const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
+  // Verandert er niets aan jóuw view (bv. alleen answeredCount doordat een andere speler
+  // indient) én sta je te typen? Dan NIET herbouwen — anders wordt je invoerveld vervangen
+  // en knippert/verdwijnt je toetsenbord. playerViewKey() dekt stage/fase/inzet, dus een
+  // echte wijziging (nieuwe hint, reveal) rendert wél.
+  const curKey = playerViewKey();
+  const typing = document.activeElement &&
+    (document.activeElement.id==='t-input' || document.activeElement.id==='s-input');
+  if(curKey === app._lastViewKey && typing) return;
+  app._lastViewKey = curKey;
+  // Onthoud welk veld nú de focus heeft: een re-render die door een update van een
+  // ANDERE speler wordt getriggerd mag niet de focus — en dus het toetsenbord — van deze
+  // speler stelen. Alleen herstellen als je zelf al in het veld stond.
+  app._focusedId = (document.activeElement && document.activeElement.id) || null;
   const prevKey = playerViewKey();
   const savedScroll = window.scrollY;
   if(g.phase==='lobby')        playerLobby();
@@ -2037,7 +2050,7 @@ function wireAnswerArea(r){
     const ti=$('#t-input');
     if(ti){
       ti.oninput=()=>{ app.textAns=ti.value; const b=$('#b-submit'); if(b) b.disabled = !ti.value.trim(); };
-      ti.focus(); const L=ti.value.length; try{ ti.setSelectionRange(L,L); }catch(e){}
+      if(app._focusedId==='t-input'){ ti.focus(); const L=ti.value.length; try{ ti.setSelectionRange(L,L); }catch(e){} }
     }
     return;
   }
@@ -2052,7 +2065,7 @@ function wireAnswerArea(r){
         app.searchResults = all().filter(x=> !ql || x.label.toLowerCase().includes(ql)).slice(0,40);
         app.searchBusy=false; refreshSearchOut();
       };
-      if(app.searchOpen){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
+      if(app._focusedId==='s-input'){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
     }
     refreshSearchOut();
     return;
@@ -2072,7 +2085,7 @@ function wireAnswerArea(r){
         app.searchBusy=false; app.searchResults=res; refreshSearchOut();
       }, 300);
     };
-    if(app.searchOpen){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
+    if(app._focusedId==='s-input'){ inp.focus(); const L=inp.value.length; try{ inp.setSelectionRange(L,L); }catch(e){} }
   }
   refreshSearchOut();
 }
