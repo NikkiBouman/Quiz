@@ -76,13 +76,13 @@ function deezerSearch(q){
     const cb='dz_'+Math.random().toString(36).slice(2,9);
     const s=document.createElement('script');
     const done=items=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(items); };
-    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,8).map(t=>({
+    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,50).map(t=>({
       id:t.id, label:`${t.artist?t.artist.name+' – ':''}${t.title}`,
       thumb:t.album&&t.album.cover_small?t.album.cover_small:null,
       preview:t.preview||'',   // ~30s MP3-fragment (host-only afspeelbaar)
     })));
     s.onerror=()=>done([]);
-    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=8`;
+    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=50`;
     document.body.appendChild(s);
   });
 }
@@ -92,11 +92,11 @@ function deezerSearchKind(kind, q){
     const cb='dz_'+Math.random().toString(36).slice(2,9);
     const s=document.createElement('script');
     const done=items=>{ try{ delete window[cb]; }catch(e){} s.remove(); resolve(items); };
-    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,8).map(x=> kind==='album'
+    window[cb]=data=>done((data&&data.data?data.data:[]).slice(0,50).map(x=> kind==='album'
       ? { id:x.id, label:`${x.artist?x.artist.name+' – ':''}${x.title}`, thumb:x.cover_small||null }
       : { id:x.id, label:x.name, thumb:x.picture_small||null }));
     s.onerror=()=>done([]);
-    s.src=`https://api.deezer.com/search/${kind}?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=8`;
+    s.src=`https://api.deezer.com/search/${kind}?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=50`;
     document.body.appendChild(s);
   });
 }
@@ -113,10 +113,10 @@ function deezerSearchTitles(q){
         if(!title||seen.has(k)) return; seen.add(k);
         out.push({ id:title, label:title, thumb:(t.album&&t.album.cover_small)||null });   // id = titel → tekst-match
       });
-      done(out.slice(0,8));
+      done(out.slice(0,50));
     };
     s.onerror=()=>done([]);
-    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=25`;
+    s.src=`https://api.deezer.com/search?q=${encodeURIComponent(q)}&output=jsonp&callback=${cb}&limit=100`;
     document.body.appendChild(s);
   });
 }
@@ -2150,7 +2150,8 @@ function searchOutHTML(){
   const busy = app.searchBusy ? '<p class="muted" style="margin:6px 0 0;font-size:13px">Zoeken…</p>' : '';
   const results = (app.searchResults||[]).map(x=>`<button class="sresult ${app.searchPick&&String(app.searchPick.id)===String(x.id)?'sel':''}" data-id="${esc(String(x.id))}" data-label="${esc(x.label)}">${x.thumb?`<img src="${esc(x.thumb)}" alt="">`:''}<span>${esc(x.label)}</span></button>`).join('');
   const picked = app.searchPick ? `<div class="picked">Gekozen: <b>${esc(app.searchPick.label)}</b></div>` : '';
-  return busy + `<div class="sresults">${results}</div>` + picked;
+  const list = results ? `<div class="sresults-wrap"><div class="sresults">${results}</div><div class="sscroll"><div class="sscroll-thumb"></div></div></div>` : '';
+  return busy + list + picked;
 }
 function wireSearchResults(){
   el.querySelectorAll('.sresult').forEach(b=> b.onclick=()=>{
@@ -2161,7 +2162,32 @@ function wireSearchResults(){
     renderPlayer();
   });
 }
-function refreshSearchOut(){ const out=el.querySelector('#sout'); if(out){ out.innerHTML=searchOutHTML(); wireSearchResults(); } }
+function wireScrollbar(){
+  const box=el.querySelector('.sresults'), bar=el.querySelector('.sscroll'), thumb=el.querySelector('.sscroll-thumb');
+  if(!box||!bar||!thumb) return;
+  const layout=()=>{
+    const sh=box.scrollHeight, ch=box.clientHeight;
+    if(sh<=ch+1){ bar.classList.remove('on'); return; }   // past binnen → geen balk
+    bar.classList.add('on');
+    const track=bar.clientHeight, th=Math.max(28, Math.round(track*ch/sh)), travel=track-th, maxScroll=sh-ch;
+    thumb.style.height=th+'px';
+    thumb.style.top=(maxScroll?(box.scrollTop/maxScroll)*travel:0)+'px';
+  };
+  box.onscroll=layout;
+  let dragY=0, startTop=0, dragging=false;
+  const onMove=e=>{
+    if(!dragging) return;
+    const track=bar.clientHeight, th=thumb.offsetHeight, travel=track-th;
+    const top=Math.max(0, Math.min(travel, startTop+(e.clientY-dragY)));
+    const maxScroll=box.scrollHeight-box.clientHeight;
+    box.scrollTop=travel?(top/travel)*maxScroll:0;
+  };
+  const onUp=()=>{ dragging=false; document.removeEventListener('pointermove',onMove); document.removeEventListener('pointerup',onUp); };
+  thumb.onpointerdown=e=>{ dragging=true; dragY=e.clientY; startTop=parseFloat(thumb.style.top)||0;
+    document.addEventListener('pointermove',onMove); document.addEventListener('pointerup',onUp); e.preventDefault(); };
+  layout();
+}
+function refreshSearchOut(){ const out=el.querySelector('#sout'); if(out){ out.innerHTML=searchOutHTML(); wireSearchResults(); wireScrollbar(); } }
 function wireAnswerArea(r){
   if(r.optionsMode==='list'){
     el.querySelectorAll('.ans').forEach(b=> b.onclick=()=>{ app.sel=parseInt(b.dataset.i,10); renderPlayer(); });
