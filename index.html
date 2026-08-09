@@ -574,11 +574,7 @@ function startHost(){
 }
 /* AFK-detectie: schrijft of de speler nu weg is (ander tabblad/app) én logt per
    weg-episode wanneer die begon (at) en hoe lang die duurde (ms). Alleen spelers
-   rapporteren, alleen tijdens phase==='question'. Per vraag wordt de log gereset.
-   Coulance: weg-zijn telt pas na AFK_GRACE_MS onafgebroken; kort wegwippen (snelle
-   lock, notificatie, kort belletje) valt zo buiten de meting. */
-const AFK_GRACE_MS = 3000;
-function afkCancelTimer(){ if(app._afkTimer){ clearTimeout(app._afkTimer); app._afkTimer=null; } }
+   rapporteren, alleen tijdens phase==='question'. Per vraag wordt de log gereset. */
 /* lopende (al gelogde) weg-episode afronden: schrijf de duur en zet 'weg' uit */
 function afkFinalize(base){
   if(!app._afkWasAway) return;
@@ -588,46 +584,35 @@ function afkFinalize(base){
   set(ref(db, `${base}/afk`), false);
 }
 function afkReport(){
-  if(app.role!=='player' || app.kicked){ afkCancelTimer(); return; }
+  if(app.role!=='player' || app.kicked) return;
   const base = `games/${app.code}/players/${app.pid}`;
   const g = app.game;
   if(!(g && g.phase==='question')){                        // buiten een vraag: meting stoppen
-    afkCancelTimer(); afkFinalize(base);                   // was iemand nog weg → episode afronden op vraag-einde
+    afkFinalize(base);                                     // was iemand nog weg → episode afronden op vraag-einde
     return;
   }
   if(g.round !== app._afkRound){                            // nieuwe vraag → per-vraag meting resetten
-    afkCancelTimer();
     app._afkRound = g.round;
     app._afkWasAway = false; app._afkSince = null; app._afkIdx = null; app._afkN = 0;
     set(ref(db, `${base}/afk`), false);
     set(ref(db, `${base}/afkLog`), null);                  // vorige vraag wissen
   }
   const away = document.hidden || !document.hasFocus();     // tab-wissel (hidden) óf venster-/app-wissel (focus)
-  if(away){
-    if(!app._afkWasAway && !app._afkTimer){                 // net weg → coulance starten, nog niets loggen
-      app._afkSince = Date.now();                           // moment van weggaan (voor 'hoe laat')
-      const forRound = g.round, since = app._afkSince;
-      app._afkTimer = setTimeout(()=>{
-        app._afkTimer = null;
-        if(app.role!=='player' || app.kicked) return;
-        const gg = app.game;
-        if(!(gg && gg.phase==='question' && gg.round===forRound)) return;   // vraag voorbij/gewisseld → vergeten
-        if(!(document.hidden || !document.hasFocus())) return;              // toch weer terug → niets
-        app._afkWasAway = true;
-        app._afkIdx = app._afkN++;                          // nieuwe episode; duur volgt bij terugkeer
-        set(ref(db, `${base}/afkLog/${app._afkIdx}`), { at: since });
-        set(ref(db, `${base}/afk`), true);
-      }, AFK_GRACE_MS);
-    }
-  } else {
-    afkCancelTimer();                                       // binnen coulance terug → nooit gelogd
-    afkFinalize(base);                                      // was al gelogd → afronden met de duur
+  if(away === app._afkWasAway) return;                      // alleen op een echte transitie, niet elk los event
+  if(away){                                                 // net weg → episode direct loggen
+    app._afkWasAway = true;
+    app._afkSince = Date.now();                             // moment van weggaan (voor 'hoe laat')
+    app._afkIdx = app._afkN++;                              // nieuwe episode; duur volgt bij terugkeer
+    set(ref(db, `${base}/afkLog/${app._afkIdx}`), { at: app._afkSince });
+    set(ref(db, `${base}/afk`), true);
+  } else {                                                  // terug → episode afronden met de duur
+    afkFinalize(base);
   }
 }
 function startPlayer(){
   if(!app._afkBound){
     app._afkBound = true;
-    app._afkWasAway = false; app._afkTimer = null; app._afkSince = null; app._afkIdx = null; app._afkN = 0;
+    app._afkWasAway = false; app._afkSince = null; app._afkIdx = null; app._afkN = 0;
     document.addEventListener('visibilitychange', afkReport);
     window.addEventListener('blur', afkReport);
     window.addEventListener('focus', afkReport);
@@ -642,7 +627,6 @@ function startPlayer(){
   });
 }
 function cleanup(){
-  afkCancelTimer();
   if(app.unsubPlayers){ app.unsubPlayers(); app.unsubPlayers=null; }
   if(app.unsubState){ app.unsubState(); app.unsubState=null; }
   if(app.unsubMe){ app.unsubMe(); app.unsubMe=null; }
@@ -1255,14 +1239,14 @@ async function playerSubmit(){
     await set(ref(db, `games/${app.code}/players/${app.pid}/guesses/${r}/${st}`), { ans: val, label: label||'' });
   }
   app.sel=null; app.searchPick=null; app.searchOpen=false; app.reguess=false;
-  renderPlayer();
+  renderPlayer(true);
 }
 async function playerBet(k){
   if(app.kicked) return;
   const r = app.game.round;
   app.bet[r] = k;
   await set(ref(db, `games/${app.code}/players/${app.pid}/bet/${r}`), k);
-  renderPlayer();
+  renderPlayer(true);
 }
 /* PASS_ANS: sentinel die nooit als juist telt (isCorrectAns matcht 'm niet) — "pas" = fout antwoord */
 const PASS_ANS = ' pas';
@@ -1274,7 +1258,7 @@ async function playerPass(){
   if(cur && cur.betting && g.betStep==='bet'){
     app.passed[r]=true;
     await set(ref(db, `games/${app.code}/players/${app.pid}/pass/${r}`), true);
-    renderPlayer();
+    renderPlayer(true);
     return;
   }
   // anders: "pas" telt als een fout antwoord voor deze hint; bij een volgende hint mag je opnieuw raden
@@ -1287,7 +1271,7 @@ async function playerPass(){
     await set(ref(db, `games/${app.code}/players/${app.pid}/astage/${r}`), st);
     await set(ref(db, `games/${app.code}/players/${app.pid}/guesses/${r}/${st}`), { ans: PASS_ANS, label: '⤴ gepast' });
   }
-  renderPlayer();
+  renderPlayer(true);
 }
 
 /* ============================================================
@@ -2093,7 +2077,7 @@ function playerViewKey(){
   if(app.submittedRound===r) return 'q:submitted:'+g.stage;
   return 'q:answering:'+g.stage;
 }
-function renderPlayer(){
+function renderPlayer(force){
   const wrap = document.querySelector('.wrap'); if(wrap) wrap.classList.remove('wide');
   if(app.kicked) return renderPlayerKicked();
   const g = app.game; if(!g) return;
@@ -2101,10 +2085,17 @@ function renderPlayer(){
   // indient) én sta je te typen? Dan NIET herbouwen — anders wordt je invoerveld vervangen
   // en knippert/verdwijnt je toetsenbord. playerViewKey() dekt stage/fase/inzet, dus een
   // echte wijziging (nieuwe hint, reveal) rendert wél.
+  // force=true bij je EIGEN actie (antwoord vergrendelen/passen/inzetten): die moet je scherm
+  // altíjd bijwerken, ook al staat je toetsenbord nog open — de guard is er alleen voor updates
+  // van ándere spelers. Zonder dit blijft na een her-gok op een nieuwe hint de viewKey op
+  // 'q:submitted' hangen (playerQuestion reset submittedRound intern en toont tóch de antwoord-UI),
+  // waardoor een volgende vergrendeling — op toestellen waar de focus na een tik op de knop op het
+  // invoerveld blijft staan (bv. Samsung Chrome) — genegeerd wordt: je antwoord komt wél binnen,
+  // maar je scherm vergrendelt niet en je kunt blijven typen.
   const curKey = playerViewKey();
   const typing = document.activeElement &&
     (document.activeElement.id==='t-input' || document.activeElement.id==='s-input');
-  if(curKey === app._lastViewKey && typing) return;
+  if(!force && curKey === app._lastViewKey && typing) return;
   app._lastViewKey = curKey;
   // Onthoud welk veld nú de focus heeft: een re-render die door een update van een
   // ANDERE speler wordt getriggerd mag niet de focus — en dus het toetsenbord — van deze
